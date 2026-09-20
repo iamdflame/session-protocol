@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The same geometry the session clock draws: a 24h ring carrying the real
+       6.5h / 17.5h split. 09:30 → 16:00 ET is the warm arc. -->
+  <path d="M 5.75 21.92 A 11.84 11.84 0 1 1 23.21 25.39"
+        stroke="#3987e5" stroke-width="4.96" stroke-linecap="round" fill="none"/>
+  <path d="M 23.21 25.39 A 11.84 11.84 0 0 1 5.75 21.92"
+        stroke="#d95926" stroke-width="4.96" stroke-linecap="round" fill="none"/>
+</svg>
