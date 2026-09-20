@@ -20,6 +20,20 @@ export const HALT_REASON = [
   'None', 'MissedBoundary', 'UnfilledHandoff', 'Insolvent', 'BadDebt', 'Inconsistent', 'Operator',
 ] as const;
 
+/** What a session is for a vault: NYSE hours, or the next discrete print. */
+export const SESSION_EQUITY = 0;
+export const SESSION_EVENT = 1;
+export type SessionKind = typeof SESSION_EQUITY | typeof SESSION_EVENT;
+export const SESSION_KIND = ['equity', 'event'] as const;
+
+/**
+ * The class names a vault's two mints wear. One program, one pair of mints;
+ * an event session calls them NOW/THEN because there is no day or night to
+ * speak of, only the stretch between prints.
+ */
+export const classLabel = (kind: SessionKind, c: ClassName): string =>
+  kind === SESSION_EVENT ? (c === 'night' ? 'THEN' : 'NOW') : c.toUpperCase();
+
 export const PAUSE_MINT = 1;
 export const PAUSE_REDEEM = 2;
 export const PAUSE_FILL = 4;
@@ -120,9 +134,29 @@ export interface Vault {
   cumFillIncentive: bigint;
   totalMintedNight: bigint;
   totalMintedDay: bigint;
+  // ── v2 ──
+  sessionKind: SessionKind;
+  symbol: string;
+  maxPostedSlotAge: number;
+  maxBellLeadSecs: number;
+  maxPremiumBps: number;
+  auctionSecs: number;
+  incentiveRamp: [number, number, number];
+  requireVerifiedRecap: boolean;
+  fillPausedUntil: number;
+  lastRecapTs: number;
+  recapCount: number;
+  detectorAuthority: PublicKey;
+  shareTokenProgram: PublicKey;
 }
 
-export const VAULT_VERSION = 1;
+export const VAULT_VERSION = 2;
+
+/** NUL-padded ASCII, as `Vault::symbol` stores it. */
+const symbolOf = (b: Uint8Array): string => {
+  const end = b.indexOf(0);
+  return new TextDecoder().decode(end < 0 ? b : b.subarray(0, end));
+};
 
 /**
  * Decode a vault account. Field order mirrors the Rust struct exactly, because
@@ -172,6 +206,19 @@ export function decodeVault(data: Uint8Array): Vault {
     cumFillIncentive: c.u64(),
     totalMintedNight: c.u64(),
     totalMintedDay: c.u64(),
+    sessionKind: c.u8() as SessionKind,
+    symbol: symbolOf(c.bytes(8)),
+    maxPostedSlotAge: c.u32(),
+    maxBellLeadSecs: c.u32(),
+    maxPremiumBps: c.u16(),
+    auctionSecs: c.u32(),
+    incentiveRamp: [c.u16(), c.u16(), c.u16()],
+    requireVerifiedRecap: c.bool(),
+    fillPausedUntil: Number(c.i64()),
+    lastRecapTs: Number(c.i64()),
+    recapCount: c.u32(),
+    detectorAuthority: c.key(),
+    shareTokenProgram: c.key(),
   };
 
   // An account written by a different program version must not be read as if

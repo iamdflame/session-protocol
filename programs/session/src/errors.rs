@@ -91,4 +91,8 @@ pub enum SessionError {
     PartialVerification,
     #[msg("token account is not owned by the signer")]
     WrongOwner,
+    #[msg("price update account was posted too many slots ago")]
+    PostedSlotStale,
+    #[msg("mark publish time is outside the window this instruction accepts")]
+    MarkOutsideWindow,
 }

@@ -15,7 +15,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from '@solana/web3.js';
-import { PROGRAM_ID, type ClassName } from './vault.ts';
+import { PROGRAM_ID, SESSION_EQUITY, type ClassName, type SessionKind } from './vault.ts';
 
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 /** Token-2022. Every real xStock mint is owned by this, not by the classic program. */
@@ -79,11 +79,28 @@ export interface VaultParams {
   fillIncentiveBps: number;
   maxCarryDeltaBps: number;
   maxUnexpectedClosedSecs: number;
+  // ── v2 ──
+  /** How many slots behind the clock a mark's `posted_slot` may be. */
+  maxPostedSlotAge: number;
+  /** How long before the bell a settlement mark may have been published. */
+  maxBellLeadSecs: number;
+  /** Event sessions: token-vs-mark divergence, in bp, that exposes THEN. */
+  maxPremiumBps: number;
+  /** The residual is offered at one price to everyone for this long after a bell. */
+  auctionSecs: number;
+  /** Fill incentive by elapsed time: in the auction window, within twice it, after. */
+  incentiveRamp: [number, number, number];
+  /** Whether a recap must carry a Pyth update per replayed boundary. */
+  requireVerifiedRecap: boolean;
 }
+
+/** `VaultParams` on the wire: 92 bytes of v1 fields, then 21 of v2. */
+export const VAULT_PARAMS_SIZE = 113;
 
 /** Field order and widths mirror `VaultParams` in lib.rs exactly. */
 export function encodeVaultParams(p: VaultParams): Uint8Array {
   if (p.markFeedId.length !== 32 || p.equityFeedId.length !== 32) throw new Error('feed ids are 32 bytes');
+  if (p.incentiveRamp.length !== 3) throw new Error('incentive ramp has three tiers');
   return concat(
     Uint8Array.from(p.markFeedId),
     Uint8Array.from(p.equityFeedId),
@@ -96,8 +113,20 @@ export function encodeVaultParams(p: VaultParams): Uint8Array {
     u16(p.fillIncentiveBps),
     u16(p.maxCarryDeltaBps),
     u32(p.maxUnexpectedClosedSecs),
+    u32(p.maxPostedSlotAge),
+    u32(p.maxBellLeadSecs),
+    u16(p.maxPremiumBps),
+    u32(p.auctionSecs),
+    u16(p.incentiveRamp[0]), u16(p.incentiveRamp[1]), u16(p.incentiveRamp[2]),
+    u8(p.requireVerifiedRecap ? 1 : 0),
   );
 }
+
+/** A borsh `String`: u32 length prefix, then UTF-8 bytes. */
+const str = (v: string): Uint8Array => {
+  const b = new TextEncoder().encode(v);
+  return concat(u32(b.length), b);
+};
 
 /* ── derived addresses ───────────────────────────────────────────────────── */
 
@@ -173,7 +202,15 @@ export interface InitializeVaultAccounts {
   quoteTokenProgram?: PublicKey;
 }
 
-export function initializeVaultIx(a: InitializeVaultAccounts, p: VaultParams): TransactionInstruction {
+/**
+ * `symbol` names the share classes (`NVDA` → `NVDA.DAY` / `NVDA.NIGHT`);
+ * uppercase ASCII, at most 8 bytes. `sessionKind` is `SESSION_EQUITY` or
+ * `SESSION_EVENT`.
+ */
+export function initializeVaultIx(
+  a: InitializeVaultAccounts, p: VaultParams, symbol: string, sessionKind: SessionKind = SESSION_EQUITY,
+): TransactionInstruction {
+  if (!/^[A-Z0-9]{1,8}$/.test(symbol)) throw new Error('symbol is 1–8 uppercase ASCII letters or digits');
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -192,7 +229,9 @@ export function initializeVaultIx(a: InitializeVaultAccounts, p: VaultParams): T
       meta(SystemProgram.programId),
       meta(SYSVAR_RENT_PUBKEY),
     ],
-    data: concat(discriminator('initialize_vault'), encodeVaultParams(p)) as Buffer,
+    data: concat(
+      discriminator('initialize_vault'), encodeVaultParams(p), str(symbol), u8(sessionKind),
+    ) as Buffer,
   });
 }
 

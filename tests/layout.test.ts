@@ -14,7 +14,7 @@ const eq = (name: string, got: unknown, want: unknown) => {
   else console.log(`  ok   ${name} = ${got}`);
 };
 
-eq('version', v.version, 1);
+eq('version', v.version, 2);
 eq('bump', v.bump, 253);
 eq('authority', v.authority.toBuffer()[0], 1);
 eq('pendingAuthority', v.pendingAuthority.toBuffer()[0], 2);
@@ -48,6 +48,20 @@ eq('cumFundingNight (negative i128)', v.cumFundingNight, -55555n);
 eq('cumFillIncentive', v.cumFillIncentive, 777n);
 eq('totalMintedNight', v.totalMintedNight, 111111n);
 eq('totalMintedDay', v.totalMintedDay, 222222n);
+// v2
+eq('sessionKind', v.sessionKind, 1);
+eq('symbol (NUL-padded)', v.symbol, 'OPENAI');
+eq('maxPostedSlotAge', v.maxPostedSlotAge, 4500);
+eq('maxBellLeadSecs', v.maxBellLeadSecs, 300);
+eq('maxPremiumBps', v.maxPremiumBps, 1000);
+eq('auctionSecs', v.auctionSecs, 120);
+eq('incentiveRamp', v.incentiveRamp.join(','), '10,25,50');
+eq('requireVerifiedRecap', v.requireVerifiedRecap, true);
+eq('fillPausedUntil', v.fillPausedUntil, 1774618321);
+eq('lastRecapTs', v.lastRecapTs, 1774500000);
+eq('recapCount', v.recapCount, 3);
+eq('detectorAuthority', v.detectorAuthority.toBuffer()[0], 11);
+eq('shareTokenProgram', v.shareTokenProgram.toBuffer()[0], 12);
 
 // a truncated account must fail loudly rather than return nonsense
 try {

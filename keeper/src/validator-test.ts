@@ -136,6 +136,8 @@ try {
     maxStaleSecs: 3_600, maxConfBps: 2_000, maxMoveBps: 9_000,
     equityQuietSecs: 86_400, fillIncentiveBps: 10,
     maxCarryDeltaBps: 500, maxUnexpectedClosedSecs: 604_800,
+    maxPostedSlotAge: 4_500, maxBellLeadSecs: 300, maxPremiumBps: 1_000, auctionSecs: 120,
+    incentiveRamp: [10, 25, 50], requireVerifiedRecap: false,
   };
 
   const send = async (tx: Transaction, signers: Keypair[] = [payer]) => {
@@ -154,7 +156,7 @@ try {
     markPriceUpdate: markAccount, equityPriceUpdate: equityAccount,
     underlyingTokenProgram: TOKEN_2022_PROGRAM_ID,
     quoteTokenProgram: TOKEN_PROGRAM_ID,
-  }, params)));
+  }, params, 'NVDA')));
 
   check('initialize_vault succeeds against the real NVDAx and USDC',
     'sig' in init, 'err' in init ? init.err : '');

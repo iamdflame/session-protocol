@@ -23,8 +23,12 @@ use crate::fixed::{mul_div_floor, WAD};
 pub enum OracleError {
     /// Price was zero or negative. A mark like that is not a price.
     NonPositivePrice,
-    /// The feed has not published recently enough to settle against.
+    /// The print is older than the window this instruction accepts.
     Stale,
+    /// The print is *newer* than the window accepts. At a bell that means the
+    /// crank read a live price long after the close and tried to book it as the
+    /// close; on a fill it means a publish time in the future.
+    AfterWindow,
     /// Pyth's confidence interval is too wide relative to the price. Pyth is the
     /// only major oracle that publishes its own uncertainty; refusing to settle
     /// when it is high is the entire reason to want that number.
@@ -105,18 +109,58 @@ pub fn normalize(q: &Quote, underlying_decimals: u8, quote_decimals: u8) -> Resu
     mul_div_floor(price, num, den).ok_or(OracleError::Overflow)
 }
 
+/// The interval a mark's `publish_time` must fall in.
+///
+/// Two different questions are asked of a price. A fill asks "what is it worth
+/// *now*", and the window trails the clock. A settlement asks "what was it
+/// worth *at the bell*", and the window sits around the bell — a crank that
+/// lands an hour late and reads the live feed has a price that is fresh and
+/// wrong, and the previous check would have accepted it. The keeper can post a
+/// historical update (Hermes serves them by timestamp); the program's only job
+/// is to refuse anything else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MarkWindow {
+    pub lo: i64,
+    pub hi: i64,
+}
+
+impl MarkWindow {
+    /// For a settlement: no earlier than `lead_secs` before the bell (the last
+    /// print before the close is the close), no later than `max_stale_secs`
+    /// after it.
+    pub fn at_bell(bell: i64, lead_secs: u32, max_stale_secs: u32) -> Self {
+        Self {
+            lo: bell.saturating_sub(lead_secs as i64),
+            hi: bell.saturating_add(max_stale_secs as i64),
+        }
+    }
+
+    /// For a fill or a trade: the print must be current.
+    pub fn now(now: i64, max_stale_secs: u32) -> Self {
+        Self { lo: now.saturating_sub(max_stale_secs as i64), hi: now }
+    }
+
+    pub fn contains(&self, t: i64) -> Result<(), OracleError> {
+        if t < self.lo {
+            Err(OracleError::Stale)
+        } else if t > self.hi {
+            Err(OracleError::AfterWindow)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// Validate a mark before it is allowed to move anybody's NAV.
 pub fn check_mark(
     q: &Quote,
-    now: i64,
+    window: MarkWindow,
     last_mark: u128,
     underlying_decimals: u8,
     quote_decimals: u8,
     g: &Guards,
 ) -> Result<u128, OracleError> {
-    if now.saturating_sub(q.publish_time) > g.max_stale_secs as i64 {
-        return Err(OracleError::Stale);
-    }
+    window.contains(q.publish_time)?;
     // conf is in the same units as price, so the ratio needs no normalisation
     if q.price <= 0 {
         return Err(OracleError::NonPositivePrice);
@@ -286,6 +330,50 @@ mod tests {
         assert_eq!(mark, expect, "got {mark}");
     }
 
+    /// The bell is at 16:00. The crank lands at 16:20. The live feed says
+    /// 16:20 — fresh, and not the close. With a 2-minute window the program
+    /// refuses; the keeper has to post the 16:00 print instead.
+    #[test]
+    fn a_late_crank_cannot_book_a_live_print_as_the_close() {
+        let bell = 1_000_000;
+        let w = MarkWindow::at_bell(bell, 300, 120);
+        let live = Quote { price: 22_034_000_000, conf: 1, expo: -8, publish_time: bell + 20 * 60 };
+        assert_eq!(check_mark(&live, w, 0, 8, 6, &G), Err(OracleError::AfterWindow));
+
+        let at_the_bell = Quote { publish_time: bell + 30, ..live };
+        assert!(check_mark(&at_the_bell, w, 0, 8, 6, &G).is_ok());
+        // the last print before the close is the close
+        let just_before = Quote { publish_time: bell - 200, ..live };
+        assert!(check_mark(&just_before, w, 0, 8, 6, &G).is_ok());
+        // but not a print from the previous session
+        let long_before = Quote { publish_time: bell - 301, ..live };
+        assert_eq!(check_mark(&long_before, w, 0, 8, 6, &G), Err(OracleError::Stale));
+    }
+
+    /// A devnet instance without a posting keeper is honest about it: the
+    /// window is widened to admit the sponsored feed at crank time, and that
+    /// width is a parameter on the instrument card, not a hidden assumption.
+    #[test]
+    fn a_wide_window_admits_the_sponsored_feed_at_crank_time() {
+        let bell = 1_000_000;
+        let w = MarkWindow::at_bell(bell, 300, 1_800);
+        let crank = Quote { price: 22_034_000_000, conf: 1, expo: -8, publish_time: bell + 25 * 60 };
+        assert!(check_mark(&crank, w, 0, 8, 6, &G).is_ok());
+        let too_late = Quote { publish_time: bell + 31 * 60, ..crank };
+        assert_eq!(check_mark(&too_late, w, 0, 8, 6, &G), Err(OracleError::AfterWindow));
+    }
+
+    #[test]
+    fn windows_are_closed_intervals_and_saturate() {
+        let w = MarkWindow::now(100, 20);
+        assert_eq!(w, MarkWindow { lo: 80, hi: 100 });
+        assert!(w.contains(80).is_ok() && w.contains(100).is_ok());
+        assert_eq!(w.contains(79), Err(OracleError::Stale));
+        assert_eq!(w.contains(101), Err(OracleError::AfterWindow));
+        let edge = MarkWindow::at_bell(i64::MAX - 1, 10, 10);
+        assert_eq!(edge.hi, i64::MAX);
+    }
+
     #[test]
     fn decimals_are_not_interchangeable() {
         let q = Quote { price: 22_034_000_000, conf: 0, expo: -8, publish_time: 0 };
@@ -306,17 +394,20 @@ mod tests {
     #[test]
     fn stale_marks_are_refused() {
         let q = Quote { price: 22_034_000_000, conf: 1_000_000, expo: -8, publish_time: 1_000 };
-        assert_eq!(check_mark(&q, 1_000 + 121, 0, 8, 6, &G), Err(OracleError::Stale));
-        assert!(check_mark(&q, 1_000 + 119, 0, 8, 6, &G).is_ok());
+        let at = |now: i64| MarkWindow::now(now, G.max_stale_secs);
+        assert_eq!(check_mark(&q, at(1_000 + 121), 0, 8, 6, &G), Err(OracleError::Stale));
+        assert!(check_mark(&q, at(1_000 + 119), 0, 8, 6, &G).is_ok());
+        // a print from the future is not a print
+        assert_eq!(check_mark(&q, at(999), 0, 8, 6, &G), Err(OracleError::AfterWindow));
     }
 
     #[test]
     fn wide_confidence_is_refused() {
         // 2% confidence against a 1% limit — exactly what the band is for
         let q = Quote { price: 10_000, conf: 200, expo: -8, publish_time: 0 };
-        assert_eq!(check_mark(&q, 0, 0, 8, 6, &G), Err(OracleError::Uncertain));
+        assert_eq!(check_mark(&q, MarkWindow::now(0, G.max_stale_secs), 0, 8, 6, &G), Err(OracleError::Uncertain));
         let ok = Quote { conf: 50, ..q };
-        assert!(check_mark(&ok, 0, 0, 8, 6, &G).is_ok());
+        assert!(check_mark(&ok, MarkWindow::now(0, G.max_stale_secs), 0, 8, 6, &G).is_ok());
     }
 
     #[test]
@@ -324,9 +415,10 @@ mod tests {
         let q = Quote { price: 22_034_000_000, conf: 0, expo: -8, publish_time: 0 };
         let mark = normalize(&q, 8, 6).unwrap();
         // previous boundary was half this price: a 100% move, over the 20% limit
-        assert_eq!(check_mark(&q, 0, mark / 2, 8, 6, &G), Err(OracleError::MoveTooLarge));
+        let w = MarkWindow::now(0, G.max_stale_secs);
+        assert_eq!(check_mark(&q, w, mark / 2, 8, 6, &G), Err(OracleError::MoveTooLarge));
         // a 10% move is fine
-        assert!(check_mark(&q, 0, mark * 100 / 110, 8, 6, &G).is_ok());
+        assert!(check_mark(&q, w, mark * 100 / 110, 8, 6, &G).is_ok());
     }
 
 
@@ -436,8 +528,9 @@ mod tests {
                              max_move_bps: 2_000, equity_quiet_secs: 900 };
             let base = Quote { price: 1_000_000, conf: conf_a, expo: -8, publish_time: 0 };
             let wider = Quote { conf: conf_a.saturating_add(extra), ..base };
-            if check_mark(&base, 0, 0, 8, 6, &g).is_err() {
-                prop_assert!(check_mark(&wider, 0, 0, 8, 6, &g).is_err());
+            let w = MarkWindow::now(0, g.max_stale_secs);
+            if check_mark(&base, w, 0, 8, 6, &g).is_err() {
+                prop_assert!(check_mark(&wider, w, 0, 8, 6, &g).is_err());
             }
         }
 
@@ -447,8 +540,8 @@ mod tests {
             let g = Guards { max_stale_secs: 120, max_conf_bps: 10_000,
                              max_move_bps: 9_000, equity_quiet_secs: 900 };
             let q = Quote { price: 1_000_000, conf: 0, expo: -8, publish_time: 0 };
-            if check_mark(&q, age, 0, 8, 6, &g).is_err() {
-                prop_assert!(check_mark(&q, age + extra, 0, 8, 6, &g).is_err());
+            if check_mark(&q, MarkWindow::now(age, g.max_stale_secs), 0, 8, 6, &g).is_err() {
+                prop_assert!(check_mark(&q, MarkWindow::now(age + extra, g.max_stale_secs), 0, 8, 6, &g).is_err());
             }
         }
     }

@@ -23,7 +23,7 @@ use crate::settle::{NavState, ShareClass};
 
 /// Bumped when the account layout changes. An account written by a different
 /// version is rejected rather than reinterpreted.
-pub const VAULT_VERSION: u8 = 1;
+pub const VAULT_VERSION: u8 = 2;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
 pub enum Class {
@@ -69,6 +69,17 @@ pub enum HaltReason {
     /// Stopped by the authority.
     Operator,
 }
+
+/// What a "session" is for this vault. The program is one; the clock differs.
+///
+/// `EQUITY`: NYSE hours, Pyth's US-equity feed going quiet is the bell.
+/// `EVENT`: a private or pre-IPO name with no exchange session. The boundary
+/// is the next discrete print (a tender, a round, a 409A) from an on-chain
+/// schedule, or the moment the token's price diverges from its mark by more
+/// than the vault tolerates. The share classes are then NOW and THEN rather
+/// than DAY and NIGHT, on the same two mints.
+pub const SESSION_EQUITY: u8 = 0;
+pub const SESSION_EVENT: u8 = 1;
 
 /// Granular pause bits. Settlement is deliberately *not* pausable: freezing NAV
 /// while the price keeps moving means the first boundary after resuming hands
@@ -157,6 +168,41 @@ pub struct Vault {
     pub cum_fill_incentive: u64,
     pub total_minted_night: u64,
     pub total_minted_day: u64,
+
+    // ── layout v2 ────────────────────────────────────────────────────────
+    /// `SESSION_EQUITY` or `SESSION_EVENT`.
+    pub session_kind: u8,
+    /// The listed name, NUL-padded: `NVDA`, `OPENAI`. Names the share classes.
+    pub symbol: [u8; 8],
+    /// A mark's `posted_slot` may be at most this many slots behind the clock.
+    /// Bounds how long a price-update account may sit around before being read
+    /// as current, on top of the publish-time window.
+    pub max_posted_slot_age: u32,
+    /// At a settlement the mark may be published up to this long *before* the
+    /// bell: the last print before the close is the close.
+    pub max_bell_lead_secs: u32,
+    /// Event sessions only: token price vs mark divergence, in basis points,
+    /// beyond which THEN is deemed exposed.
+    pub max_premium_bps: u16,
+    /// How long after a settlement the residual is offered at one price to
+    /// everyone before ordinary fills resume.
+    pub auction_secs: u32,
+    /// Fill incentive by elapsed time since the bell: within the auction
+    /// window, within twice it, after. In basis points.
+    pub incentive_ramp: [u16; 3],
+    /// Whether a recap must carry a Pyth update for every boundary it replays.
+    /// A devnet instance without a posting keeper cannot produce those, and
+    /// says so on its instrument card rather than pretending.
+    pub require_verified_recap: bool,
+    /// Fills are refused until this instant. Set by a jump at a settlement.
+    pub fill_paused_until: i64,
+    pub last_recap_ts: i64,
+    pub recap_count: u32,
+    /// Event sessions only: the key allowed to post the detector reading.
+    pub detector_authority: Pubkey,
+    /// The program that owns the share mints. Recorded so a client never has
+    /// to guess which ATA derivation applies.
+    pub share_token_program: Pubkey,
 }
 
 impl Vault {
@@ -176,6 +222,15 @@ impl Vault {
             max_move_bps: self.max_move_bps,
             equity_quiet_secs: self.equity_quiet_secs,
         }
+    }
+
+    pub fn is_event(&self) -> bool {
+        self.session_kind == SESSION_EVENT
+    }
+
+    pub fn symbol_str(&self) -> &str {
+        let end = self.symbol.iter().position(|&b| b == 0).unwrap_or(self.symbol.len());
+        core::str::from_utf8(&self.symbol[..end]).unwrap_or("")
     }
 
     pub fn last_session(&self) -> Session {
@@ -415,6 +470,19 @@ mod layout {
             cum_fill_incentive: 777,
             total_minted_night: 111_111,
             total_minted_day: 222_222,
+            session_kind: SESSION_EVENT,
+            symbol: *b"OPENAI\0\0",
+            max_posted_slot_age: 4_500,
+            max_bell_lead_secs: 300,
+            max_premium_bps: 1_000,
+            auction_secs: 120,
+            incentive_ramp: [10, 25, 50],
+            require_verified_recap: true,
+            fill_paused_until: 1_774_618_321,
+            last_recap_ts: 1_774_500_000,
+            recap_count: 3,
+            detector_authority: Pubkey::new_from_array([11u8; 32]),
+            share_token_program: Pubkey::new_from_array([12u8; 32]),
         };
 
         let mut body = Vec::new();

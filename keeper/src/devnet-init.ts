@@ -72,6 +72,8 @@ const PARAMS: VaultParams = {
   fillIncentiveBps: 10,
   maxCarryDeltaBps: 500,
   maxUnexpectedClosedSecs: 3 * 3_600,
+  maxPostedSlotAge: 4_500, maxBellLeadSecs: 300, maxPremiumBps: 1_000, auctionSecs: 120,
+  incentiveRamp: [10, 25, 50], requireVerifiedRecap: false,
 };
 
 const load = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(p, 'utf8'))));
@@ -170,7 +172,7 @@ async function main() {
       markPriceUpdate: markUpdate, equityPriceUpdate: equityUpdate,
       underlyingTokenProgram: TOKEN_2022_PROGRAM_ID,
       quoteTokenProgram: SPL_TOKEN,
-    }, PARAMS);
+    }, PARAMS, 'NVDA');
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [deployer]);
     console.log(`vault        ${vault.toBase58()}  initialised in ${sig}`);
   }

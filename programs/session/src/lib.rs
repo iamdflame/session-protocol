@@ -54,7 +54,7 @@ use errors::SessionError;
 use fixed::{mul_div_floor, WAD};
 use machine::Decision;
 use ops::OpError;
-use oracle::{effective_session, parse_price_update, Quote, Verification};
+use oracle::{effective_session, parse_price_update, MarkWindow, PriceUpdate, Verification};
 use settle::{settle, value_of};
 use state::*;
 
@@ -69,8 +69,25 @@ pub mod session {
     use super::*;
 
     /// Create a vault for one underlying, with both share classes.
-    pub fn initialize_vault(ctx: Context<InitializeVault>, p: VaultParams) -> Result<()> {
+    ///
+    /// Permissionless: whoever pays becomes this vault's authority, and that
+    /// authority reaches this vault's tunables and nothing else. One vault per
+    /// (underlying, quote) pair, by PDA.
+    pub fn initialize_vault(
+        ctx: Context<InitializeVault>,
+        p: VaultParams,
+        symbol: String,
+        session_kind: u8,
+    ) -> Result<()> {
         p.validate()?;
+        require!(
+            session_kind == SESSION_EQUITY || session_kind == SESSION_EVENT,
+            SessionError::BadParameter
+        );
+        require!(
+            !symbol.is_empty() && symbol.len() <= 8 && symbol.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()),
+            SessionError::BadParameter
+        );
         require_keys_neq!(
             ctx.accounts.underlying_mint.key(),
             ctx.accounts.quote_mint.key(),
@@ -86,8 +103,10 @@ pub mod session {
 
         // Both feeds are read at creation, so a vault can never be initialised
         // pointing at an account that does not exist or does not match.
-        let mark_q = read_quote(&ctx.accounts.mark_price_update, &p.mark_feed_id)?;
-        let _equity_q = read_quote(&ctx.accounts.equity_price_update, &p.equity_feed_id)?;
+        let mark_u = read_quote(&ctx.accounts.mark_price_update, &p.mark_feed_id)?;
+        let _equity_u = read_quote(&ctx.accounts.equity_price_update, &p.equity_feed_id)?;
+        require_recent_post(&mark_u, p.max_posted_slot_age)?;
+        let mark_q = mark_u.quote;
 
         let v = &mut ctx.accounts.vault;
         v.version = VAULT_VERSION;
@@ -123,8 +142,23 @@ pub mod session {
         v.halted = false;
         v.halt_reason = HaltReason::None;
 
+        v.session_kind = session_kind;
+        v.symbol = [0u8; 8];
+        v.symbol[..symbol.len()].copy_from_slice(symbol.as_bytes());
+        v.fill_paused_until = 0;
+        v.last_recap_ts = 0;
+        v.recap_count = 0;
+        // Until a detector key is set, the authority is it.
+        v.detector_authority = ctx.accounts.authority.key();
+        v.share_token_program = ctx.accounts.quote_token_program.key();
+
         v.last_mark = oracle::check_mark(
-            &mark_q, now, 0, v.underlying_decimals, v.quote_decimals, &v.guards(),
+            &mark_q,
+            MarkWindow::now(now, v.max_stale_secs),
+            0,
+            v.underlying_decimals,
+            v.quote_decimals,
+            &v.guards(),
         )
         .map_err(map_oracle)?;
 
@@ -295,7 +329,9 @@ pub mod session {
         // The calendar proposes; the equity feed disposes. A feed that has gone
         // quiet during a nominal session means an unencoded holiday or a halt.
         let equity_feed = ctx.accounts.vault.equity_feed_id;
-        let equity_q = read_quote(&ctx.accounts.equity_price_update, &equity_feed)?;
+        // No posted-slot bound on the equity feed: it is *expected* to sit
+        // unwritten for seventeen hours a day. Its age is the signal.
+        let equity_q = read_quote(&ctx.accounts.equity_price_update, &equity_feed)?.quote;
         let guards = ctx.accounts.vault.guards();
         let calendar = session_at(now);
         let effective = effective_session(calendar, equity_q.publish_time, now, &guards);
@@ -353,9 +389,19 @@ pub mod session {
         }
 
         let mark_feed = v.mark_feed_id;
-        let mark_q = read_quote(&ctx.accounts.mark_price_update, &mark_feed)?;
+        let mark_u = read_quote(&ctx.accounts.mark_price_update, &mark_feed)?;
+        require_recent_post(&mark_u, v.max_posted_slot_age)?;
+        // The price *at the bell*, not the price at the crank. A crank an hour
+        // late reading the live feed has a number that is fresh and wrong; the
+        // window around `boundary_ts` refuses it, and the keeper posts the
+        // print from the bell instead.
         let mark = oracle::check_mark(
-            &mark_q, now, v.last_mark, v.underlying_decimals, v.quote_decimals, &guards,
+            &mark_u.quote,
+            MarkWindow::at_bell(boundary_ts, v.max_bell_lead_secs, v.max_stale_secs),
+            v.last_mark,
+            v.underlying_decimals,
+            v.quote_decimals,
+            &guards,
         )
         .map_err(map_oracle)?;
 
@@ -380,10 +426,8 @@ pub mod session {
         v.last_mark = mark;
         // The bell, not the crank. A crank that lands an hour late must not
         // charge the incoming class that hour: the session it is being paid
-        // for began when the calendar says it began. The mark is still the
-        // one the crank read — an on-chain program cannot fetch a historical
-        // price — which is why `max_stale_secs` bounds how far from the bell
-        // that mark is allowed to be.
+        // for began when the calendar says it began. The mark, too, was
+        // required to come from the bell's own window above.
         v.last_boundary_ts = boundary_ts;
         v.boundary_count = v.boundary_count.saturating_add(1);
         // Carry, never overwrite: a residue from the previous boundary is still
@@ -436,9 +480,16 @@ pub mod session {
         require!(!v.paused(PAUSE_FILL), SessionError::Paused);
 
         let mark_feed = v.mark_feed_id;
-        let mark_q = read_quote(&ctx.accounts.mark_price_update, &mark_feed)?;
+        let mark_u = read_quote(&ctx.accounts.mark_price_update, &mark_feed)?;
+        require_recent_post(&mark_u, v.max_posted_slot_age)?;
+        // A fill is priced now, so the window trails the clock.
         let mark = oracle::check_mark(
-            &mark_q, now, v.last_mark, v.underlying_decimals, v.quote_decimals, &v.guards(),
+            &mark_u.quote,
+            MarkWindow::now(now, v.max_stale_secs),
+            v.last_mark,
+            v.underlying_decimals,
+            v.quote_decimals,
+            &v.guards(),
         )
         .map_err(map_oracle)?;
 
@@ -694,6 +745,13 @@ pub struct VaultParams {
     pub fill_incentive_bps: u16,
     pub max_carry_delta_bps: u16,
     pub max_unexpected_closed_secs: u32,
+    // ── v2 ──
+    pub max_posted_slot_age: u32,
+    pub max_bell_lead_secs: u32,
+    pub max_premium_bps: u16,
+    pub auction_secs: u32,
+    pub incentive_ramp: [u16; 3],
+    pub require_verified_recap: bool,
 }
 
 impl VaultParams {
@@ -718,6 +776,18 @@ impl VaultParams {
             (3_600..=604_800).contains(&self.max_unexpected_closed_secs),
             SessionError::BadParameter
         );
+        // A slot is ~400ms; 9,000 is an hour. Wider than that and the bound
+        // stops meaning "recently posted".
+        require!((1..=9_000).contains(&self.max_posted_slot_age), SessionError::BadParameter);
+        require!(self.max_bell_lead_secs <= 3_600, SessionError::BadParameter);
+        require!(self.max_premium_bps <= 5_000, SessionError::BadParameter);
+        require!((30..=3_600).contains(&self.auction_secs), SessionError::BadParameter);
+        require!(
+            self.incentive_ramp.iter().all(|&b| b <= 500)
+                && self.incentive_ramp[0] <= self.incentive_ramp[1]
+                && self.incentive_ramp[1] <= self.incentive_ramp[2],
+            SessionError::BadParameter
+        );
         Ok(())
     }
 }
@@ -733,6 +803,12 @@ impl Vault {
         self.fill_incentive_bps = p.fill_incentive_bps;
         self.max_carry_delta_bps = p.max_carry_delta_bps;
         self.max_unexpected_closed_secs = p.max_unexpected_closed_secs;
+        self.max_posted_slot_age = p.max_posted_slot_age;
+        self.max_bell_lead_secs = p.max_bell_lead_secs;
+        self.max_premium_bps = p.max_premium_bps;
+        self.auction_secs = p.auction_secs;
+        self.incentive_ramp = p.incentive_ramp;
+        self.require_verified_recap = p.require_verified_recap;
     }
 
     fn check_live(&self) -> Result<()> {
@@ -821,7 +897,7 @@ fn vault_seeds(v: &Vault) -> [&[u8]; 4] {
 /// receiver, it must parse as a price update, and the feed id must match the
 /// vault's configuration. Skip any one and a caller can settle a vault against
 /// a price of their choosing.
-fn read_quote(ai: &AccountInfo, expect: &[u8; 32]) -> Result<Quote> {
+fn read_quote(ai: &AccountInfo, expect: &[u8; 32]) -> Result<PriceUpdate> {
     require_keys_eq!(*ai.owner, PYTH_RECEIVER, SessionError::WrongOracleOwner);
     let data = ai.try_borrow_data()?;
     let update = parse_price_update(&data).map_err(map_oracle)?;
@@ -835,7 +911,21 @@ fn read_quote(ai: &AccountInfo, expect: &[u8; 32]) -> Result<Quote> {
         update.verification == Verification::Full,
         SessionError::PartialVerification
     );
-    Ok(update.quote)
+    Ok(update)
+}
+
+/// The account must have been *written* recently, not just carry a recent
+/// publish time. Anyone can post any valid Pyth update into an account they
+/// own; this stops an old posting being left around and read as current long
+/// after the fact. Never applied to the equity feed, whose silence is the
+/// point.
+fn require_recent_post(u: &PriceUpdate, max_age_slots: u32) -> Result<()> {
+    let slot = Clock::get()?.slot;
+    require!(
+        slot.saturating_sub(u.posted_slot) <= max_age_slots as u64,
+        SessionError::PostedSlotStale
+    );
+    Ok(())
 }
 
 /// Policy failures carry their own meaning; flattening them into one error
@@ -863,6 +953,7 @@ fn map_oracle(e: oracle::OracleError) -> Error {
     match e {
         O::NonPositivePrice => error!(SessionError::BadOraclePrice),
         O::Stale => error!(SessionError::StaleOracle),
+        O::AfterWindow => error!(SessionError::MarkOutsideWindow),
         O::Uncertain => error!(SessionError::UncertainOracle),
         O::MoveTooLarge => error!(SessionError::MoveTooLarge),
         O::BadExponent => error!(SessionError::BadExponent),
