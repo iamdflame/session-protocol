@@ -30,7 +30,11 @@ impl FundingParams {
 }
 
 impl Default for FundingParams {
-    /// 25% sensitivity, capped at 50bp per boundary — roughly 2.5%/month if the
+    /// 25% sensitivity, capped at 50bp per boundary. That is ~22%/month if a
+    /// vault sits maximally lopsided through every bell (50bp x 2 boundaries x
+    /// 22 trading days), which is a deliberately strong pull and not a gentle
+    /// one — an earlier comment here said 2.5% and was wrong by a factor of
+    /// nine. It is the rate a class pays to keep the other side interested; if
     /// book stays maximally lopsided, which is enough to pull it back.
     fn default() -> Self {
         Self { k_bps: 2_500, max_bps: 50 }

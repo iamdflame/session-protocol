@@ -125,7 +125,7 @@ Every bound is enforced on chain; these are the values to start from.
 | parameter | start | reasoning |
 |---|---|---|
 | `funding_k_bps` | 2500 | 25% sensitivity to skew |
-| `funding_max_bps` | 50 | ~2.5%/month if maximally lopsided — enough to pull it back |
+| `funding_max_bps` | 50 | 50bp **per boundary** — ~22%/month at maximum skew (50bp x 2 bells x 22 days), reached only when one class is worth far more than the other. Raise deliberately: the ceiling is 1000 (10% per bell). |
 | `max_stale_secs` | 120 | Pyth publishes far faster; this only catches outages |
 | `max_conf_bps` | 100 | refuse to settle when Pyth is 1% unsure |
 | `max_move_bps` | 2000 | a 20% jump between boundaries needs a human |
