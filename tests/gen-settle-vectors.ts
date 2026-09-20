@@ -1,6 +1,7 @@
 /* Cross-language settlement vectors. If the chain and the SDK ever disagree,
    a keeper quotes a number the chain will not produce. */
-import { settle, WAD, type NavState, type ShareClass, type FundingParams } from '../sdk/src/settle.ts';
+import { settle, WAD, valueOf, mulDivFloor,
+         type NavState, type ShareClass, type FundingParams } from '../sdk/src/settle.ts';
 import { writeFileSync } from 'node:fs';
 
 let seed = 0xc0ffee;
@@ -23,14 +24,19 @@ for (const [ns, ds] of edges)
   for (const exposed of ['night', 'day'] as ShareClass[])
     for (const fp of FP)
       for (const [p0, p1] of [[WAD, WAD], [WAD, WAD * 11n / 10n], [WAD, WAD * 9n / 10n]]) {
-        const s: NavState = { nightSupply: ns, daySupply: ds, nightNav: WAD, dayNav: WAD, exposed, lastMark: p0 };
+        const ev = exposed === 'night' ? valueOf(ns, WAD) : valueOf(ds, WAD);
+        const owned = p0 > 0n ? mulDivFloor(ev, WAD, p0) : 0n;
+        const s: NavState = { nightSupply: ns, daySupply: ds, ownedUnderlying: owned,
+                              nightNav: WAD, dayNav: WAD, exposed, lastMark: p0 };
         const out = settle(s, p1, fp);
         cases.push({
-          in: { ...s, nightSupply: `${ns}`, daySupply: `${ds}`, nightNav: `${WAD}`, dayNav: `${WAD}`, lastMark: `${p0}` },
+          in: { ...s, nightSupply: `${ns}`, daySupply: `${ds}`, ownedUnderlying: `${owned}`,
+                nightNav: `${WAD}`, dayNav: `${WAD}`, lastMark: `${p0}` },
           newMark: `${p1}`, fp: { kBps: `${fp.kBps}`, maxBps: `${fp.maxBps}` },
           out: { nightNav: `${out.nightNav}`, dayNav: `${out.dayNav}`, exposed: out.exposed,
                  funding: `${out.funding}`, handoffDelta: `${out.handoffDelta}`,
-                 valueNight: `${out.valueNight}`, valueDay: `${out.valueDay}` },
+                 valueNight: `${out.valueNight}`, valueDay: `${out.valueDay}`,
+                 shortfall: `${out.shortfall}` },
         });
       }
 
@@ -44,15 +50,23 @@ for (let i = 0; i < 1500; i++) {
   const p1 = WAD * BigInt(1 + Math.floor(rnd() * 10000)) / 1000n;
   const exposed = pick(['night', 'day'] as ShareClass[]);
   const fp = pick(FP);
-  const s: NavState = { nightSupply: ns, daySupply: ds, nightNav: navN, dayNav: navD, exposed, lastMark: p0 };
+  // a mix of hedged and deliberately unhedged books, since the unhedged case
+  // is exactly where the two roll formulas diverge
+  const ev = exposed === 'night' ? valueOf(ns, navN) : valueOf(ds, navD);
+  let owned = p0 > 0n ? mulDivFloor(ev, WAD, p0) : 0n;
+  if (rnd() < 0.35) owned = owned * BigInt(50 + Math.floor(rnd() * 150)) / 100n;
+  const s: NavState = { nightSupply: ns, daySupply: ds, ownedUnderlying: owned,
+                        nightNav: navN, dayNav: navD, exposed, lastMark: p0 };
   let out;
   try { out = settle(s, p1, fp); } catch { continue; }
   cases.push({
-    in: { nightSupply: `${ns}`, daySupply: `${ds}`, nightNav: `${navN}`, dayNav: `${navD}`, exposed, lastMark: `${p0}` },
+    in: { nightSupply: `${ns}`, daySupply: `${ds}`, ownedUnderlying: `${owned}`,
+          nightNav: `${navN}`, dayNav: `${navD}`, exposed, lastMark: `${p0}` },
     newMark: `${p1}`, fp: { kBps: `${fp.kBps}`, maxBps: `${fp.maxBps}` },
     out: { nightNav: `${out.nightNav}`, dayNav: `${out.dayNav}`, exposed: out.exposed,
            funding: `${out.funding}`, handoffDelta: `${out.handoffDelta}`,
-           valueNight: `${out.valueNight}`, valueDay: `${out.valueDay}` },
+           valueNight: `${out.valueNight}`, valueDay: `${out.valueDay}`,
+           shortfall: `${out.shortfall}` },
   });
 }
 

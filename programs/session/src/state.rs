@@ -61,6 +61,9 @@ pub enum HaltReason {
     UnfilledHandoff,
     /// Assets no longer cover claims.
     Insolvent,
+    /// A price move produced a loss larger than the exposed class was worth.
+    /// Only reachable when an unfilled handoff left the vault badly over-hedged.
+    BadDebt,
     /// Stored state contradicts the calendar.
     Inconsistent,
     /// Stopped by the authority.
@@ -203,6 +206,7 @@ impl Vault {
         NavState {
             night_supply,
             day_supply,
+            owned_underlying: self.owned_underlying,
             night_nav: self.night_nav,
             day_nav: self.day_nav,
             exposed: self.exposed.into(),

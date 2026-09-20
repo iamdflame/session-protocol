@@ -351,6 +351,15 @@ pub mod session {
         let out = settle(&nav_state, mark, &v.funding_params())
             .map_err(|_| error!(SessionError::MathOverflow))?;
 
+        // A loss the exposed class cannot absorb has nowhere to go. Applying it
+        // would wipe that class to zero and silently take the remainder out of
+        // the other class's backing, so the vault stops instead — with nothing
+        // written, so an operator sees the state that produced it.
+        if out.shortfall > 0 {
+            let detail = out.shortfall.min(i64::MAX as u128) as i64;
+            return halt_and_succeed(&mut ctx.accounts.vault, HaltReason::BadDebt, now, detail);
+        }
+
         let v = &mut ctx.accounts.vault;
         v.night_nav = out.night_nav;
         v.day_nav = out.day_nav;

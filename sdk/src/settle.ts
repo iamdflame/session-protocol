@@ -65,6 +65,8 @@ export function fundingTransfer(
 export interface NavState {
   nightSupply: bigint;
   daySupply: bigint;
+  /** Underlying atoms the vault actually holds. */
+  ownedUnderlying: bigint;
   nightNav: bigint;
   dayNav: bigint;
   exposed: ShareClass;
@@ -79,6 +81,8 @@ export interface Settlement {
   handoffDelta: bigint;
   valueNight: bigint;
   valueDay: bigint;
+  /** Loss the exposed class could not absorb. Non-zero means halt. */
+  shortfall: bigint;
 }
 
 export const valueOf = (supply: bigint, nav: bigint): bigint => mulDivFloor(supply, nav, WAD);
@@ -99,10 +103,34 @@ export function settle(
 ): Settlement {
   if (s.lastMark === 0n || newMark === 0n) throw new Error('zero mark');
 
+  // The exposed class earns the return on the inventory the vault *actually*
+  // held, not on the price ratio. Those agree while the book is hedged and
+  // diverge the moment a handoff goes unfilled — rolling by the ratio would
+  // credit a return the vault never made.
   let nightNav = s.nightNav;
   let dayNav = s.dayNav;
-  if (s.exposed === 'night') nightNav = mulDivFloor(nightNav, newMark, s.lastMark);
-  else dayNav = mulDivFloor(dayNav, newMark, s.lastMark);
+  let shortfall = 0n;
+  const exposedSupply = s.exposed === 'night' ? s.nightSupply : s.daySupply;
+  if (exposedSupply > 0n && s.ownedUnderlying > 0n) {
+    const up = newMark >= s.lastMark;
+    const spread = up ? newMark - s.lastMark : s.lastMark - newMark;
+    // Asymmetric on purpose: a gain rounds down, a loss rounds up, so claims
+    // can never outrun the assets backing them.
+    const delta = up
+      ? mulDivFloor(s.ownedUnderlying, spread, exposedSupply)
+      : mulDivCeil(s.ownedUnderlying, spread, exposedSupply);
+    const cur = s.exposed === 'night' ? nightNav : dayNav;
+    let next: bigint;
+    if (up) {
+      next = cur + delta;
+    } else if (delta > cur) {
+      shortfall = mulDivFloor(delta - cur, exposedSupply, WAD);
+      next = 0n;
+    } else {
+      next = cur - delta;
+    }
+    if (s.exposed === 'night') nightNav = next; else dayNav = next;
+  }
 
   const vn0 = valueOf(s.nightSupply, nightNav);
   const vd0 = valueOf(s.daySupply, dayNav);
@@ -134,6 +162,6 @@ export function settle(
   return {
     nightNav, dayNav, exposed, funding,
     handoffDelta: need - have,
-    valueNight, valueDay,
+    valueNight, valueDay, shortfall,
   };
 }

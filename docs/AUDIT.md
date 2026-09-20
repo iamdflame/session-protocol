@@ -116,3 +116,62 @@ program around it. Every P0 above lives in `lib.rs`, which had **zero** test
 coverage — the 46 passing tests created the impression of a tested system while
 the entire state machine, authorisation surface and solvency model were
 unexercised.
+
+---
+
+# Second pass — found by the adversarial simulation
+
+The first pass fixed what reading the code revealed. These three were found by
+running long randomised sequences and asserting solvency after *every* step.
+None would have been caught by testing operations one at a time, and all three
+are silent: the vault keeps working and the gap keeps growing.
+
+### 10. NAV rolled by the price ratio, not the inventory actually held
+
+Settlement multiplied the exposed class's NAV by `P₁/P₀`. That is correct only
+while the vault holds exactly that class's value in stock. When a handoff goes
+unfilled it does not, and claims then move by the *assumed* return while assets
+move by the *real* one. The difference comes out of everyone's backing.
+
+Now `Δnav = U·(P₁−P₀)/supply`, computed from the inventory the vault actually
+held. The two agree exactly when hedged — substituting `U·P₀ = supply·nav`
+recovers the multiplicative roll — and diverge precisely when they should.
+
+### 11. Losses rounded the wrong way
+
+Gains floored *and* losses floored. Flooring a loss means claims shrink more
+slowly than assets, so every down move left claims fractionally above backing.
+Individually dust; cumulatively an insolvency, and one that only ever grows.
+
+Gains now floor and losses ceil, so claims can never outrun assets.
+
+### 12. The sell side of a fill leaked an atom
+
+`gross` floored in both directions. Selling, that let a filler take stock worth
+marginally more than they paid — about one atom per fill, never reversing, and
+chosen by the filler, who picks the size.
+
+Rounding is now against the filler in both directions: floor when the vault
+buys, ceil when it sells.
+
+### 13. Bad debt was silently absorbed
+
+A loss larger than the exposed class is worth wiped it to zero and let the
+remainder fall on the other class's backing. Reachable whenever an unfilled
+handoff leaves the vault badly over-hedged and the price then drops — the
+simulation hit it with the vault holding ~199k of stock against a class worth
+~3k.
+
+`settle` now reports a `shortfall` and the program halts without applying
+anything, so the state that produced it is preserved for an operator.
+
+## What the simulation is for
+
+Three of these are rounding-direction bugs. Every one passed the unit tests,
+because a single operation loses an atom and an atom looks like nothing. They
+are only visible as a trend across thousands of operations, which is why the
+suite now runs 40 randomised year-long lifecycles and checks solvency after
+every mint, redeem, fill and settlement rather than at the end.
+
+Under that load 4 of 40 runs trip a guard — enough to prove the guards fire,
+not so many that they fire spuriously.

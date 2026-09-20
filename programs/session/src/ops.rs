@@ -219,14 +219,24 @@ pub fn plan_fill(
     if underlying_amount == 0 {
         return Err(OpError::ZeroAmount);
     }
-    let gross = mul_div_floor(underlying_amount as u128, mark, WAD).ok_or(OpError::Overflow)?;
+    // Rounding is against the filler in both directions, because the filler
+    // chooses the size and would otherwise pick one whose remainder favours
+    // them. Buying, the vault pays no more than the stock is worth (floor);
+    // selling, the filler pays no less (ceil). Floor both ways and each sell
+    // leaks an atom of backing — small, but it accumulates and never reverses.
+    let buying = v.pending_delta > 0;
+    let gross = if buying {
+        mul_div_floor(underlying_amount as u128, mark, WAD)
+    } else {
+        mul_div_ceil(underlying_amount as u128, mark, WAD)
+    }
+    .ok_or(OpError::Overflow)?;
     if gross == 0 {
         return Err(OpError::AmountTooSmall);
     }
     let incentive =
         mul_div_floor(gross, v.fill_incentive_bps as u128, 10_000).ok_or(OpError::Overflow)?;
 
-    let buying = v.pending_delta > 0;
     let (quote_amount, owned_underlying_after, owned_quote_after, pending_after) = if buying {
         if gross > v.pending_delta as u128 {
             return Err(OpError::FillTooLarge);

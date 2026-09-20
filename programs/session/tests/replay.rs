@@ -39,11 +39,16 @@ fn replay(symbol: &str, kind: &str, rows: &[(i64, f64)], fp: &FundingParams) -> 
     }
     let to_mark = |p: f64| -> u128 { (p * WAD as f64 / 1_000.0) as u128 };
 
+    let start_mark = to_mark(rows[0].1);
     let mut state = NavState {
         // equal-sized classes: the case the protocol is designed around, where
         // every handoff is internal and nothing trades
         night_supply: 1_000_000_000,
         day_supply: 1_000_000_000,
+        // hedged exactly: the vault holds the exposed class's value in stock
+        owned_underlying: if start_mark > 0 {
+            ((1_000_000_000u128 * WAD / start_mark).min(u64::MAX as u128)) as u64
+        } else { 0 },
         night_nav: WAD,
         day_nav: WAD,
         exposed: match session_at(rows[0].0) {
@@ -90,11 +95,17 @@ fn replay(symbol: &str, kind: &str, rows: &[(i64, f64)], fp: &FundingParams) -> 
         }
         ref_anchor = px;
 
+        // re-point inventory at the newly exposed class, as a filled handoff does
+        let exposed_value = match out.exposed {
+            ShareClass::Night => (state.night_supply as u128) * out.night_nav / WAD,
+            ShareClass::Day => (state.day_supply as u128) * out.day_nav / WAD,
+        };
         state = NavState {
             night_nav: out.night_nav,
             day_nav: out.day_nav,
             exposed: out.exposed,
             last_mark: mark,
+            owned_underlying: ((exposed_value * WAD / mark).min(u64::MAX as u128)) as u64,
             ..state
         };
         cur = s;
@@ -229,13 +240,17 @@ fn funding_never_creates_value_across_a_long_replay() {
         }
 
         // a deliberately lopsided book, so funding is active at every boundary
+        let m0 = (rows[0].1 * WAD as f64 / 1_000.0) as u128;
         let mut state = NavState {
             night_supply: 3_000_000_000,
             day_supply: 1_000_000_000,
+            owned_underlying: if m0 > 0 {
+                ((3_000_000_000u128 * WAD / m0).min(u64::MAX as u128)) as u64
+            } else { 0 },
             night_nav: WAD,
             day_nav: WAD,
             exposed: ShareClass::Night,
-            last_mark: (rows[0].1 * WAD as f64 / 1_000.0) as u128,
+            last_mark: m0,
         };
         let mut cur = session_at(rows[0].0);
 
@@ -252,11 +267,16 @@ fn funding_never_creates_value_across_a_long_replay() {
                 // funding moves value between classes; it must never mint any
                 let before = out.value_night + out.value_day;
                 assert!(before > 0, "vault emptied itself");
+                let exposed_value = match out.exposed {
+                    ShareClass::Night => (state.night_supply as u128) * out.night_nav / WAD,
+                    ShareClass::Day => (state.day_supply as u128) * out.day_nav / WAD,
+                };
                 state = NavState {
                     night_nav: out.night_nav,
                     day_nav: out.day_nav,
                     exposed: out.exposed,
                     last_mark: mark,
+                    owned_underlying: ((exposed_value * WAD / mark).min(u64::MAX as u128)) as u64,
                     ..state
                 };
             }

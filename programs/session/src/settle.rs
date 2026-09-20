@@ -50,6 +50,13 @@ pub struct NavState {
     /// Share atoms outstanding.
     pub night_supply: u64,
     pub day_supply: u64,
+    /// Underlying atoms the vault actually holds.
+    ///
+    /// Not cosmetic: the exposed class earns the return on the inventory the
+    /// vault *really* held, not on the inventory it was supposed to hold. When
+    /// a handoff is unfilled those differ, and rolling NAV by the price ratio
+    /// would credit a return the vault never earned.
+    pub owned_underlying: u64,
     /// Quote atoms per share atom, WAD-scaled.
     pub night_nav: u128,
     pub day_nav: u128,
@@ -72,6 +79,14 @@ pub struct Settlement {
     pub handoff_delta: i128,
     pub value_night: u128,
     pub value_day: u128,
+    /// Quote atoms of loss the exposed class could not absorb.
+    ///
+    /// Reached only when the vault is badly over-hedged — an unfilled handoff
+    /// left it holding far more stock than the exposed class is worth — and the
+    /// price then falls. The class is wiped to zero and the remainder has no
+    /// claim to fall on. It is surfaced rather than clamped away, because
+    /// silently absorbing it makes the *other* class's backing disappear.
+    pub shortfall: u128,
 }
 
 /// Quote-atom value of a class.
@@ -95,12 +110,56 @@ pub fn settle(s: &NavState, new_mark: u128, fp: &FundingParams) -> Result<Settle
         return Err(MathError::ZeroMark);
     }
 
-    // 1. the exposed class earns the session; the parked class earns nothing
+    // 1. The exposed class earns the session; the parked class earns nothing.
+    //
+    // The gain is computed from the inventory the vault actually held, not from
+    // the price ratio. Those agree exactly while the book is balanced:
+    //
+    //     Δnav = U·(P₁−P₀)/supply,  and with U·P₀ = supply·nav,
+    //     Δnav = nav·(P₁/P₀ − 1)                     — the multiplicative roll
+    //
+    // but they diverge the moment a handoff goes unfilled, because then the
+    // vault is holding the wrong amount of stock. Rolling by the ratio would
+    // credit the exposed class a return the vault never made and quietly take
+    // the difference out of everyone's backing.
+    let mut shortfall: u128 = 0;
     let (mut night_nav, mut day_nav) = (s.night_nav, s.day_nav);
-    let rolled = |nav: u128| mul_div_floor(nav, new_mark, s.last_mark).ok_or(MathError::Overflow);
-    match s.exposed {
-        ShareClass::Night => night_nav = rolled(night_nav)?,
-        ShareClass::Day => day_nav = rolled(day_nav)?,
+    let exposed_supply = match s.exposed {
+        ShareClass::Night => s.night_supply,
+        ShareClass::Day => s.day_supply,
+    };
+
+    if exposed_supply > 0 && s.owned_underlying > 0 {
+        let up = new_mark >= s.last_mark;
+        let spread = if up { new_mark - s.last_mark } else { s.last_mark - new_mark };
+        // Δnav = U · spread / supply. The WAD scalings cancel.
+        //
+        // The rounding direction is not symmetric, and getting it wrong is an
+        // insolvency. A gain rounds *down* so claims grow no faster than assets;
+        // a loss rounds *up* so claims shrink at least as fast as assets. Floor
+        // both ways and every down move leaves claims above backing, compounding
+        // quietly until the vault cannot pay.
+        let delta = if up {
+            mul_div_floor(s.owned_underlying as u128, spread, exposed_supply as u128)
+        } else {
+            mul_div_ceil(s.owned_underlying as u128, spread, exposed_supply as u128)
+        }
+        .ok_or(MathError::Overflow)?;
+        let nav = match s.exposed {
+            ShareClass::Night => &mut night_nav,
+            ShareClass::Day => &mut day_nav,
+        };
+        if up {
+            *nav = nav.saturating_add(delta);
+        } else if delta > *nav {
+            // The loss is larger than the class is worth. Wipe it to zero and
+            // report what could not be absorbed; the caller must halt rather
+            // than let the gap eat the other class's backing.
+            shortfall = mul_div_floor(delta - *nav, exposed_supply as u128, WAD).unwrap_or(u128::MAX);
+            *nav = 0;
+        } else {
+            *nav -= delta;
+        }
     }
 
     // Values are derived for sizing funding. NAV stays the primary quantity:
@@ -156,6 +215,7 @@ pub fn settle(s: &NavState, new_mark: u128, fp: &FundingParams) -> Result<Settle
         handoff_delta,
         value_night,
         value_day,
+        shortfall,
     })
 }
 
@@ -165,12 +225,39 @@ mod tests {
     use proptest::prelude::*;
 
     const OFF: FundingParams = FundingParams::new(0, 0);
+
+    /// Apply a settlement and re-point inventory at the newly exposed class,
+    /// which is what a filled handoff does.
+    fn rehedge(prev: &NavState, out: &Settlement, mark: u128) -> NavState {
+        let exposed_value = match out.exposed {
+            ShareClass::Night => value_of(prev.night_supply, out.night_nav),
+            ShareClass::Day => value_of(prev.day_supply, out.day_nav),
+        }
+        .unwrap_or(0);
+        NavState {
+            night_nav: out.night_nav,
+            day_nav: out.day_nav,
+            exposed: out.exposed,
+            last_mark: mark,
+            owned_underlying: mul_div_floor(exposed_value, WAD, mark)
+                .unwrap_or(0)
+                .min(u64::MAX as u128) as u64,
+            ..*prev
+        }
+    }
     const ON: FundingParams = FundingParams::new(2_500, 50);
 
+    /// A correctly hedged book: the vault holds exactly the exposed class's
+    /// value in stock, which at nav = mark = WAD is one atom per share.
     fn state(ns: u64, ds: u64, exposed: ShareClass) -> NavState {
+        let exposed_supply = match exposed {
+            ShareClass::Night => ns,
+            ShareClass::Day => ds,
+        };
         NavState {
             night_supply: ns,
             day_supply: ds,
+            owned_underlying: exposed_supply,
             night_nav: WAD,
             day_nav: WAD,
             exposed,
@@ -255,21 +342,24 @@ mod tests {
             mark = mark * 102 / 100;                      // the market moved while shut
             expect_night *= mark as f64 / prev as f64;
             let out = settle(&s, mark, &OFF).unwrap();
-            s = NavState { night_nav: out.night_nav, day_nav: out.day_nav,
-                           exposed: out.exposed, last_mark: mark, ..s };
+            s = rehedge(&s, &out, mark);
 
             let prev = mark;
             mark = mark * 99 / 100;                       // and fell during the session
             expect_day *= mark as f64 / prev as f64;
             let out = settle(&s, mark, &OFF).unwrap();
-            s = NavState { night_nav: out.night_nav, day_nav: out.day_nav,
-                           exposed: out.exposed, last_mark: mark, ..s };
+            s = rehedge(&s, &out, mark);
         }
         let got_night = s.night_nav as f64 / WAD as f64;
         let got_day = s.day_nav as f64 / WAD as f64;
-        // NAV precision must survive repeated boundaries, not decay through them
-        assert!((got_night - expect_night).abs() < 1e-12, "night {got_night} vs {expect_night}");
-        assert!((got_day - expect_day).abs() < 1e-12, "day {got_day} vs {expect_day}");
+        // Re-hedging floors the inventory, so the vault is always a hair
+        // *under*-exposed. That is not one-directional in NAV: it earns slightly
+        // less on an up move and loses slightly less on a down move, so the
+        // deviation from a frictionless ideal can go either way. What matters is
+        // that it stays tiny, and that claims track the assets actually held —
+        // which `settlement_conserves_total_value` asserts directly.
+        assert!((got_night - expect_night).abs() < 1e-6, "night {got_night} vs {expect_night}");
+        assert!((got_day - expect_day).abs() < 1e-6, "day {got_day} vs {expect_day}");
         // and the two classes genuinely diverged: night up, day down
         assert!(got_night > 1.2 && got_day < 0.91, "night {got_night} day {got_day}");
     }
@@ -298,6 +388,7 @@ mod tests {
             let st = NavState {
                 night_supply: u(&inp["nightSupply"]) as u64,
                 day_supply: u(&inp["daySupply"]) as u64,
+                owned_underlying: u(&inp["ownedUnderlying"]) as u64,
                 night_nav: u(&inp["nightNav"]),
                 day_nav: u(&inp["dayNav"]),
                 exposed: cls(&inp["exposed"]),
@@ -318,6 +409,7 @@ mod tests {
             assert_eq!(got.handoff_delta, i(&want["handoffDelta"]), "case {n} handoff_delta");
             assert_eq!(got.value_night, u(&want["valueNight"]), "case {n} value_night");
             assert_eq!(got.value_day, u(&want["valueDay"]), "case {n} value_day");
+            assert_eq!(got.shortfall, u(&want["shortfall"]), "case {n} shortfall");
         }
         println!("settlement agrees with the SDK on {} vectors", cases.len());
     }
@@ -339,31 +431,41 @@ mod tests {
             night_first in any::<bool>(),
         ) {
             let exposed = if night_first { ShareClass::Night } else { ShareClass::Day };
-            let s = NavState { night_supply: ns, day_supply: ds, night_nav: nav_n,
-                               day_nav: nav_d, exposed, last_mark: p0 };
+            // hedged exactly, so the actual-gain roll and the ratio roll agree
+            let exposed_value = match exposed {
+                ShareClass::Night => value_of(ns, nav_n),
+                ShareClass::Day => value_of(ds, nav_d),
+            }.unwrap_or(0);
+            let owned = mul_div_floor(exposed_value, WAD, p0).unwrap_or(0).min(u64::MAX as u128) as u64;
+            let s = NavState { night_supply: ns, day_supply: ds, owned_underlying: owned,
+                               night_nav: nav_n, day_nav: nav_d, exposed, last_mark: p0 };
 
-            // Roll the exposed class's NAV exactly as settlement does, then value
-            // both classes. What this test is really asserting is that the two
-            // steps after the roll — funding and the handoff — move value between
-            // the classes without creating or destroying any.
-            let rolled_nav = match exposed {
-                ShareClass::Night => mul_div_floor(nav_n, p1, p0),
-                ShareClass::Day => mul_div_floor(nav_d, p1, p0),
+            // Claims must move by exactly the gain the vault actually made on the
+            // inventory it actually held — nothing more, nothing less. Anything
+            // else is value appearing from, or vanishing into, the accounting.
+            let claims_before = value_of(ns, nav_n).unwrap()
+                .saturating_add(value_of(ds, nav_d).unwrap());
+            let exposed_supply = match exposed { ShareClass::Night => ns, ShareClass::Day => ds };
+            let gain = if exposed_supply == 0 || owned == 0 {
+                0i128
+            } else {
+                let up = p1 >= p0;
+                let spread = if up { p1 - p0 } else { p0 - p1 };
+                // the per-share delta the implementation computes, re-valued
+                let per_share = mul_div_floor(owned as u128, spread, exposed_supply as u128)
+                    .unwrap_or(0);
+                let moved = value_of(exposed_supply, per_share).unwrap_or(0) as i128;
+                if up { moved } else { -moved }
             };
-            prop_assume!(rolled_nav.is_some());
-            let expected_total = match exposed {
-                ShareClass::Night => value_of(ns, rolled_nav.unwrap()).unwrap()
-                                       .saturating_add(value_of(ds, nav_d).unwrap()),
-                ShareClass::Day => value_of(ds, rolled_nav.unwrap()).unwrap()
-                                     .saturating_add(value_of(ns, nav_n).unwrap()),
-            };
+            let expected_total = (claims_before as i128 + gain).max(0) as u128;
 
             if let Ok(out) = settle(&s, p1, &ON) {
                 let total = out.value_night.saturating_add(out.value_day);
                 let drift = if total > expected_total { total - expected_total }
                             else { expected_total - total };
-                // floor division can lose at most one atom per class
-                prop_assert!(drift <= 4, "created/destroyed {drift} atoms");
+                // floor division can lose at most one atom per class, on the
+                // roll, the funding transfer and the re-valuation
+                prop_assert!(drift <= 6, "created/destroyed {drift} atoms");
             }
         }
 
@@ -374,8 +476,9 @@ mod tests {
             ds in 1u64..1_000_000_000u64,
             p in (WAD / 10)..(WAD * 10),
         ) {
-            let s = NavState { night_supply: ns, day_supply: ds, night_nav: WAD,
-                               day_nav: WAD, exposed: ShareClass::Night, last_mark: WAD };
+            let s = NavState { night_supply: ns, day_supply: ds, owned_underlying: ns,
+                               night_nav: WAD, day_nav: WAD, exposed: ShareClass::Night,
+                               last_mark: WAD };
             let with = settle(&s, p, &ON).unwrap();
             let without = settle(&s, p, &OFF).unwrap();
             let tw = with.value_night.saturating_add(with.value_day);
@@ -392,8 +495,9 @@ mod tests {
             p in (WAD / 10)..(WAD * 10), night_first in any::<bool>(),
         ) {
             let exposed = if night_first { ShareClass::Night } else { ShareClass::Day };
-            let s = NavState { night_supply: ns, day_supply: ds, night_nav: WAD,
-                               day_nav: WAD, exposed, last_mark: WAD };
+            let exposed_supply = match exposed { ShareClass::Night => ns, ShareClass::Day => ds };
+            let s = NavState { night_supply: ns, day_supply: ds, owned_underlying: exposed_supply,
+                               night_nav: WAD, day_nav: WAD, exposed, last_mark: WAD };
             let out = settle(&s, p, &ON).unwrap();
             prop_assert_eq!(out.exposed, exposed.other());
         }
