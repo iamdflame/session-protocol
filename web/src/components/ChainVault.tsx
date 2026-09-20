@@ -1,0 +1,403 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
+import { CurveChart } from './charts/CurveChart';
+import { SessionClock } from './SessionClock';
+import { ChainTrade } from './ChainTrade';
+import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
+import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
+import {
+  useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
+} from '@/lib/chain';
+import { Severity } from '@sdk/health.ts';
+import type { ShareClass } from '@/lib/localVault';
+import s from '@/pages/Vault.module.css';
+import h from './HealthPanel.module.css';
+import c from './ChainVault.module.css';
+
+const LABEL: Record<string, string> = { ok: 'Healthy', notice: 'Notice', warning: 'Warning', critical: 'Critical' };
+const nav = (v: bigint) => Number(v) / 1e18;
+const fromAtoms = (v: bigint, d: number) => Number(v) / 10 ** d;
+
+/**
+ * The vault page, when the vault is real.
+ *
+ * Everything on it is read from devnet through `useChainVault`: the account,
+ * the share supplies, both oracles, the wallet's balances. The trade panel
+ * signs real transactions. The health panel runs the SDK's `evaluate` on the
+ * chain state. The ledger is the vault's own transaction history. None of it
+ * is the local simulation — that path still serves the other assets, which
+ * have no vault on chain yet, and says so.
+ */
+export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
+  const chain = useChainVault(m);
+  const curve = useCurve(asset.symbol);
+  const clockSize = useClockSize(196, 72);
+
+  if (chain.status === 'loading') return <ChainSkeleton />;
+
+  if (chain.status === 'error' && !chain.data) {
+    return (
+      <div className={`shell ${s.gate}`}>
+        <p className="eyebrow">Devnet unreachable</p>
+        <h1 className={`display ${s.gateTitle}`}>The vault could not be read.</h1>
+        <p className={`lead ${s.gateBody}`}>
+          {chain.error.message}. The public devnet RPC rate-limits; a reload usually
+          gets through. Nothing here is guessed in the meantime.
+        </p>
+        <div className={s.gateActions}>
+          <button className={s.primary} onClick={() => chain.refresh()}>Try again</button>
+          <a className={s.secondary} href={explorerAddr(m.vault)} target="_blank" rel="noreferrer">Vault on Explorer ↗</a>
+        </div>
+      </div>
+    );
+  }
+
+  const d = chain.data!;
+  const v = d.vault;
+  const qd = v.quoteDecimals;
+
+  return (
+    <div className={s.page}>
+      <header className={`shell ${s.head}`}>
+        <div className={s.crumbs}>
+          <Link to="/markets">Markets</Link>
+          <span aria-hidden="true">/</span>
+          <span className="mono">{asset.symbol}</span>
+        </div>
+
+        <div className={s.headMain}>
+          <div className={s.identity}>
+            <div className={c.titleRow}>
+              <h1 className={`mono ${s.symbol}`}>{asset.symbol}</h1>
+              <span className={c.liveBadge}><span className={c.liveDot} aria-hidden="true" />Live · devnet</span>
+            </div>
+            <p className={s.name}>{asset.name}</p>
+
+            <div className={s.priceRow}>
+              <span className={`num ${s.price}`}>{d.markUsd !== null ? fmtUsd(d.markUsd) : '—'}</span>
+              <span className={s.priceMeta} data-live={d.markAgeSecs !== null && d.markAgeSecs < v.maxStaleSecs} data-stale={d.markAgeSecs !== null && d.markAgeSecs >= v.maxStaleSecs}>
+                {d.markAgeSecs === null ? 'mark unavailable'
+                  : d.markAgeSecs >= v.maxStaleSecs ? `mark stale · ${Math.round(d.markAgeSecs / 60)}m`
+                  : `pyth · ${m.markFeed} · ${d.markAgeSecs}s`}
+              </span>
+            </div>
+
+            <dl className={s.quickFacts}>
+              <div><dt>Vault</dt><dd><a className={`num ${c.addrLink}`} href={explorerAddr(m.vault)} target="_blank" rel="noreferrer">{short(m.vault, 6)} ↗</a></dd></div>
+              <div><dt>Boundaries settled</dt><dd className="num">{v.boundaryCount.toString()}</dd></div>
+              <div><dt>Slot</dt><dd className="num">{d.slot.toLocaleString()}</dd></div>
+            </dl>
+          </div>
+
+          <div className={s.clockCol}>
+            <SessionClock size={clockSize} compact />
+            <ClockNote exposed={v.exposed} />
+          </div>
+        </div>
+      </header>
+
+      <DevnetNote m={m} />
+
+      {/* ── the two classes ─────────────────────────────────────────────── */}
+      <section className={`shell ${s.classes}`} aria-label="Share classes">
+        {(['night', 'day'] as ShareClass[]).map(k => {
+          const isExposed = v.exposed === k;
+          const supply = k === 'night' ? d.nightSupply : d.daySupply;
+          const value = k === 'night' ? d.valueNight : d.valueDay;
+          const mine = d.me ? (k === 'night' ? d.me.night : d.me.day) : null;
+          const study = k === 'night' ? asset.night : asset.day;
+          const navK = k === 'night' ? v.nightNav : v.dayNav;
+          return (
+            <article key={k} className={s.classCard} data-class={k} data-exposed={isExposed}>
+              <header className={s.classHead}>
+                <div>
+                  <span className={s.classTag}>{asset.symbol}.{k.toUpperCase()}</span>
+                  <p className={s.classState}>{isExposed ? 'Holding the stock' : 'Flat — parked in quote'}</p>
+                </div>
+                <span className={s.classBadge} data-on={isExposed}>{isExposed ? 'exposed' : 'parked'}</span>
+              </header>
+              <div className={s.navRow}>
+                <span className={`num ${s.navValue}`}>{nav(navK).toFixed(4)}</span>
+                <span className={s.navUnit}>NAV per share</span>
+              </div>
+              <dl className={s.classStats}>
+                <div><dt>Supply</dt><dd className="num">{fromAtoms(supply, qd).toLocaleString('en-US', { maximumFractionDigits: 2 })}</dd></div>
+                <div><dt>Class value</dt><dd className="num">{fmtUsd(fromAtoms(value, qd), 2)}</dd></div>
+                <div>
+                  <dt>You hold</dt>
+                  <dd className="num" data-mine={!!mine && mine > 0n}>
+                    {mine === null ? '—' : fromAtoms(mine, qd).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  </dd>
+                </div>
+              </dl>
+              {study && (
+                <footer className={s.classStudy}>
+                  <span>Measured, {Math.round(asset.days)}d</span>
+                  <span className={`num ${s.classCum}`} data-sign={study.cumulative >= 0 ? 'up' : 'down'}>{fmtPct(study.cumulative, 1)}</span>
+                  <span className={s.classT}>σ <span className="num">{(study.stdev * 100).toFixed(2)}%</span> · t <span className="num">{study.t.toFixed(2)}</span></span>
+                </footer>
+              )}
+            </article>
+          );
+        })}
+      </section>
+
+      {/* ── chart + trade ───────────────────────────────────────────────── */}
+      <section className={`shell ${s.body}`}>
+        <div className={c.left}>
+          <div className={`card ${s.chartCard}`}>
+            <header className={s.cardHead}>
+              <div>
+                <h2 className={s.cardTitle}>Decomposed since inception</h2>
+                <p className={s.cardSub}>
+                  {asset.symbol}&rsquo;s real pool history, split by session. The vault above
+                  applies the same rule to whatever the mark does from here.
+                </p>
+              </div>
+            </header>
+            {curve.status === 'ready'
+              ? <CurveChart points={curve.data.points} height={300} label={`${asset.symbol}, night versus day cumulative return`} />
+              : curve.status === 'error'
+                ? <p className={s.cardError}>The history for {asset.symbol} could not be loaded.</p>
+                : <div className="skeleton" style={{ width: '100%', height: 300 }} />}
+          </div>
+
+          <Crank d={d} onDone={chain.refresh} />
+          <Ledger vault={m.vault} />
+        </div>
+
+        <div className={s.side}>
+          <ChainTrade m={m} chain={d} onDone={chain.refresh} />
+          <ChainHealth d={d} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ── pieces ──────────────────────────────────────────────────────────────── */
+
+function ClockNote({ exposed }: { exposed: ShareClass }) {
+  const sess = useSession();
+  if (!sess) return <p className={s.clockNote}>Reading the session clock…</p>;
+  return (
+    <p className={s.clockNote}>
+      <strong data-holder={exposed}>{exposed.toUpperCase()}</strong> holds this vault&rsquo;s stock.
+      Handover in <span className="num">{countdown(sess.until)}</span>.
+    </p>
+  );
+}
+
+function DevnetNote({ m }: { m: Devnet }) {
+  return (
+    <div className={`shell ${c.noteWrap}`}>
+      <div className={c.note} role="note">
+        <span className={c.noteDot} aria-hidden="true" />
+        <p>
+          <strong>This vault is on Solana devnet.</strong> The program, both share
+          classes, settlement, funding, the handoff and every health signal are the
+          real thing. Two parts stand in: the underlying and quote are test mints
+          (devnet has no xStocks or USDC), and the mark is fed by Pyth&rsquo;s{' '}
+          <span className="mono">{m.markFeed}</span> because the NVDAX feed is not
+          sponsored on devnet — on mainnet it is <span className="mono">Crypto.NVDAX/USD</span>.{' '}
+          <Link to="/how-it-works#status" className={c.noteLink}>What is and is not live</Link>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The crank, visible.
+ *
+ * Settlement is permissionless, so the page itself can keep the vault current:
+ * when the calendar says a bell has passed and the vault has not settled it,
+ * the page pings the crank endpoint, which settles and fills. A person can
+ * also press the button. Either way the result is read back from the chain,
+ * never assumed.
+ */
+function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState<{ at: number; text: string; sig?: string; ok: boolean } | null>(null);
+  const auto = useRef(0);
+
+  const run = useCallback(async (why: 'auto' | 'manual') => {
+    setBusy(true);
+    const r = await pingCrank();
+    setBusy(false);
+    const at = Math.floor(Date.now() / 1000);
+    if ('error' in r) { setLast({ at, text: r.error, ok: false }); return; }
+    const rep = r.report;
+    if ('signature' in rep.settled) {
+      setLast({ at, ok: true, sig: rep.settled.signature, text: `Boundary settled${rep.fills.length ? ` and handoff filled (${rep.fills.length})` : ''}` });
+      onDone();
+    } else if ('failed' in rep.settled) {
+      setLast({ at, ok: false, text: `Settlement failed: ${rep.settled.failed}` });
+    } else if (rep.fills.length) {
+      setLast({ at, ok: true, sig: rep.fills[0].signature, text: `Handoff filled (${rep.fills.length})` });
+      onDone();
+    } else if (rep.fillError) {
+      setLast({ at, ok: false, text: `Fill failed: ${rep.fillError}` });
+    } else {
+      setLast({ at, ok: true, text: why === 'manual' ? 'Nothing due — the vault is current' : 'Checked; nothing due' });
+    }
+  }, [onDone]);
+
+  // Ping once when a boundary is due, and not again for five minutes so a
+  // page left open does not hammer the endpoint while a stale mark blocks it.
+  useEffect(() => {
+    if (!d.boundaryDue || d.vault.halted) return;
+    const now = Date.now();
+    if (now - auto.current < 5 * 60_000) return;
+    auto.current = now;
+    run('auto');
+  }, [d.boundaryDue, d.vault.halted, run]);
+
+  return (
+    <div className={`card ${c.crank}`}>
+      <div className={c.crankRow}>
+        <div>
+          <p className={c.crankTitle}>Settlement</p>
+          <p className={c.crankSub}>
+            Last settled <span className="num">{etClock(d.vault.lastBoundaryTs)}</span> {etDate(d.vault.lastBoundaryTs)} ET
+            {d.nextBoundaryTs !== null && (
+              <> · next bell <span className="num">{etClock(d.nextBoundaryTs)}</span> {etDate(d.nextBoundaryTs)}</>
+            )}
+            {d.vault.pendingDelta !== 0n && (
+              <> · handoff pending <span className="num">{fmtUsd(fromAtoms(d.vault.pendingDelta < 0n ? -d.vault.pendingDelta : d.vault.pendingDelta, d.vault.quoteDecimals), 2)}</span></>
+            )}
+          </p>
+        </div>
+        <button className={c.crankBtn} onClick={() => run('manual')} disabled={busy} data-due={d.boundaryDue}>
+          {busy ? 'Running…' : d.boundaryDue ? 'Settle now' : 'Check'}
+        </button>
+      </div>
+      {last && (
+        <p className={c.crankLast} data-ok={last.ok}>
+          {last.text}
+          {last.sig && <> · <a href={explorer(last.sig)} target="_blank" rel="noreferrer">transaction ↗</a></>}
+        </p>
+      )}
+      <p className={c.crankNote}>
+        Anyone can settle: the program&rsquo;s <span className="mono">settle_boundary</span> takes no
+        signer. This page pings the crank when its calendar says a bell has passed; the
+        operator&rsquo;s inventory fills the handoff, which on mainnet is a market maker&rsquo;s job.
+      </p>
+    </div>
+  );
+}
+
+function ChainHealth({ d }: { d: ChainState }) {
+  const { health, vault: v } = d;
+  const qd = v.quoteDecimals;
+  const skewPct = Number(d.skew) / 1e18;
+  return (
+    <section className={`card ${h.card}`} aria-label="Vault health">
+      <header className={h.head}>
+        <h2 className={h.title}>Vault health</h2>
+        <span className={h.badge} data-sev={health.severity}><span className={h.dot} aria-hidden="true" />{LABEL[health.severity]}</span>
+      </header>
+      <dl className={h.metrics}>
+        <div><dt>Backing</dt><dd className="num">{fmtUsd(fromAtoms(health.margin + d.valueNight + d.valueDay, qd), 2)}</dd></div>
+        <div><dt>Claims</dt><dd className="num">{fmtUsd(fromAtoms(d.valueNight + d.valueDay, qd), 2)}</dd></div>
+        <div><dt>Margin</dt><dd className="num" data-sign={health.margin >= 0n ? 'up' : 'down'}>{health.margin >= 0n ? '+' : '−'}{fmtUsd(Math.abs(fromAtoms(health.margin, qd)), 2)}</dd></div>
+        <div><dt title="Night value minus day value, over their total">Skew</dt><dd className="num" data-side={skewPct >= 0 ? 'night' : 'day'}>{skewPct >= 0 ? '+' : '−'}{(Math.abs(skewPct) * 100).toFixed(1)}%</dd></div>
+      </dl>
+      {health.signals.length === 0 ? (
+        <p className={h.clear}>No signals. Claims are fully backed, the handoff is flat and the last boundary settled on time.</p>
+      ) : (
+        <ul className={h.signals}>
+          {health.signals.map(sig => (
+            <li key={sig.id} className={h.signal} data-sev={sig.severity}>
+              <span className={h.sigDot} aria-hidden="true" />
+              <div>
+                <p className={h.sigMsg}><span className={h.sigId}>{sig.id.replace(/-/g, ' ')}</span>{sig.message}</p>
+                {sig.action && <p className={h.sigAction}>{sig.action}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.halted && (
+        <p className={h.halted} role="alert"><strong>Halted — {v.haltReason}.</strong> Settlement has stopped. Redemption at the last good NAV is the only operation left.</p>
+      )}
+      <footer className={h.foot}>
+        <p>Computed by the SDK&rsquo;s <span className="mono">evaluate()</span> on state read from devnet at slot <span className="num">{d.slot.toLocaleString()}</span> — the same function the keeper pages on.</p>
+      </footer>
+    </section>
+  );
+}
+
+/** The vault's own transaction history, from the chain. */
+function Ledger({ vault }: { vault: string }) {
+  const { connection } = useConnection();
+  const [rows, setRows] = useState<{ sig: string; at: number | null; err: boolean }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const go = async () => {
+      try {
+        const sigs = await connection.getSignaturesForAddress(new PublicKey(vault), { limit: 12 });
+        if (live) setRows(sigs.map(x => ({ sig: x.signature, at: x.blockTime ?? null, err: !!x.err })));
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : String(e));
+      }
+    };
+    go();
+    const id = setInterval(go, 30_000);
+    return () => { live = false; clearInterval(id); };
+  }, [connection, vault]);
+
+  return (
+    <section className={c.ledger}>
+      <h2 className={s.cardTitle}>On-chain ledger</h2>
+      <p className={s.cardSub}>The last twelve transactions that touched this vault, newest first — initialisation, mints, redemptions, settlements and fills.</p>
+      {error ? (
+        <p className={c.ledgerNote}>Could not load history: {error}</p>
+      ) : rows === null ? (
+        <div className={c.ledgerSkel}>{Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton" style={{ height: 34 }} />)}</div>
+      ) : rows.length === 0 ? (
+        <p className={c.ledgerNote}>No transactions yet.</p>
+      ) : (
+        <ol className={s.events}>
+          {rows.map(r => (
+            <li key={r.sig} className={s.event} data-kind={r.err ? 'redeem' : 'settle'}>
+              <span className={s.eventKind}>{r.err ? 'failed' : 'tx'}</span>
+              <span className={s.eventWhen}>
+                {r.at ? <><span className="num">{etClock(r.at)}</span><span className={s.eventDate}>{etDate(r.at)}</span></> : <span className={s.eventDate}>pending</span>}
+              </span>
+              <span className={s.eventDetail}>
+                <a className={`mono ${c.sig}`} href={explorer(r.sig)} target="_blank" rel="noreferrer">{short(r.sig, 8)} ↗</a>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function ChainSkeleton() {
+  return (
+    <div className={s.page} aria-busy="true">
+      <div className={`shell ${s.head}`}>
+        <div className="skeleton" style={{ width: 160, height: 12 }} />
+        <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="skeleton" style={{ width: 220, height: 38 }} />
+          <div className="skeleton" style={{ width: 120, height: 14 }} />
+          <div className="skeleton" style={{ width: 240, height: 30 }} />
+        </div>
+      </div>
+      <div className={`shell ${s.classes}`}>
+        <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
+        <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
+      </div>
+      <span className="sr-only">Reading the vault from devnet</span>
+    </div>
+  );
+}
+
+export { Severity };

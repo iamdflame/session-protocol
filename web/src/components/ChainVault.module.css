@@ -1,0 +1,68 @@
+.titleRow { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+
+.liveBadge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--good-ink);
+  border: 1px solid color-mix(in srgb, var(--good) 40%, var(--line));
+  border-radius: var(--r-pill); padding: 4px 10px;
+  background: color-mix(in srgb, var(--good) 6%, transparent);
+}
+.liveDot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); position: relative; }
+.liveDot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 1px solid var(--good); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .liveDot::after { animation: live-ring 2.6s var(--ease) infinite; }
+  @keyframes live-ring { 0% { transform: scale(0.7); opacity: 0.5 } 70%, 100% { transform: scale(1.9); opacity: 0 } }
+}
+
+.addrLink { color: var(--ink); border-bottom: 1px solid var(--line-strong); transition: border-color var(--t-hover) var(--ease); }
+.addrLink:hover { border-color: var(--ink); }
+
+/* ── devnet note ─────────────────────────────────────────────────────────── */
+
+.noteWrap { margin-top: var(--sp-6); }
+.note {
+  display: flex; gap: var(--sp-3); align-items: flex-start;
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid color-mix(in srgb, var(--good) 28%, var(--line));
+  border-left: 2px solid var(--good);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--good) 4%, transparent);
+  font-size: var(--t-sm); line-height: 1.62; color: var(--ink-2);
+}
+.noteDot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-top: 7px; flex: none; }
+.note strong { color: var(--ink); font-weight: 550; }
+.note .mono { color: var(--ink); font-size: 0.92em; }
+.noteLink { color: var(--ink); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.noteLink:hover { border-color: var(--ink); }
+
+/* ── left column ─────────────────────────────────────────────────────────── */
+
+.left { display: flex; flex-direction: column; gap: clamp(16px, 2.2vw, 24px); min-width: 0; }
+
+.crank { padding: clamp(18px, 2.4vw, 24px); display: flex; flex-direction: column; gap: var(--sp-3); }
+.crankRow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+.crankTitle { font-size: var(--t-body); font-weight: 550; }
+.crankSub { font-size: var(--t-xs); color: var(--ink-3); margin-top: 4px; line-height: 1.6; }
+.crankBtn {
+  flex: none; height: 36px; padding: 0 16px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-2);
+  color: var(--ink); font-size: var(--t-xs); font-weight: 510;
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.crankBtn:hover:not(:disabled) { background: var(--bg-sunken); }
+.crankBtn[data-due='true'] { background: var(--ink); color: var(--ink-inverse); border-color: var(--ink); }
+.crankBtn:disabled { opacity: 0.6; cursor: wait; }
+.crankLast { font-size: var(--t-xs); color: var(--ink-2); }
+.crankLast[data-ok='false'] { color: var(--crit-ink); }
+.crankLast a { text-decoration: underline; text-underline-offset: 2px; }
+.crankNote { font-size: var(--t-micro); line-height: 1.6; color: var(--ink-3); }
+.crankNote .mono { color: var(--ink-2); }
+
+/* ── ledger ──────────────────────────────────────────────────────────────── */
+
+.ledger { margin-top: var(--sp-2); }
+.ledgerNote { margin-top: var(--sp-4); font-size: var(--t-xs); color: var(--ink-3); }
+.ledgerSkel { margin-top: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); }
+.sig { color: var(--ink-2); }
+.sig:hover { color: var(--ink); }
