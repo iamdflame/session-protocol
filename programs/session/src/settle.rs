@@ -274,6 +274,54 @@ mod tests {
         assert!(got_night > 1.2 && got_day < 0.91, "night {got_night} day {got_day}");
     }
 
+
+    /// The SDK mirrors this function so keepers and interfaces can predict a
+    /// boundary without an RPC round trip. If the two ever diverge, they quote
+    /// numbers the chain will not produce.
+    #[test]
+    fn matches_typescript_vectors() {
+        let raw = std::fs::read_to_string("../../tests/vectors/settle.json")
+            .expect("run `node tests/gen-settle-vectors.ts` first");
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let cases = v["cases"].as_array().unwrap();
+        assert!(cases.len() > 500, "expected a substantial vector set");
+
+        let u = |x: &serde_json::Value| -> u128 { x.as_str().unwrap().parse().unwrap() };
+        let i = |x: &serde_json::Value| -> i128 { x.as_str().unwrap().parse().unwrap() };
+        let cls = |x: &serde_json::Value| match x.as_str().unwrap() {
+            "night" => ShareClass::Night,
+            _ => ShareClass::Day,
+        };
+
+        for (n, c) in cases.iter().enumerate() {
+            let inp = &c["in"];
+            let st = NavState {
+                night_supply: u(&inp["nightSupply"]) as u64,
+                day_supply: u(&inp["daySupply"]) as u64,
+                night_nav: u(&inp["nightNav"]),
+                day_nav: u(&inp["dayNav"]),
+                exposed: cls(&inp["exposed"]),
+                last_mark: u(&inp["lastMark"]),
+            };
+            let fp = FundingParams {
+                k_bps: u(&c["fp"]["kBps"]) as u32,
+                max_bps: u(&c["fp"]["maxBps"]) as u32,
+            };
+            let got = settle(&st, u(&c["newMark"]), &fp)
+                .unwrap_or_else(|e| panic!("case {n} failed: {e:?}"));
+            let want = &c["out"];
+
+            assert_eq!(got.night_nav, u(&want["nightNav"]), "case {n} night_nav");
+            assert_eq!(got.day_nav, u(&want["dayNav"]), "case {n} day_nav");
+            assert_eq!(got.exposed, cls(&want["exposed"]), "case {n} exposed");
+            assert_eq!(got.funding, i(&want["funding"]), "case {n} funding");
+            assert_eq!(got.handoff_delta, i(&want["handoffDelta"]), "case {n} handoff_delta");
+            assert_eq!(got.value_night, u(&want["valueNight"]), "case {n} value_night");
+            assert_eq!(got.value_day, u(&want["valueDay"]), "case {n} value_day");
+        }
+        println!("settlement agrees with the SDK on {} vectors", cases.len());
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(2000))]
 
