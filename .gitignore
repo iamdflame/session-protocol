@@ -7,3 +7,5 @@ data/_history.json
 data/_hourly.json
 proptest-regressions/
 .DS_Store
+node_modules/
+package-lock.json

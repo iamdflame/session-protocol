@@ -453,6 +453,30 @@ mod tests {
         assert_eq!(p.fee_per_share, 0);
     }
 
+    #[test]
+    fn redeeming_a_class_down_to_zero_strands_nothing() {
+        // The last holder out must take the class's whole backing with them,
+        // or the remainder belongs to nobody and the accounting is wrong.
+        let mut v = vault();
+        v.day_nav = WAD * 7 / 4;
+        v.owned_quote = 0;
+
+        let m = plan_mint(&v, ShareClass::Day, 700_000).unwrap();
+        v.owned_quote = m.owned_quote_after;
+        let supply = m.shares;
+
+        let r = plan_redeem(&v, ShareClass::Day, supply).unwrap();
+        v.owned_quote = r.owned_quote_after;
+
+        // with the class empty, claims are zero and whatever is left is surplus
+        let s = solvency(&v, 0, 0).unwrap();
+        assert!(s.ok());
+        assert!(
+            v.owned_quote <= 2,
+            "{} quote stranded after the class emptied", v.owned_quote
+        );
+    }
+
     /* ── solvency ────────────────────────────────────────────────────── */
 
     #[test]

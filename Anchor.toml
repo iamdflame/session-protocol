@@ -1,0 +1,37 @@
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+session = "8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ"
+
+[programs.mainnet]
+session = "8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test -p session"
+
+# xStocks and the Pyth receiver exist only on mainnet, so any validator-backed
+# test must clone real accounts rather than invent them. Listed explicitly so
+# the set is reviewable rather than buried in a shell script.
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+[[test.validator.clone]]
+address = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"   # Pyth Solana Receiver
+
+[[test.validator.clone]]
+address = "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh"   # NVDAx mint
+
+[[test.validator.clone]]
+address = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"   # USDC mint

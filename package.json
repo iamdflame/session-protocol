@@ -12,5 +12,8 @@
     "check": "node scripts/check.mjs",
     "start": "node scripts/serve.mjs"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.99.0"
+  }
 }

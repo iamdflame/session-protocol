@@ -132,6 +132,33 @@ mod tests {
         }
     }
 
+    /// A rejected mark — a wide Pyth confidence band, a stale publish, a move
+    /// beyond the limit — makes `settle_boundary` revert. The boundary is then
+    /// still outstanding, so the crank must be able to retry it.
+    ///
+    /// It can, for the whole session: `decide` keeps returning `Settle` until a
+    /// *second* boundary elapses. So an oracle problem costs retries, not the
+    /// vault, and only becomes a halt if it persists across an entire session.
+    #[test]
+    fn a_rejected_mark_leaves_a_full_session_to_retry() {
+        let settled_at = mon(9, 30);
+        // the close has passed; every retry through the evening still settles
+        for minutes_late in [1i64, 5, 60, 6 * 60, 12 * 60] {
+            let now = mon(16, 0) + minutes_late * 60;
+            assert_eq!(
+                decide(Session::Open, settled_at, now),
+                Decision::Settle { to: Session::Closed },
+                "retry {minutes_late}min after the close should still be settleable"
+            );
+        }
+        // but once the next open passes, the window is gone and it must halt
+        let after_next_open = mon(9, 30) + SEC_PER_DAY + 60;
+        assert!(matches!(
+            decide(Session::Open, settled_at, after_next_open),
+            Decision::Stale { .. }
+        ));
+    }
+
     #[test]
     fn a_stored_session_that_contradicts_the_calendar_is_rejected() {
         // claims the market was closed at Monday 10:00 ET, which is a session
