@@ -3,19 +3,21 @@
   "rpc": "https://api.devnet.solana.com",
   "programId": "8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ",
   "symbol": "NVDAx",
-  "note": "Devnet stand-in: test mints for NVDAx and USDC; mark fed by Pyth SOL/USD because the NVDAX feed is not sponsored on devnet.",
-  "vault": "3BgELitNWgPNQ9qsWM8tPDAAkcAPM8mtbpnPgogAJ9ZB",
-  "underlyingMint": "FAi4HwrbHQbtiwygn9HGEkABXhd7SXBWfXZwtHsbB3tk",
-  "quoteMint": "AD4VZcLtAyQ6CE6NjdZAFoU2M6GKXMjvB13DLts7wCG3",
-  "nightMint": "8ZhdRUUkyn6g4g5fCZAeuge8aRtVJbBC7KMFtCA2etEc",
-  "dayMint": "A9W9ospoyQr2oXvjuxdrYimtcxbs9H7bCZwp8w7MsS58",
-  "underlyingVault": "AMSxbDboxjnrSonrB7fj3BFuXufiAYXBmFcepTXoQTXt",
-  "quoteVault": "5XqxDCQgKR9D1wpqciRysVdPwswmiTuv8He7LMUosaAe",
+  "note": "Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate — the same shape as the real NVDAx — and the quote is a classic SPL mint like USDC. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.",
+  "vault": "2FCbM3gX492PAmEpEm4kJ798Tp9LBjYnPS8f143jn2DJ",
+  "underlyingMint": "77v1sqsUxcLnaH5dEcoHg9TuXgcBw1Qe9fv9yzgV5tni",
+  "quoteMint": "GQ2GFzGuCnUNLi6GHd3YdRfKL6GF5NPQMJx3cuQf6AHE",
+  "nightMint": "46Rphuvj8MqYP6AHN18PzZfnMob9jSJBvS3JvTNbG9Q2",
+  "dayMint": "2ehVoBk12UnCAZQNo9oD6vUQdxf5RG8ewag35sWqo5MZ",
+  "underlyingVault": "7XZL7Ljppa2oKajYH3D8ojGMC2wsPGT5r21RSGjPfADR",
+  "quoteVault": "8QuiabNmhM2BTSAqzhYhH9vgURDQXWgUkW373pMSZhbR",
   "markPriceUpdate": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
   "equityPriceUpdate": "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo",
   "markFeed": "Crypto.SOL/USD",
   "equityFeed": "Crypto.BTC/USD",
   "operator": "GNJxWx5AWfdyQfpu4BEMAmBQzQX7QSKMhDzFBRTShfYi",
+  "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "underlyingTokenProgram": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   "params": {
     "markFeedId": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
     "equityFeedId": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
@@ -29,5 +31,5 @@
     "maxCarryDeltaBps": 500,
     "maxUnexpectedClosedSecs": 10800
   },
-  "initialised": "2026-09-20T18:55:39.746Z"
+  "initialised": "2026-09-20T22:05:12.390Z"
 }

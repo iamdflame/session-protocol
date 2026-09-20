@@ -5,7 +5,7 @@
    produces. Reaching the program's logic is the assertion. */
 import { readFileSync } from 'node:fs';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
-import { settleBoundaryIx, fillHandoffIx, ata } from '../../sdk/src/ix.ts';
+import { settleBoundaryIx, fillHandoffIx, ata, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '../../sdk/src/ix.ts';
 import type { Manifest } from './crank-core.ts';
 
 const m: Manifest = JSON.parse(readFileSync('keeper/.devnet/manifest.json', 'utf8'));
@@ -38,8 +38,11 @@ if (!await simulate('settle_boundary reaches the state machine', new Transaction
 if (!await simulate('fill_handoff reaches plan_fill', new Transaction().add(fillHandoffIx({
   vault: pk(m.vault), underlyingVault: pk(m.underlyingVault), quoteVault: pk(m.quoteVault),
   nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
-  fillerUnderlying: ata(op.publicKey, pk(m.underlyingMint)), fillerQuote: ata(op.publicKey, pk(m.quoteMint)),
+  fillerUnderlying: ata(op.publicKey, pk(m.underlyingMint), pk(m.underlyingTokenProgram)),
+  fillerQuote: ata(op.publicKey, pk(m.quoteMint), pk(m.tokenProgram)),
   filler: op.publicKey, markPriceUpdate: pk(m.markPriceUpdate),
+  underlyingMint: pk(m.underlyingMint), quoteMint: pk(m.quoteMint),
+  underlyingTokenProgram: pk(m.underlyingTokenProgram), quoteTokenProgram: pk(m.tokenProgram),
 }, 1_000n, 10n ** 12n, 0n)), /no imbalance to fill|NothingToFill/i)) failed++;
 
 // A deliberately wrong account order must fail *differently* — proving the
