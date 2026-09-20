@@ -146,10 +146,9 @@ export function evaluate(v: VaultState, now: number): Health {
       message:
         `${v.pendingDelta > 0n ? 'short' : 'long'} ${abs(v.pendingDelta)} quote atoms of stock ` +
         `(${carryBps}bp of value, limit ${limit}bp)`,
-      action:
-        sev === Severity.Ok
-          ? ''
-          : 'raise the fill incentive or fill it directly; at the limit the next boundary halts',
+      // `sev` is never Ok in this branch — an unfilled handoff always wants
+      // an operator to do something.
+      action: 'raise the fill incentive or fill it directly; at the limit the next boundary halts',
     });
   }
 
