@@ -158,7 +158,9 @@ const index = assets.map(({ points, ...rest }: any) => ({
 }));
 const head = headline();
 writeFileSync(`${OUT}/markets.json`, JSON.stringify({
-  generated: new Date().toISOString(),
+  // The snapshot the data came from, not the moment this ran — a wall clock
+  // here makes a committed file churn on every build for no change.
+  generated: hourly.generated,
   source: hourly.generated,
   headline: head,
   assets: index,
