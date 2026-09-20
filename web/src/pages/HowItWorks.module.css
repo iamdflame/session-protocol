@@ -1,0 +1,199 @@
+.page { padding-block: clamp(40px, 6vw, 80px) 0; }
+
+.head { max-width: 1240px; }
+.title { font-size: var(--t-h1); margin-top: var(--sp-3); max-width: 18ch; }
+.lead { margin-top: var(--sp-5); }
+
+.section { padding-block: clamp(56px, 8vw, 104px); }
+.sunken { background: var(--bg-sunken); border-block: 1px solid var(--line); }
+
+.h2 { font-size: var(--t-h2); margin-top: var(--sp-3); max-width: 22ch; text-wrap: balance; }
+.sectionLead { margin-top: var(--sp-5); }
+
+/* ── the cycle ───────────────────────────────────────────────────────────── */
+
+.steps { list-style: none; margin-top: var(--sp-8); display: flex; flex-direction: column; }
+
+.step {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: clamp(16px, 3vw, 40px);
+  padding: var(--sp-6) 0;
+  border-top: 1px solid var(--line);
+}
+.steps > *:first-child .step { border-top: 0; padding-top: 0; }
+
+.stepNum {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-mono); font-size: var(--t-sm);
+  color: var(--ink-3);
+}
+
+.stepBody { max-width: 68ch; }
+.stepName {
+  font-size: var(--t-micro); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.stepTitle {
+  font-size: var(--t-h3); font-weight: 500; letter-spacing: -0.012em;
+  margin-top: var(--sp-2);
+}
+.stepText {
+  margin-top: var(--sp-3);
+  font-size: var(--t-body); line-height: 1.7; color: var(--ink-2);
+}
+.stepText em { font-style: italic; color: var(--ink); }
+.stepText strong { color: var(--ink); font-weight: 550; }
+
+/* ── upcoming boundaries ─────────────────────────────────────────────────── */
+
+.upcoming { margin-top: var(--sp-7); }
+.upcomingTitle { font-size: var(--t-body); font-weight: 550; }
+
+.boundaryList {
+  list-style: none;
+  margin-top: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+.boundaryList li {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 110px 110px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--t-xs);
+}
+.boundaryList li:last-child { border-bottom: 0; }
+
+.bTo { font-weight: 600; letter-spacing: 0.03em; font-size: var(--t-micro); text-transform: uppercase; }
+.bTo[data-holder='night'] { color: var(--night-ink); }
+.bTo[data-holder='day'] { color: var(--day-ink); }
+.bWhen { color: var(--ink-2); }
+.bTime { color: var(--ink-2); }
+.bSpan { color: var(--ink-3); display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.bReason {
+  font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  padding: 1px 8px;
+}
+
+/* ── status ──────────────────────────────────────────────────────────────── */
+
+.statusLink { color: var(--ink); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.statusLink:hover { border-color: var(--ink); }
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(20px, 3vw, 40px);
+  margin-top: var(--sp-8);
+}
+
+.statusCol {
+  padding: clamp(20px, 2.6vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  height: 100%;
+}
+.statusCol[data-on='true'] { border-color: color-mix(in srgb, var(--good-ink) 28%, var(--line)); }
+
+.statusTitle {
+  display: flex; align-items: center; gap: var(--sp-3);
+  font-size: var(--t-body); font-weight: 550;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.statusDot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink-3);
+}
+.statusDot[data-on='true'] { background: var(--good); }
+
+.statusCol ul { list-style: none; margin-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.statusCol li {
+  position: relative; padding-left: 18px;
+  font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2);
+}
+.statusCol li::before {
+  content: ''; position: absolute; left: 0; top: 0.62em;
+  width: 8px; height: 1px; background: var(--ink-3);
+}
+.statusCol code {
+  color: var(--ink); background: var(--bg-sunken);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 5px; font-size: 0.9em;
+}
+.statusNote {
+  margin-top: var(--sp-5); padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  font-size: var(--t-xs); line-height: 1.6; color: var(--ink-3);
+}
+
+/* ── faq ─────────────────────────────────────────────────────────────────── */
+
+.faq {
+  margin-top: var(--sp-7);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  overflow: hidden;
+  max-width: 88ch;
+}
+.faqItem { border-bottom: 1px solid var(--line); }
+.faq > *:last-child .faqItem { border-bottom: 0; }
+
+.faqQ {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5);
+  text-align: left;
+  font-size: var(--t-body); font-weight: 450; color: var(--ink);
+  transition: background-color var(--t-hover) var(--ease);
+}
+.faqQ:hover { background: var(--bg-raised-2); }
+.faqQ svg {
+  flex: none; color: var(--ink-3);
+  transition: transform var(--t-state) var(--ease), color var(--t-hover) var(--ease);
+}
+.faqItem[data-open='true'] .faqQ svg { transform: rotate(45deg); color: var(--ink); }
+
+.faqA { padding: 0 var(--sp-5) var(--sp-5); }
+.faqA p {
+  font-size: var(--t-sm); line-height: 1.72; color: var(--ink-2);
+  max-width: 72ch;
+}
+
+.faqFoot {
+  margin-top: var(--sp-6);
+  font-size: var(--t-sm); line-height: 1.7; color: var(--ink-2);
+  max-width: 78ch;
+}
+.faqLink {
+  color: var(--ink); border-bottom: 1px solid var(--line-strong);
+  transition: border-color var(--t-hover) var(--ease); white-space: nowrap;
+}
+.faqLink:hover { border-color: var(--ink); }
+
+/* ── responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .statusLink { color: var(--ink); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.statusLink:hover { border-color: var(--ink); }
+
+.statusGrid { grid-template-columns: 1fr; }
+  .boundaryList li { grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-4); }
+}
+@media (max-width: 560px) {
+  .step { grid-template-columns: 1fr; gap: var(--sp-4); }
+  .stepNum { width: 32px; height: 32px; }
+  .boundaryList li { grid-template-columns: 1fr; gap: var(--sp-1); }
+}

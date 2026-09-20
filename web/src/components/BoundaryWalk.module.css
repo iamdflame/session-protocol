@@ -1,0 +1,108 @@
+.wrap { margin: var(--sp-7) 0 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.legend {
+  display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap;
+  font-size: var(--t-xs); color: var(--ink-2);
+}
+.key { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.unit { margin-left: auto; color: var(--ink-3); font-size: var(--t-micro); }
+.swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.swatch[data-kind='day'] { background: var(--day); }
+.swatch[data-kind='night'] { background: color-mix(in srgb, var(--night) 34%, transparent); }
+/* Hatched, not just dimmer: at 9px a 55% opacity orange and a 100% orange are
+   the same swatch, and the difference between "closes at 13:00" and "closes at
+   16:00" is exactly what this key exists to carry. */
+.swatch[data-kind='early'] {
+  background: repeating-linear-gradient(
+    135deg, var(--day) 0 2px, color-mix(in srgb, var(--day) 30%, transparent) 2px 4px
+  );
+}
+.swatch[data-kind='holiday'] {
+  background: color-mix(in srgb, var(--night) 12%, transparent);
+  border: 1px solid var(--line-strong);
+}
+
+.grid {
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+  overflow-x: auto;
+}
+
+.dowRow, .week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(40px, 1fr));
+  gap: var(--sp-2);
+}
+.dowRow {
+  padding-bottom: var(--sp-3);
+  font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3); text-align: center;
+}
+.week + .week { margin-top: var(--sp-2); }
+
+.day {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 6px 4px 5px;
+  border-radius: var(--r-1);
+  border: 1px solid transparent;
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.day:hover, .day:focus-visible { background: var(--bg-sunken); }
+.day[data-today='true'] { border-color: var(--line-strong); background: var(--bg-sunken); }
+
+.dayNum {
+  font-family: var(--font-mono); font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.day[data-today='true'] .dayNum { color: var(--ink); font-weight: 600; }
+.day[data-closed='true'] .dayNum { opacity: 0.55; }
+
+/* The bar is the whole 24 hours; the block inside it is the regular session,
+   positioned by its real start and sized by its real length. */
+.bar {
+  position: relative;
+  width: 100%;
+  height: 54px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--night) 22%, transparent);
+  overflow: hidden;
+}
+.day[data-closed='true'] .bar { background: color-mix(in srgb, var(--night) 12%, transparent); }
+
+.session {
+  position: absolute; left: 0; right: 0;
+  background: var(--day);
+  transition: opacity var(--t-hover) var(--ease);
+}
+.day[data-early='true'] .session {
+  background: repeating-linear-gradient(
+    135deg, var(--day) 0 3px, color-mix(in srgb, var(--day) 35%, transparent) 3px 6px
+  );
+}
+
+/* A weekday the Exchange is shut: an empty bar reads the same as a weekend,
+   which is true — but the ring around it says it was a choice, not the clock. */
+.day[data-closed='true']:not([data-weekend='true']) .bar {
+  border: 1px dashed color-mix(in srgb, var(--ink-3) 45%, transparent);
+}
+
+.readout {
+  font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2);
+  min-height: 2.6em;
+}
+.readout strong { color: var(--ink); font-weight: 550; }
+.earlyTag {
+  display: inline-block; margin: 0 6px;
+  font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--day-ink);
+  border: 1px solid color-mix(in srgb, var(--day) 40%, var(--line));
+  border-radius: var(--r-pill); padding: 1px 7px;
+}
+
+@media (max-width: 560px) {
+  .dowRow, .week { grid-template-columns: repeat(7, minmax(34px, 1fr)); gap: 4px; }
+  .bar { height: 44px; }
+}
