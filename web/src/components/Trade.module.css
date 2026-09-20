@@ -1,0 +1,140 @@
+.card { padding: clamp(20px, 2.6vw, 26px); display: flex; flex-direction: column; gap: var(--sp-4); }
+
+/* ── mode switch ─────────────────────────────────────────────────────────── */
+
+.modes {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 2px; padding: 3px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+}
+.mode {
+  height: 32px; border-radius: 7px;
+  font-size: var(--t-sm); font-weight: 450; color: var(--ink-2);
+  transition: background-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
+}
+.mode:hover { color: var(--ink); }
+.mode[data-on='true'] { background: var(--bg-raised); color: var(--ink); box-shadow: var(--shadow-1); }
+
+/* ── class picker ────────────────────────────────────────────────────────── */
+
+.classPick { border: 0; padding: 0; margin: 0; display: grid; gap: var(--sp-2); }
+.classPick legend { color: var(--ink-3); margin-bottom: var(--sp-1); }
+
+.classOption {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  transition: border-color var(--t-hover) var(--ease), background-color var(--t-hover) var(--ease);
+}
+.classOption:hover { border-color: var(--line-strong); }
+.classOption[data-on='true'] { background: var(--bg-sunken); }
+.classOption[data-on='true'][data-class='night'] { border-color: color-mix(in srgb, var(--night-ink) 55%, var(--line)); }
+.classOption[data-on='true'][data-class='day'] { border-color: color-mix(in srgb, var(--day-ink) 55%, var(--line)); }
+.classOption:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.classOptionTag {
+  font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.classOption[data-class='night'] .classOptionTag { color: var(--night-ink); }
+.classOption[data-class='day'] .classOptionTag { color: var(--day-ink); }
+.classOptionState { font-size: var(--t-micro); color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
+.classOption[data-open='true'] .classOptionState { color: var(--good-ink); }
+
+.blocked {
+  font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+  border-radius: 0 var(--r-1) var(--r-1) 0;
+}
+.blocked strong { color: var(--ink); font-weight: 550; display: block; margin-bottom: 3px; }
+
+/* ── amount ──────────────────────────────────────────────────────────────── */
+
+.field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.fieldLabel {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-size: var(--t-xs); color: var(--ink-2);
+}
+.maxBtn {
+  font-size: var(--t-micro); color: var(--ink-3);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  transition: color var(--t-hover) var(--ease);
+}
+.maxBtn:hover:not(:disabled) { color: var(--ink); }
+.maxBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.inputWrap {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: 48px; padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  background: var(--bg-sunken);
+  transition: border-color var(--t-hover) var(--ease);
+}
+.inputWrap:focus-within { border-color: var(--ink); }
+.prefix, .suffix { color: var(--ink-3); font-size: var(--t-sm); flex: none; }
+.suffix { font-family: var(--font-mono); font-size: var(--t-xs); letter-spacing: 0.04em; }
+.input {
+  flex: 1; min-width: 0;
+  background: none; border: 0; outline: none;
+  color: var(--ink);
+  font-size: 1.22rem; font-weight: 450;
+}
+.input::placeholder { color: var(--ink-3); }
+
+/* ── preview ─────────────────────────────────────────────────────────────── */
+
+.preview {
+  display: grid; gap: var(--sp-2);
+  margin: 0; padding: var(--sp-4) 0;
+  border-block: 1px solid var(--line);
+}
+.preview > div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.preview dt { font-size: var(--t-xs); color: var(--ink-3); }
+.preview dd { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
+.preview dd[data-emph='true'] { color: var(--ink); font-weight: 500; }
+
+.err {
+  font-size: var(--t-xs); line-height: 1.55; color: var(--crit-ink);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--crit) 30%, var(--line));
+  border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--crit) 6%, transparent);
+}
+
+/* Filled buttons take the class colour as a surface, which is a different
+   contrast problem from the class colour as text. White on the day orange is
+   3.9:1 and fails; dark ink on it is 5.0:1 and 5.8:1 on the two grounds. White
+   on the night blue is 3.6:1; on the dimmer night step it is 5.5:1 and 6.6:1.
+   So the two buttons are not built the same way, on purpose. */
+.submit {
+  height: 46px; border-radius: var(--r-2);
+  font-size: var(--t-sm); font-weight: 550; letter-spacing: 0.01em;
+  transition: opacity var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+}
+.submit[data-class='night'] { background: var(--night-dim); color: #ffffff; }
+.submit[data-class='day'] { background: var(--day); color: #0f0d0a; }
+.submit:hover:not(:disabled) { opacity: 0.9; }
+.submit:active:not(:disabled) { transform: translateY(1px); }
+.submit:disabled { background: var(--bg-sunken); color: var(--ink-3); cursor: not-allowed; }
+
+.flash {
+  font-size: var(--t-xs); color: var(--good-ink);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--good) 30%, var(--line));
+  border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--good) 7%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flash { animation: flash-in 220ms var(--ease-out) both; }
+  @keyframes flash-in { from { opacity: 0; transform: translateY(-4px) } }
+}
+
+.footnote { font-size: var(--t-micro); line-height: 1.6; color: var(--ink-3); }
