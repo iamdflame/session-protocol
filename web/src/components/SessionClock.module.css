@@ -1,0 +1,151 @@
+.wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.wrap svg { position: absolute; inset: 0; overflow: visible; }
+
+/* ── the track ───────────────────────────────────────────────────────────── */
+
+/* Both arcs are always present. Dimmed enough to recede behind the lit part,
+   saturated enough that the warm cap still reads as warm — a day arc the
+   viewer has to hunt for defeats the whole point of the shape. */
+.trackNight { stroke: var(--night); opacity: 0.26; }
+.trackDay   { stroke: var(--day);   opacity: 0.4; }
+
+/* The day arc goes dashed when the session is not running at all today, so a
+   hand sitting inside it on a Sunday reads as "shut" rather than as a bug. */
+.trackDay[data-closed='true'] { opacity: 0.5; stroke-linecap: butt; }
+
+/* What has already elapsed of the current span. */
+.elapsed { transition: stroke var(--t-route) var(--ease); }
+.wrap[data-holder='night'] .elapsed { stroke: var(--night); }
+.wrap[data-holder='day']   .elapsed { stroke: var(--day); }
+
+.elapsedHalo { opacity: 0.1; }
+.wrap[data-holder='night'] .elapsedHalo { stroke: var(--night); }
+.wrap[data-holder='day']   .elapsedHalo { stroke: var(--day); }
+
+.tick { stroke: var(--line-strong); }
+
+.hand { stroke: var(--ink-2); opacity: 0.65; }
+.handTip {
+  stroke: var(--bg);
+  stroke-width: 2.5;
+  transition: fill var(--t-route) var(--ease);
+}
+.wrap[data-holder='night'] .handTip { fill: var(--night); }
+.wrap[data-holder='day']   .handTip { fill: var(--day); }
+
+.boundaryLabel {
+  fill: var(--ink-3);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ── centre readout ──────────────────────────────────────────────────────── */
+
+.center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.holderLabel {
+  font-size: calc(var(--clock) * 0.077);
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  line-height: 1;
+  transition: color var(--t-route) var(--ease);
+}
+.wrap[data-holder='night'] .holderLabel { color: var(--night-ink); }
+.wrap[data-holder='day']   .holderLabel { color: var(--day-ink); }
+
+.holds {
+  font-size: max(9px, calc(var(--clock) * 0.035));
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 5px;
+}
+
+.countdown {
+  font-size: calc(var(--clock) * 0.128);
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  margin-top: calc(var(--clock) * 0.037);
+  white-space: nowrap;
+  /* The digits must not shuffle as they tick — this is the number on the page
+     a holder looks at most, and a countdown that jitters looks broken. */
+  font-variant-numeric: tabular-nums;
+}
+
+.handsTo {
+  font-size: max(10px, calc(var(--clock) * 0.04));
+  color: var(--ink-2);
+  line-height: 1.35;
+  margin-top: calc(var(--clock) * 0.019);
+  text-wrap: balance;
+}
+
+/* Shown only when the market is shut for a reason beyond "it is night". */
+.reason {
+  margin-top: calc(var(--clock) * 0.027);
+  font-size: max(9px, calc(var(--clock) * 0.032));
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  padding: 2px calc(var(--clock) * 0.028);
+  background: var(--bg-raised);
+  white-space: nowrap;
+}
+
+/* ── outer readout ───────────────────────────────────────────────────────── */
+
+.readout {
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.readoutSep { opacity: 0.5; }
+
+.wrap[data-compact='true'] .countdown {
+  margin-top: calc(var(--clock) * 0.026);
+  font-size: calc(var(--clock) * 0.104);
+  letter-spacing: -0.05em;
+}
+.wrap[data-compact='true'] .holderLabel { font-size: calc(var(--clock) * 0.062); }
+
+/* ── loading ─────────────────────────────────────────────────────────────── */
+
+.skeletonRing {
+  position: absolute;
+  border-radius: 50%;
+  border: 14px solid var(--bg-raised-2);
+  animation: ringPulse 1.6s var(--ease) infinite;
+}
+@keyframes ringPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeletonRing { animation: none; }
+  .elapsed, .handTip, .holderLabel { transition: none; }
+}
