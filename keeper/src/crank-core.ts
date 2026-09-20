@@ -37,6 +37,10 @@ export interface Manifest {
   markPriceUpdate: string;
   equityPriceUpdate: string;
   operator: string;
+  /** The program owning the underlying — Token-2022 for a real xStock. */
+  underlyingTokenProgram: string;
+  /** The program owning the quote and the share classes. */
+  tokenProgram: string;
 }
 
 export interface CrankReport {
@@ -131,8 +135,10 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
   /* ── fill ────────────────────────────────────────────────────────────── */
   if (!v.halted && v.pendingDelta !== 0n && markQ) {
     const mark = normalizeMark(markQ, v.underlyingDecimals, v.quoteDecimals);
-    const opU = ata(operator.publicKey, pk(m.underlyingMint));
-    const opQ = ata(operator.publicKey, pk(m.quoteMint));
+    const quoteTokenProgram = pk(m.tokenProgram);
+    const underlyingTokenProgram = pk(m.underlyingTokenProgram);
+    const opU = ata(operator.publicKey, pk(m.underlyingMint), underlyingTokenProgram);
+    const opQ = ata(operator.publicKey, pk(m.quoteMint), quoteTokenProgram);
 
     // Up to four passes: a fill can be partial when the operator's inventory
     // or the vault's stock does not cover the whole delta.
@@ -151,11 +157,13 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
         nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
         fillerUnderlying: opU, fillerQuote: opQ, filler: operator.publicKey,
         markPriceUpdate: pk(m.markPriceUpdate),
+        underlyingMint: pk(m.underlyingMint), quoteMint: pk(m.quoteMint),
+        underlyingTokenProgram, quoteTokenProgram,
       }, amount, gross * 2n + 1_000_000n, 0n);
 
       const tx = new Transaction().add(
-        createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.underlyingMint)),
-        createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.quoteMint)),
+        createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.underlyingMint), underlyingTokenProgram),
+        createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.quoteMint), quoteTokenProgram),
         ix,
       );
       const r = await tryTx(conn, tx, [operator]);

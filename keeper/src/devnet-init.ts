@@ -5,8 +5,10 @@
    not have xStocks, USDC, or a fresh feed for any tokenised equity — Pyth's
    scheduler sponsors a handful of crypto feeds there and nothing else. So:
 
-     underlying  a test mint, 8 decimals, standing in for NVDAx
-     quote       a test mint, 6 decimals, standing in for USDC
+     underlying  a **Token-2022** mint, 8 decimals, with a permanent delegate —
+                 the same shape as the real NVDAx, so the deployment actually
+                 exercises the Token-2022 path rather than a classic-SPL toy
+     quote       a classic SPL mint, 6 decimals, standing in for USDC
      mark feed   Crypto.SOL/USD — kept fresh on devnet by Pyth
      equity feed Crypto.BTC/USD — kept fresh, so the session detector never
                  trips (it only fires on a feed that has gone *quiet*)
@@ -30,7 +32,9 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import {
-  createInitializeMint2Instruction, createMintToInstruction, MINT_SIZE, getMinimumBalanceForRentExemptMint,
+  createInitializeMint2Instruction, createMintToInstruction, MINT_SIZE,
+  getMinimumBalanceForRentExemptMint, createInitializePermanentDelegateInstruction,
+  getMintLen, ExtensionType, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID as SPL_TOKEN,
 } from '@solana/spl-token';
 import { PROGRAM_ID, vaultPda, nightMintPda, dayMintPda, underlyingVaultPda, quoteVaultPda, decodeVault } from '../../sdk/src/vault.ts';
 import {
@@ -101,25 +105,44 @@ async function main() {
   } else {
     const underlying = Keypair.generate();
     const quote = Keypair.generate();
+
+    // The underlying is Token-2022 with a permanent delegate, because that is
+    // what a real xStock is. A classic-SPL stand-in would let the whole
+    // Token-2022 path go untested and the first mainnet vault would be the
+    // first time it ran.
+    const uLen = getMintLen([ExtensionType.PermanentDelegate]);
+    const tx = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: operator.publicKey, newAccountPubkey: underlying.publicKey,
+        space: uLen, lamports: await conn.getMinimumBalanceForRentExemption(uLen),
+        programId: TOKEN_2022_PROGRAM_ID,
+      }),
+      createInitializePermanentDelegateInstruction(
+        underlying.publicKey, operator.publicKey, TOKEN_2022_PROGRAM_ID,
+      ),
+      createInitializeMint2Instruction(
+        underlying.publicKey, 8, operator.publicKey, null, TOKEN_2022_PROGRAM_ID,
+      ),
+    );
+
+    // Quote is classic SPL, like USDC.
     const rent = await getMinimumBalanceForRentExemptMint(conn);
-    const tx = new Transaction();
-    for (const [kp, decimals] of [[underlying, 8], [quote, 6]] as const) {
-      tx.add(
-        SystemProgram.createAccount({
-          fromPubkey: operator.publicKey, newAccountPubkey: kp.publicKey,
-          space: MINT_SIZE, lamports: rent, programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMint2Instruction(kp.publicKey, decimals, operator.publicKey, null),
-      );
-    }
+    tx.add(
+      SystemProgram.createAccount({
+        fromPubkey: operator.publicKey, newAccountPubkey: quote.publicKey,
+        space: MINT_SIZE, lamports: rent, programId: SPL_TOKEN,
+      }),
+      createInitializeMint2Instruction(quote.publicKey, 6, operator.publicKey, null, SPL_TOKEN),
+    );
+
     await sendAndConfirmTransaction(conn, tx, [operator, underlying, quote]);
     mints = { underlying: underlying.publicKey.toBase58(), quote: quote.publicKey.toBase58() };
     writeFileSync(mintPath, JSON.stringify(mints, null, 2));
   }
   const underlyingMint = new PublicKey(mints.underlying);
   const quoteMint = new PublicKey(mints.quote);
-  console.log(`underlying   ${underlyingMint.toBase58()}  (8 dp, stands in for NVDAx)`);
-  console.log(`quote        ${quoteMint.toBase58()}  (6 dp, stands in for USDC)`);
+  console.log(`underlying   ${underlyingMint.toBase58()}  (Token-2022, 8 dp, permanent delegate — NVDAx's shape)`);
+  console.log(`quote        ${quoteMint.toBase58()}  (SPL, 6 dp — USDC's shape)`);
 
   /* ── feeds ─────────────────────────────────────────────────────────── */
   const markUpdate = pythFeedAccount(PARAMS.markFeedId);
@@ -145,6 +168,8 @@ async function main() {
       authority: deployer.publicKey, vault, underlyingMint, quoteMint,
       nightMint, dayMint, underlyingVault, quoteVault,
       markPriceUpdate: markUpdate, equityPriceUpdate: equityUpdate,
+      underlyingTokenProgram: TOKEN_2022_PROGRAM_ID,
+      quoteTokenProgram: SPL_TOKEN,
     }, PARAMS);
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [deployer]);
     console.log(`vault        ${vault.toBase58()}  initialised in ${sig}`);
@@ -154,17 +179,17 @@ async function main() {
   console.log(`             exposed=${v.exposed}  mark=${v.lastMark}  nav=${v.nightNav}/${v.dayNav}`);
 
   /* ── operator inventory, for fills and the faucet ─────────────────── */
-  const opUnderlying = ata(operator.publicKey, underlyingMint);
-  const opQuote = ata(operator.publicKey, quoteMint);
+  const opUnderlying = ata(operator.publicKey, underlyingMint, TOKEN_2022_PROGRAM_ID);
+  const opQuote = ata(operator.publicKey, quoteMint, SPL_TOKEN);
   const tx = new Transaction().add(
-    createAtaIdempotentIx(operator.publicKey, operator.publicKey, underlyingMint),
-    createAtaIdempotentIx(operator.publicKey, operator.publicKey, quoteMint),
+    createAtaIdempotentIx(operator.publicKey, operator.publicKey, underlyingMint, TOKEN_2022_PROGRAM_ID),
+    createAtaIdempotentIx(operator.publicKey, operator.publicKey, quoteMint, SPL_TOKEN),
   );
   const bal = await conn.getTokenAccountBalance(opUnderlying).catch(() => null);
   if (!bal || Number(bal.value.amount) < 1_000_000n * 10n ** 8n / 2n) {
     tx.add(
-      createMintToInstruction(underlyingMint, opUnderlying, operator.publicKey, 1_000_000n * 10n ** 8n),
-      createMintToInstruction(quoteMint, opQuote, operator.publicKey, 100_000_000n * 10n ** 6n),
+      createMintToInstruction(underlyingMint, opUnderlying, operator.publicKey, 1_000_000n * 10n ** 8n, [], TOKEN_2022_PROGRAM_ID),
+      createMintToInstruction(quoteMint, opQuote, operator.publicKey, 100_000_000n * 10n ** 6n, [], SPL_TOKEN),
     );
   }
   await sendAndConfirmTransaction(conn, tx, [operator]);
@@ -176,7 +201,7 @@ async function main() {
     rpc: RPC,
     programId: PROGRAM_ID.toBase58(),
     symbol: 'NVDAx',
-    note: 'Devnet stand-in: test mints for NVDAx and USDC; mark fed by Pyth SOL/USD because the NVDAX feed is not sponsored on devnet.',
+    note: 'Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate — the same shape as the real NVDAx — and the quote is a classic SPL mint like USDC. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.',
     vault: vault.toBase58(),
     underlyingMint: underlyingMint.toBase58(),
     quoteMint: quoteMint.toBase58(),
@@ -189,6 +214,8 @@ async function main() {
     markFeed: 'Crypto.SOL/USD',
     equityFeed: 'Crypto.BTC/USD',
     operator: operator.publicKey.toBase58(),
+    tokenProgram: SPL_TOKEN.toBase58(),
+    underlyingTokenProgram: TOKEN_2022_PROGRAM_ID.toBase58(),
     params: { ...PARAMS, markFeedId: FEEDS['Crypto.SOL/USD'], equityFeedId: FEEDS['Crypto.BTC/USD'] },
     initialised: new Date().toISOString(),
   };

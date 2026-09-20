@@ -18,6 +18,8 @@ import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } 
 import { PROGRAM_ID, type ClassName } from './vault.ts';
 
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+/** Token-2022. Every real xStock mint is owned by this, not by the classic program. */
+export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 export const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 /** Pyth's push-oracle program, under which the sponsored feed accounts are derived. */
 export const PYTH_PUSH_ORACLE = new PublicKey('pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT');
@@ -99,9 +101,14 @@ export function encodeVaultParams(p: VaultParams): Uint8Array {
 
 /* ── derived addresses ───────────────────────────────────────────────────── */
 
-export function ata(owner: PublicKey, mint: PublicKey): PublicKey {
+/**
+ * The associated token address. The token program is part of the seed, so a
+ * Token-2022 mint's ATA is a different address from the classic one — passing
+ * the wrong program here silently derives an account that will never exist.
+ */
+export function ata(owner: PublicKey, mint: PublicKey, tokenProgram = TOKEN_PROGRAM_ID): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    [owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID,
   )[0];
 }
@@ -129,16 +136,18 @@ export const bytesToHex = (b: Uint8Array): string =>
 const meta = (pubkey: PublicKey, isWritable = false, isSigner = false) => ({ pubkey, isWritable, isSigner });
 
 /** Idempotent ATA creation — a no-op if the account already exists. */
-export function createAtaIdempotentIx(payer: PublicKey, owner: PublicKey, mint: PublicKey): TransactionInstruction {
+export function createAtaIdempotentIx(
+  payer: PublicKey, owner: PublicKey, mint: PublicKey, tokenProgram = TOKEN_PROGRAM_ID,
+): TransactionInstruction {
   return new TransactionInstruction({
     programId: ASSOCIATED_TOKEN_PROGRAM_ID,
     keys: [
       meta(payer, true, true),
-      meta(ata(owner, mint), true),
+      meta(ata(owner, mint, tokenProgram), true),
       meta(owner),
       meta(mint),
       meta(SystemProgram.programId),
-      meta(TOKEN_PROGRAM_ID),
+      meta(tokenProgram),
     ],
     data: Uint8Array.of(1) as Buffer,   // CreateIdempotent
   });
@@ -155,6 +164,13 @@ export interface InitializeVaultAccounts {
   quoteVault: PublicKey;
   markPriceUpdate: PublicKey;
   equityPriceUpdate: PublicKey;
+  /**
+   * The two token programs. They differ in the case this protocol is for: a
+   * real xStock is Token-2022 and USDC is the classic program, so one field
+   * cannot serve both. Both default to classic for an all-SPL vault.
+   */
+  underlyingTokenProgram?: PublicKey;
+  quoteTokenProgram?: PublicKey;
 }
 
 export function initializeVaultIx(a: InitializeVaultAccounts, p: VaultParams): TransactionInstruction {
@@ -171,7 +187,8 @@ export function initializeVaultIx(a: InitializeVaultAccounts, p: VaultParams): T
       meta(a.quoteVault, true),
       meta(a.markPriceUpdate),
       meta(a.equityPriceUpdate),
-      meta(TOKEN_PROGRAM_ID),
+      meta(a.underlyingTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(a.quoteTokenProgram ?? TOKEN_PROGRAM_ID),
       meta(SystemProgram.programId),
       meta(SYSVAR_RENT_PUBKEY),
     ],
@@ -188,6 +205,10 @@ export interface TradeAccounts {
   userQuote: PublicKey;
   userShares: PublicKey;
   user: PublicKey;
+  /** The quote mint — `transfer_checked` validates the transfer against it. */
+  quoteMint: PublicKey;
+  /** The quote program; the share mints live under it too. */
+  tokenProgram?: PublicKey;
 }
 
 const tradeKeys = (a: TradeAccounts) => [
@@ -199,7 +220,8 @@ const tradeKeys = (a: TradeAccounts) => [
   meta(a.userQuote, true),
   meta(a.userShares, true),
   meta(a.user, false, true),
-  meta(TOKEN_PROGRAM_ID),
+  meta(a.quoteMint),
+  meta(a.tokenProgram ?? TOKEN_PROGRAM_ID),
 ];
 
 export function mintSharesIx(a: TradeAccounts, cls: ClassName, quoteAmount: bigint): TransactionInstruction {
@@ -251,6 +273,10 @@ export interface FillAccounts {
   fillerQuote: PublicKey;
   filler: PublicKey;
   markPriceUpdate: PublicKey;
+  underlyingMint: PublicKey;
+  quoteMint: PublicKey;
+  underlyingTokenProgram?: PublicKey;
+  quoteTokenProgram?: PublicKey;
 }
 
 export function fillHandoffIx(
@@ -268,7 +294,10 @@ export function fillHandoffIx(
       meta(a.fillerQuote, true),
       meta(a.filler, false, true),
       meta(a.markPriceUpdate),
-      meta(TOKEN_PROGRAM_ID),
+      meta(a.underlyingMint),
+      meta(a.quoteMint),
+      meta(a.underlyingTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(a.quoteTokenProgram ?? TOKEN_PROGRAM_ID),
     ],
     data: concat(
       discriminator('fill_handoff'), u64(underlyingAmount), u64(maxQuoteIn), u64(minQuoteOut),

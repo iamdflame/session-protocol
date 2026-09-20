@@ -29,7 +29,15 @@
 //!   and waits for an operator rather than guessing.
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+// token_interface, not token: the assets this vault is for are Token-2022
+// mints. Every real xStock — NVDAx, SPYx — is Token-2022 with extensions, and
+// `Account<'info, token::Mint>` owner-checks against the classic SPL Token
+// program, so the previous types could not so much as *deserialise* the mint
+// this protocol exists to hold. The interface accepts either program and the
+// account carries which one it is.
+use anchor_spl::token_interface::{
+    self as token, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
+};
 
 pub mod calendar;
 pub mod errors;
@@ -157,22 +165,24 @@ pub mod session {
         let plan = ops::plan_mint(&v.view(), class.into(), quote_amount).map_err(map_op)?;
         let shares = plan.shares;
 
-        token::transfer(
+        token::transfer_checked(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
                     from: ctx.accounts.user_quote.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
                     to: ctx.accounts.quote_vault.to_account_info(),
                     authority: ctx.accounts.user.to_account_info(),
                 },
             ),
             quote_amount,
+            v.quote_decimals,
         )?;
 
         let seeds = vault_seeds(v);
         token::mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.quote_token_program.to_account_info(),
                 MintTo {
                     mint: ctx.accounts.class_mint.to_account_info(),
                     to: ctx.accounts.user_shares.to_account_info(),
@@ -221,7 +231,7 @@ pub mod session {
 
         token::burn(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.quote_token_program.to_account_info(),
                 Burn {
                     mint: ctx.accounts.class_mint.to_account_info(),
                     from: ctx.accounts.user_shares.to_account_info(),
@@ -232,17 +242,19 @@ pub mod session {
         )?;
 
         let seeds = vault_seeds(v);
-        token::transfer(
+        token::transfer_checked(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
+                ctx.accounts.quote_token_program.to_account_info(),
+                TransferChecked {
                     from: ctx.accounts.quote_vault.to_account_info(),
+                    mint: ctx.accounts.quote_mint.to_account_info(),
                     to: ctx.accounts.user_quote.to_account_info(),
                     authority: ctx.accounts.vault.to_account_info(),
                 },
                 &[&seeds[..]],
             ),
             quote_out,
+            v.quote_decimals,
         )?;
 
         let (night_supply, day_supply) = supplies_after(
@@ -448,55 +460,63 @@ pub mod session {
         let (u_delta, q_delta) = if plan.buying {
             // The vault is short stock: the filler sells it underlying and is
             // paid a little above the mark.
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.underlying_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.filler_underlying.to_account_info(),
+                        mint: ctx.accounts.underlying_mint.to_account_info(),
                         to: ctx.accounts.underlying_vault.to_account_info(),
                         authority: ctx.accounts.filler.to_account_info(),
                     },
                 ),
                 underlying_amount,
+                v.underlying_decimals,
             )?;
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.quote_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.quote_vault.to_account_info(),
+                        mint: ctx.accounts.quote_mint.to_account_info(),
                         to: ctx.accounts.filler_quote.to_account_info(),
                         authority: ctx.accounts.vault.to_account_info(),
                     },
                     &[&seeds[..]],
                 ),
                 plan.quote_amount,
+                v.quote_decimals,
             )?;
             (underlying_amount as i64, -(plan.quote_amount as i64))
         } else {
             // The vault is long stock it no longer needs: the filler buys it a
             // little below the mark.
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.quote_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.filler_quote.to_account_info(),
+                        mint: ctx.accounts.quote_mint.to_account_info(),
                         to: ctx.accounts.quote_vault.to_account_info(),
                         authority: ctx.accounts.filler.to_account_info(),
                     },
                 ),
                 plan.quote_amount,
+                v.quote_decimals,
             )?;
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.underlying_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.underlying_vault.to_account_info(),
+                        mint: ctx.accounts.underlying_mint.to_account_info(),
                         to: ctx.accounts.filler_underlying.to_account_info(),
                         authority: ctx.accounts.vault.to_account_info(),
                     },
                     &[&seeds[..]],
                 ),
                 underlying_amount,
+                v.underlying_decimals,
             )?;
             (-(underlying_amount as i64), plan.quote_amount as i64)
         };
@@ -549,31 +569,35 @@ pub mod session {
 
         let seeds = vault_seeds(v);
         if u_surplus > 0 {
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.underlying_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.underlying_vault.to_account_info(),
+                        mint: ctx.accounts.underlying_mint.to_account_info(),
                         to: ctx.accounts.dest_underlying.to_account_info(),
                         authority: ctx.accounts.vault.to_account_info(),
                     },
                     &[&seeds[..]],
                 ),
                 u_surplus,
+                v.underlying_decimals,
             )?;
         }
         if q_surplus > 0 {
-            token::transfer(
+            token::transfer_checked(
                 CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
+                    ctx.accounts.quote_token_program.to_account_info(),
+                    TransferChecked {
                         from: ctx.accounts.quote_vault.to_account_info(),
+                        mint: ctx.accounts.quote_mint.to_account_info(),
                         to: ctx.accounts.dest_quote.to_account_info(),
                         authority: ctx.accounts.vault.to_account_info(),
                     },
                     &[&seeds[..]],
                 ),
                 q_surplus,
+                v.quote_decimals,
             )?;
         }
         emit!(SurplusSkimmed { vault: v.key(), underlying: u_surplus, quote: q_surplus });
@@ -751,8 +775,8 @@ pub fn assert_solvent(v: &Vault, night_supply: u64, day_supply: u64) -> Result<(
 /// pre-CPI figure. Using it directly would check solvency against a supply that
 /// no longer exists.
 fn supplies_after(
-    night: &Account<Mint>,
-    day: &Account<Mint>,
+    night: &InterfaceAccount<Mint>,
+    day: &InterfaceAccount<Mint>,
     class: Class,
     delta: i128,
 ) -> Result<(u64, u64)> {
@@ -869,39 +893,51 @@ pub struct InitializeVault<'info> {
     // standard Anchor fix and changes nothing about the account itself.
     pub vault: Box<Account<'info, Vault>>,
 
-    pub underlying_mint: Account<'info, Mint>,
-    pub quote_mint: Account<'info, Mint>,
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
+    // The share classes are created under the *quote* program, which is the
+    // ordinary SPL one for a USDC-quoted vault. They are this program's own
+    // mints with no extensions, so there is nothing to gain from 2022 and a
+    // great deal of wallet compatibility to lose.
     #[account(
         init, payer = authority, seeds = [b"night", vault.key().as_ref()], bump,
         mint::decimals = quote_mint.decimals, mint::authority = vault,
+        mint::token_program = quote_token_program,
     )]
-    pub night_mint: Account<'info, Mint>,
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init, payer = authority, seeds = [b"day", vault.key().as_ref()], bump,
         mint::decimals = quote_mint.decimals, mint::authority = vault,
+        mint::token_program = quote_token_program,
     )]
-    pub day_mint: Account<'info, Mint>,
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init, payer = authority, seeds = [b"underlying", vault.key().as_ref()], bump,
         token::mint = underlying_mint, token::authority = vault,
+        token::token_program = underlying_token_program,
     )]
-    pub underlying_vault: Account<'info, TokenAccount>,
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init, payer = authority, seeds = [b"quote", vault.key().as_ref()], bump,
         token::mint = quote_mint, token::authority = vault,
+        token::token_program = quote_token_program,
     )]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
     pub mark_price_update: UncheckedAccount<'info>,
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
     pub equity_price_update: UncheckedAccount<'info>,
 
-    pub token_program: Program<'info, Token>,
+    // Two programs, because a real vault needs two: NVDAx is Token-2022 and
+    // USDC is the classic SPL program. Assuming one covers both is what made
+    // the original design unable to hold the asset it was written for.
+    pub underlying_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -909,65 +945,77 @@ pub struct InitializeVault<'info> {
 #[derive(Accounts)]
 pub struct MintShares<'info> {
     #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     #[account(mut)]
-    pub class_mint: Account<'info, Mint>,
+    pub class_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.night_mint)]
-    pub night_mint: Account<'info, Mint>,
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.day_mint)]
-    pub day_mint: Account<'info, Mint>,
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, address = vault.quote_vault)]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     // Owner as well as mint. A wrong-owner CPI fails anyway, but only after
     // the signature exists: without this a caller can be induced to sign a
     // mint whose shares land in someone else's account.
     #[account(mut,
         constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint,
         constraint = user_quote.owner == user.key() @ SessionError::WrongOwner)]
-    pub user_quote: Account<'info, TokenAccount>,
+    pub user_quote: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut,
         constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint,
         constraint = user_shares.owner == user.key() @ SessionError::WrongOwner)]
-    pub user_shares: Account<'info, TokenAccount>,
+    pub user_shares: Box<InterfaceAccount<'info, TokenAccount>>,
     pub user: Signer<'info>,
-    pub token_program: Program<'info, Token>,
+
+    // `transfer_checked` takes the mint, which is how Token-2022 validates a
+    // transfer against the extensions the mint actually carries. Pinned by
+    // address so it cannot be substituted for one with friendlier decimals.
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
 pub struct RedeemShares<'info> {
     #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     #[account(mut)]
-    pub class_mint: Account<'info, Mint>,
+    pub class_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.night_mint)]
-    pub night_mint: Account<'info, Mint>,
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.day_mint)]
-    pub day_mint: Account<'info, Mint>,
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut, address = vault.quote_vault)]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     // Owner as well as mint. A wrong-owner CPI fails anyway, but only after
     // the signature exists: without this a caller can be induced to sign a
     // mint whose shares land in someone else's account.
     #[account(mut,
         constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint,
         constraint = user_quote.owner == user.key() @ SessionError::WrongOwner)]
-    pub user_quote: Account<'info, TokenAccount>,
+    pub user_quote: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut,
         constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint,
         constraint = user_shares.owner == user.key() @ SessionError::WrongOwner)]
-    pub user_shares: Account<'info, TokenAccount>,
+    pub user_shares: Box<InterfaceAccount<'info, TokenAccount>>,
     pub user: Signer<'info>,
-    pub token_program: Program<'info, Token>,
+
+    // `transfer_checked` takes the mint, which is how Token-2022 validates a
+    // transfer against the extensions the mint actually carries. Pinned by
+    // address so it cannot be substituted for one with friendlier decimals.
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
 pub struct SettleBoundary<'info> {
     #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     #[account(address = vault.night_mint)]
-    pub night_mint: Account<'info, Mint>,
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.day_mint)]
-    pub day_mint: Account<'info, Mint>,
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
     /// 24/7 price of the token itself — what the vault's assets are worth.
     pub mark_price_update: UncheckedAccount<'info>,
@@ -980,57 +1028,77 @@ pub struct SettleBoundary<'info> {
 #[derive(Accounts)]
 pub struct FillHandoff<'info> {
     #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     #[account(mut, address = vault.underlying_vault)]
-    pub underlying_vault: Account<'info, TokenAccount>,
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = vault.quote_vault)]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(address = vault.night_mint)]
-    pub night_mint: Account<'info, Mint>,
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.day_mint)]
-    pub day_mint: Account<'info, Mint>,
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut,
         constraint = filler_underlying.mint == vault.underlying_mint @ SessionError::WrongMint,
         constraint = filler_underlying.owner == filler.key() @ SessionError::WrongOwner)]
-    pub filler_underlying: Account<'info, TokenAccount>,
+    pub filler_underlying: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut,
         constraint = filler_quote.mint == vault.quote_mint @ SessionError::WrongMint,
         constraint = filler_quote.owner == filler.key() @ SessionError::WrongOwner)]
-    pub filler_quote: Account<'info, TokenAccount>,
+    pub filler_quote: Box<InterfaceAccount<'info, TokenAccount>>,
     pub filler: Signer<'info>,
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
     pub mark_price_update: UncheckedAccount<'info>,
-    pub token_program: Program<'info, Token>,
+
+    // `transfer_checked` takes the mint, which is how Token-2022 validates a
+    // transfer against the extensions the mint actually carries. Pinned by
+    // address so it cannot be substituted for one with friendlier decimals.
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    // Both, because this instruction moves both assets.
+    pub underlying_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
 pub struct SkimSurplus<'info> {
     #[account(has_one = authority @ SessionError::Unauthorized,
               seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     pub authority: Signer<'info>,
     #[account(mut, address = vault.underlying_vault)]
-    pub underlying_vault: Account<'info, TokenAccount>,
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, address = vault.quote_vault)]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, constraint = dest_underlying.mint == vault.underlying_mint @ SessionError::WrongMint)]
-    pub dest_underlying: Account<'info, TokenAccount>,
+    pub dest_underlying: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut, constraint = dest_quote.mint == vault.quote_mint @ SessionError::WrongMint)]
-    pub dest_quote: Account<'info, TokenAccount>,
-    pub token_program: Program<'info, Token>,
+    pub dest_quote: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    // `transfer_checked` takes the mint, which is how Token-2022 validates a
+    // transfer against the extensions the mint actually carries. Pinned by
+    // address so it cannot be substituted for one with friendlier decimals.
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    // Both, because this instruction moves both assets.
+    pub underlying_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
 pub struct Admin<'info> {
     #[account(mut, has_one = authority @ SessionError::Unauthorized,
               seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct AcceptAuthority<'info> {
     #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
-    pub vault: Account<'info, Vault>,
+    pub vault: Box<Account<'info, Vault>>,
     pub next_authority: Signer<'info>,
 }

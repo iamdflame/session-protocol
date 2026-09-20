@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Connection, PublicKey, Transaction, type TransactionInstruction } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
 import {
@@ -45,6 +46,11 @@ export interface Devnet {
   markFeed: string;
   equityFeed: string;
   operator: string;
+  /** The program owning the quote and the two share classes. Part of every
+      ATA seed, so it cannot be assumed. */
+  tokenProgram: string;
+  /** The program owning the underlying — Token-2022 for a real xStock. */
+  underlyingTokenProgram: string;
   params: { maxStaleSecs: number; [k: string]: unknown };
   initialised: string;
 }
@@ -101,11 +107,12 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     new PublicKey(m.underlyingVault), new PublicKey(m.quoteVault),
     new PublicKey(m.markPriceUpdate), new PublicKey(m.equityPriceUpdate),
   ];
+  const tokenProgram = new PublicKey(m.tokenProgram);
   if (me) {
     keys.push(
-      ata(me, new PublicKey(m.quoteMint)),
-      ata(me, new PublicKey(m.nightMint)),
-      ata(me, new PublicKey(m.dayMint)),
+      ata(me, new PublicKey(m.quoteMint), tokenProgram),
+      ata(me, new PublicKey(m.nightMint), tokenProgram),
+      ata(me, new PublicKey(m.dayMint), tokenProgram),
     );
   }
 
@@ -233,31 +240,36 @@ export function useSendTx() {
   }, [connection, publicKey, sendTransaction]);
 }
 
-export function buildMint(m: Devnet, user: PublicKey, cls: ShareClass, quoteAtoms: bigint): TransactionInstruction[] {
+const tradeAccounts = (m: Devnet, user: PublicKey, cls: ShareClass) => {
+  const tokenProgram = new PublicKey(m.tokenProgram);
   const classMint = new PublicKey(cls === 'night' ? m.nightMint : m.dayMint);
   const quoteMint = new PublicKey(m.quoteMint);
-  return [
-    createAtaIdempotentIx(user, user, classMint),
-    mintSharesIx({
+  return {
+    tokenProgram, classMint, quoteMint,
+    accounts: {
       vault: new PublicKey(m.vault), classMint,
       nightMint: new PublicKey(m.nightMint), dayMint: new PublicKey(m.dayMint),
       quoteVault: new PublicKey(m.quoteVault),
-      userQuote: ata(user, quoteMint), userShares: ata(user, classMint), user,
-    }, cls, quoteAtoms),
+      userQuote: ata(user, quoteMint, tokenProgram),
+      userShares: ata(user, classMint, tokenProgram),
+      user, quoteMint, tokenProgram,
+    },
+  };
+};
+
+export function buildMint(m: Devnet, user: PublicKey, cls: ShareClass, quoteAtoms: bigint): TransactionInstruction[] {
+  const { accounts, classMint, tokenProgram } = tradeAccounts(m, user, cls);
+  return [
+    createAtaIdempotentIx(user, user, classMint, tokenProgram),
+    mintSharesIx(accounts, cls, quoteAtoms),
   ];
 }
 
 export function buildRedeem(m: Devnet, user: PublicKey, cls: ShareClass, shareAtoms: bigint): TransactionInstruction[] {
-  const classMint = new PublicKey(cls === 'night' ? m.nightMint : m.dayMint);
-  const quoteMint = new PublicKey(m.quoteMint);
+  const { accounts, quoteMint, tokenProgram } = tradeAccounts(m, user, cls);
   return [
-    createAtaIdempotentIx(user, user, quoteMint),
-    redeemSharesIx({
-      vault: new PublicKey(m.vault), classMint,
-      nightMint: new PublicKey(m.nightMint), dayMint: new PublicKey(m.dayMint),
-      quoteVault: new PublicKey(m.quoteVault),
-      userQuote: ata(user, quoteMint), userShares: ata(user, classMint), user,
-    }, cls, shareAtoms),
+    createAtaIdempotentIx(user, user, quoteMint, tokenProgram),
+    redeemSharesIx(accounts, cls, shareAtoms),
   ];
 }
 
@@ -282,15 +294,36 @@ export async function pingCrank(): Promise<{ cached: boolean; report: CrankRepor
   }
 }
 
-export async function requestFaucet(wallet: PublicKey): Promise<{ signature: string; solDripped: boolean } | { error: string }> {
+/** Must match `faucetMessage` in api-src/faucet.ts. */
+export const faucetMessage = (wallet: string, issued: number) =>
+  `SESSION devnet faucet\nwallet: ${wallet}\nissued: ${issued}`;
+
+/**
+ * Ask for test quote, proving control of the wallet first.
+ *
+ * One extra click in the wallet, and it turns an endpoint anyone could point
+ * at any address — draining the operator's SOL a fresh keypair at a time —
+ * into one that can only fund a wallet its caller actually holds.
+ */
+export async function requestFaucet(
+  wallet: PublicKey,
+  signMessage: ((m: Uint8Array) => Promise<Uint8Array>) | undefined,
+): Promise<{ signature: string; solDripped: boolean } | { error: string }> {
+  if (!signMessage) {
+    return { error: 'This wallet cannot sign messages, which the faucet needs to prove the address is yours.' };
+  }
   try {
+    const issued = Date.now();
+    const sig = await signMessage(new TextEncoder().encode(faucetMessage(wallet.toBase58(), issued)));
     const r = await fetch('/api/faucet', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ wallet: wallet.toBase58() }),
+      body: JSON.stringify({ wallet: wallet.toBase58(), issued, signature: bs58.encode(sig) }),
     });
     return await r.json();
   } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/reject|denied|cancel/i.test(msg)) return { error: 'Cancelled in the wallet.' };
+    return { error: msg };
   }
 }
 
