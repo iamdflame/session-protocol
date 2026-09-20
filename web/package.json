@@ -1,0 +1,47 @@
+{
+  "name": "session-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3100",
+    "build": "npm run data && npm run functions && NODE_ENV=production vite build",
+    "preview": "vite preview --port 3200",
+    "data": "node --experimental-strip-types scripts/prepare-data.ts",
+    "ground": "node --experimental-strip-types scripts/gen-ground.ts",
+    "check": "tsc --noEmit && tsc -p api-src/tsconfig.json",
+    "flow": "node scripts/flow.mjs",
+    "settle": "node scripts/settle-check.mjs",
+    "a11y": "node scripts/a11y.mjs && node scripts/a11y.mjs --ground day",
+    "shot": "node scripts/shot.mjs",
+    "perf": "node scripts/perf.mjs",
+    "profile": "node scripts/profile.mjs",
+    "verify": "npm run check && npm run ground && npm run flow && npm run settle && npm run chain && npm run a11y",
+    "functions": "node scripts/functions.mjs",
+    "chain": "node scripts/chain-flow.mjs",
+    "chain:prod": "node scripts/chain-flow.mjs --base https://session-roan.vercel.app --fresh"
+  },
+  "dependencies": {
+    "@solana/wallet-adapter-base": "^0.9.28",
+    "@solana/wallet-adapter-react": "^0.15.40",
+    "@solana/web3.js": "^1.98.4",
+    "buffer": "^6.0.3",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0",
+    "motion": "^12.23.12",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "react-router-dom": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/d3-scale": "^4.0.9",
+    "@types/d3-shape": "^3.1.7",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "ws": "^8.21.3"
+  }
+}
