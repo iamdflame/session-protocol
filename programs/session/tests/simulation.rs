@@ -498,3 +498,96 @@ fn partial_fills_converge_and_never_overshoot() {
         v.pending_delta
     );
 }
+
+
+/* ── adversarial: specific attacks, not random churn ─────────────────────── */
+
+#[test]
+fn settling_the_same_boundary_twice_does_nothing_the_second_time() {
+    // Duplicate transactions are normal on Solana — a retry, a re-broadcast, or
+    // two keepers racing. Settling twice must not roll NAV twice.
+    let start = session::calendar::days_from_civil(2026, 6, 2) * 86_400 + 15 * 3600;
+    let mark = WAD * 3;
+    let mut v = seeded(mark, start);
+    let fp = FundingParams::default();
+
+    let b = next_boundary(start, 12).unwrap();
+    let moved = mark * 105 / 100;
+
+    let first = v.settle_at(b + 1, moved, &fp);
+    assert!(matches!(first, Decision::Settle { .. }));
+    let after_first = (v.night_nav, v.day_nav, v.exposed, v.pending_delta);
+
+    // the same crank fires again a second later
+    let second = v.settle_at(b + 2, moved, &fp);
+    assert_eq!(second, Decision::UpToDate, "a duplicate settle must be a no-op");
+    assert_eq!(
+        (v.night_nav, v.day_nav, v.exposed, v.pending_delta),
+        after_first,
+        "the second settlement changed state"
+    );
+
+    // and again much later in the same session
+    let third = v.settle_at(b + 3 * 3600, moved, &fp);
+    assert_eq!(third, Decision::UpToDate);
+    assert_eq!((v.night_nav, v.day_nav, v.exposed, v.pending_delta), after_first);
+}
+
+#[test]
+fn dust_sized_fills_cannot_drain_the_incentive() {
+    // A griefer might try to extract the fill incentive by splitting a fill
+    // into thousands of tiny ones, hoping each rounds in their favour.
+    let ts = session::calendar::days_from_civil(2026, 6, 3) * 86_400 + 15 * 3600;
+    let mark = WAD * 4;
+    let mut v = seeded(mark, ts);
+    v.pending_delta = 200_000;
+    v.owned_quote += 400_000;
+    v.fill_incentive_bps = 10;
+
+    let before = v.solvency().margin();
+    let claims_before = v.claims();
+
+    let mut fills = 0;
+    for _ in 0..3_000 {
+        match v.fill(1, mark) {
+            Ok(()) => fills += 1,
+            Err(_) => break,
+        }
+        assert!(v.solvency().ok(), "a dust fill broke solvency");
+    }
+
+    // Whatever they managed, the vault is no worse off than the incentive it
+    // agreed to pay, and that cost landed on a class rather than on backing.
+    let after = v.solvency().margin();
+    assert!(
+        after >= before - 4,
+        "dust fills drained {} beyond the incentive over {fills} fills",
+        before - after
+    );
+    assert!(
+        v.claims() <= claims_before,
+        "dust fills inflated claims"
+    );
+}
+
+#[test]
+fn a_redeemer_cannot_take_quote_committed_to_a_handoff() {
+    // The vault owes the market a purchase. A redeemer racing to take that
+    // quote first would leave the handoff unfillable and the inventory wrong.
+    let ts = session::calendar::days_from_civil(2026, 6, 4) * 86_400 + 15 * 3600;
+    let mark = WAD * 2;
+    let mut v = seeded(mark, ts);
+
+    let parked = if v.exposed == ShareClass::Night { ShareClass::Day } else { ShareClass::Night };
+    let supply = v.supply_of(parked);
+    v.pending_delta = (v.owned_quote as i128) - 10; // almost everything is spoken for
+
+    // redeeming the whole parked class would need far more than is free
+    let big = v.redeem(parked, supply);
+    assert_eq!(big, Err(OpError::InsufficientFreeQuote), "reserved quote was payable");
+
+    // but the unreserved remainder is still redeemable
+    let free = v.view().free_quote();
+    assert!(free >= 10, "expected a small free balance, got {free}");
+    assert!(v.solvency().ok());
+}
