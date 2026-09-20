@@ -1,0 +1,238 @@
+.page { padding-block: clamp(40px, 6vw, 72px) clamp(64px, 9vw, 112px); }
+
+/* ── header ──────────────────────────────────────────────────────────────── */
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(24px, 5vw, 64px);
+}
+.headCopy { min-width: 0; }
+.title { font-size: var(--t-h1); margin-top: var(--sp-3); max-width: 16ch; }
+.lead { margin-top: var(--sp-4); max-width: 56ch; }
+
+.holderInline { font-weight: 600; letter-spacing: 0.04em; }
+.holderInline[data-holder='night'] { color: var(--night-ink); }
+.holderInline[data-holder='day'] { color: var(--day-ink); }
+
+/* ── controls ────────────────────────────────────────────────────────────── */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
+  flex-wrap: wrap;
+}
+
+.filters {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+}
+.filter {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 12px;
+  border-radius: 7px;
+  font-size: var(--t-xs); font-weight: 450;
+  color: var(--ink-2);
+  transition: background-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
+}
+.filter:hover { color: var(--ink); }
+.filter[data-on='true'] {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+.filterCount { font-size: var(--t-micro); color: var(--ink-3); }
+.filter[data-on='true'] .filterCount { color: var(--ink-2); }
+
+.sort { position: relative; display: inline-flex; align-items: center; }
+.sort select {
+  appearance: none;
+  height: 36px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-xs);
+  cursor: pointer;
+  transition: border-color var(--t-hover) var(--ease);
+}
+.sort select:hover { border-color: var(--line-strong); }
+.sort svg { position: absolute; right: 11px; color: var(--ink-3); pointer-events: none; }
+
+.quoteState {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.quoteState[data-stale='true'] { color: var(--warn-ink); }
+.quoteState[data-error='true'] { color: var(--ink-2); }
+.liveDot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent);
+}
+
+/* ── table ───────────────────────────────────────────────────────────────── */
+
+.tableWrap {
+  margin-top: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  overflow-x: auto;
+}
+
+.table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+
+.table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-raised);
+  text-align: left;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: var(--sp-4) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table tbody tr {
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--t-hover) var(--ease);
+}
+.table tbody tr:last-child { border-bottom: 0; }
+.table tbody tr:hover { background: var(--bg-raised-2); }
+.table td, .table tbody th { padding: var(--sp-3) var(--sp-4); vertical-align: middle; }
+
+.right { text-align: right; }
+
+.asset { min-width: 190px; }
+.assetLink { display: flex; flex-direction: column; gap: 1px; width: fit-content; }
+.symbol {
+  font-size: var(--t-sm); font-weight: 600; color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.assetLink:hover .symbol { text-decoration: underline; text-underline-offset: 3px; }
+.name { font-size: var(--t-xs); color: var(--ink-3); font-weight: 400; }
+
+.symbolRow { display: inline-flex; align-items: center; gap: 7px; }
+.liveTag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--good-ink);
+  border: 1px solid color-mix(in srgb, var(--good) 40%, var(--line));
+  border-radius: var(--r-pill); padding: 1px 7px;
+}
+.liveTagDot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+.table tbody tr[data-live='true'] { background: color-mix(in srgb, var(--good) 3%, transparent); }
+.tag {
+  display: inline-block;
+  font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+}
+
+.price { color: var(--ink); font-weight: 450; }
+.price[data-live='true'] { color: var(--ink); }
+
+.nav { font-weight: 450; }
+.nav[data-series='night'] { color: var(--night-ink); }
+.nav[data-series='day'] { color: var(--day-ink); }
+.nav[data-sign='down'] { opacity: 0.72; }
+
+td.gap { color: var(--ink-2); }
+.gapUnit { font-size: var(--t-micro); color: var(--ink-3); margin-left: 3px; }
+td.gap[data-wider='night'] { color: var(--night-ink); }
+td.gap[data-wider='day'] { color: var(--day-ink); }
+
+.sparkCol { width: 108px; }
+td.pool { color: var(--ink-3); }
+
+.open { width: 40px; }
+.open a {
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: var(--r-1);
+  color: var(--ink-3);
+  transition: color var(--t-hover) var(--ease), background-color var(--t-hover) var(--ease);
+}
+.open a:hover { color: var(--ink); background: var(--bg-sunken); }
+
+/* ── states ──────────────────────────────────────────────────────────────── */
+
+.skelHead { height: 45px; border-bottom: 1px solid var(--line); }
+.skelRow {
+  display: flex; align-items: center; gap: var(--sp-6);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.skelRow > *:nth-child(2) { margin-left: auto; }
+
+.error, .empty {
+  margin-top: var(--sp-5);
+  padding: clamp(32px, 6vw, 64px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--bg-raised);
+  text-align: center;
+}
+.error h2 { font-size: var(--t-h3); font-weight: 500; }
+.error p, .empty p { margin-top: var(--sp-3); color: var(--ink-2); font-size: var(--t-sm); }
+.retry {
+  margin-top: var(--sp-5);
+  height: 38px; padding: 0 18px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  transition: background-color var(--t-hover) var(--ease);
+}
+.retry:hover { background: var(--bg-sunken); }
+
+/* The measure lives on the paragraph, not on the `.shell` — `.shell` centres
+   itself, so narrowing it centres the text under a full-width table. */
+.noteWrap { margin-top: var(--sp-6); }
+.note {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  line-height: 1.66;
+  max-width: 86ch;
+}
+
+/* ── responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .head { flex-direction: column; align-items: flex-start; }
+  .sparkCol, .pool { display: none; }
+}
+
+@media (max-width: 640px) {
+  .controls { gap: var(--sp-3); }
+  .quoteState { margin-left: 0; width: 100%; }
+  .table td, .table tbody th { padding: var(--sp-3) 10px; }
+  .table thead th { padding: var(--sp-3) 10px; }
+  .table { font-size: 13px; }
+  .asset { min-width: 0; }
+  /* "ANTHROPIC" plus its pre-IPO tag on one line is what pushed the table
+     past the phone's width; the tag wraps beneath, and a long company name
+     truncates rather than widening the column for everyone. */
+  .symbolRow { flex-wrap: wrap; gap: 3px 7px; }
+  .name { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Asset, price, and the two class returns fit a phone. The gap is derivable
+     from the two returns and the arrow duplicates the row link, so both go
+     rather than leaving a column half-visible off the right edge. */
+  .gap, .open { display: none; }
+}
