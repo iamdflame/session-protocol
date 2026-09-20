@@ -1,5 +1,9 @@
 [workspace]
 members = ["programs/*"]
+# The integration harness pulls a different Solana major version than the
+# program builds against; keeping it out of this graph is what lets
+# `cargo build-sbf` resolve at all.
+exclude = ["tests/integration"]
 resolver = "2"
 
 [profile.release]
