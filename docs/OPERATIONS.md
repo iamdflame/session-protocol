@@ -98,7 +98,7 @@ There is a live devnet deployment, and the site is wired to it.
 | | |
 |---|---|
 | program | `8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ` |
-| vault | `3BgELitNWgPNQ9qsWM8tPDAAkcAPM8mtbpnPgogAJ9ZB` — NVDAx stand-in |
+| vault | `2FCbM3gX492PAmEpEm4kJ798Tp9LBjYnPS8f143jn2DJ` — NVDAx stand-in: Token-2022 underlying with a permanent delegate, classic-SPL quote |
 | manifest | `keeper/.devnet/manifest.json`, served by the site as `/devnet.json` |
 | operator | `keeper/.devnet/operator.json` (gitignored); mint authority for the test tokens, the faucet signer and the crank/fill signer. Its secret is `OPERATOR_KEYPAIR` in the Vercel environment. |
 

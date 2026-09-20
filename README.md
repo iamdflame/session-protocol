@@ -16,7 +16,7 @@ Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 **Live:** [session-roan.vercel.app](https://session-roan.vercel.app) — the site,
 and a vault on Solana devnet you can mint into from your wallet.
 Program [`8gWC37…KqKZ`](https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet),
-vault [`3BgELi…J9ZB`](https://explorer.solana.com/address/3BgELitNWgPNQ9qsWM8tPDAAkcAPM8mtbpnPgogAJ9ZB?cluster=devnet).
+vault [`2FCbM3…n2DJ`](https://explorer.solana.com/address/2FCbM3gX492PAmEpEm4kJ798Tp9LBjYnPS8f143jn2DJ?cluster=devnet).
 
 ---
 
@@ -300,12 +300,13 @@ therefore variable width — a fixed-offset reader silently misreads every
   mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
   funding, the handoff and the health signals are the mainnet program doing the
   mainnet thing; the site says which parts stand in, above the fold.
-- **The deployed program predates the Token-2022 work.** The vault can now hold
-  a Token-2022 underlying alongside a classic-SPL quote — which is what a real
-  NVDAx/USDC pair is — and that is built, unit-tested and covered by a validator
-  test. It is **not yet redeployed**, so the live devnet vault is still the
-  classic-SPL one. `npm run test:validator` is the only thing that proves the
-  new path end to end, and it needs a CPU with AVX2.
+- **The live vault holds a Token-2022 underlying.** Real xStocks are Token-2022
+  with extensions, and USDC is not, so the program takes two token programs and
+  the devnet vault is shaped like the real pair: a Token-2022 underlying with a
+  permanent delegate, a classic-SPL quote. A browser wallet has minted and
+  redeemed against it on devnet. `npm run test:validator` goes further and runs
+  the program against the *actual* mainnet NVDAx and USDC accounts on a local
+  validator; it needs a CPU with AVX2.
 - **The issuer holds powers no program can take away.** NVDAx carries a
   permanent delegate, a pause switch and a freeze authority. A vault holding it
   can be emptied, paused or frozen by the issuer. That is true of holding the
