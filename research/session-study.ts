@@ -14,7 +14,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { sessionAt, Session, weekdayFromDays, SEC_PER_DAY } from '../sdk/src/calendar.ts';
+import { sessionAt, Session, weekdayFromDays, etOffset, SEC_PER_DAY } from '../sdk/src/calendar.ts';
 import { summarise, pct, bp, type Summary } from './stats.ts';
 import { dropSpikes } from './clean.ts';
 
@@ -66,7 +66,9 @@ function runsFor(rows: Row[], policy: Policy): { runs: Run[]; dropped: number } 
       dropped++; cur = null; continue;    // strict: refuse to guess
     }
 
-    const days = Math.floor((t0 - 4 * 3600) / SEC_PER_DAY);
+    // etOffset, not a hardcoded -4: half the year is EST and a fixed offset
+    // puts late-Friday and early-Monday runs on the wrong calendar day.
+    const days = Math.floor((t0 + etOffset(t0)) / SEC_PER_DAY);
     const w = weekdayFromDays(days);
     const weekend = w === 0 || w === 6;
 
