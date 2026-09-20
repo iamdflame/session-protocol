@@ -9,3 +9,4 @@ proptest-regressions/
 .DS_Store
 node_modules/
 keeper/.devnet/
+problems.md

@@ -46,6 +46,36 @@ platform-tools release whose Cargo is ≥ 1.85 and drop the pins. None of the
 seven is in the program's own dependency graph — they are proc-macro and
 test-only — so the pins change nothing that ships.
 
+### Token-2022
+
+The underlying and the quote can live under different token programs, and for
+a real vault they do: every xStock is Token-2022 and USDC is the classic SPL
+program. `initialize_vault` therefore takes **two** program accounts, and each
+CPI is routed at the one owning the asset it moves. The share classes are
+created under the quote program — they are this program's own mints with no
+extensions, so 2022 buys nothing and costs wallet compatibility.
+
+What the code cannot fix, and an operator must accept before listing an asset:
+
+| NVDAx extension | what it means for a vault |
+|---|---|
+| `PermanentDelegate` | the issuer can move the vault's inventory out at any time |
+| `PausableConfig` | the issuer can stop all transfers, which strands settlement |
+| freeze authority | the issuer can freeze the vault's own token account |
+| `TransferHook` | currently **unset**; if the issuer sets one, every transfer needs the hook's extra accounts and this program does not pass them |
+
+The first three are properties of the asset that any holder already lives with.
+The fourth is a live dependency: check it before listing, and check it again
+after any issuer upgrade.
+
+```bash
+npm run test:validator    # a local validator with the real mainnet NVDAx,
+                          # USDC and Pyth receiver cloned in
+```
+
+That test needs a CPU with AVX2 — `solana-test-validator` aborts without it,
+which is why this repository had no validator test for so long.
+
 ### Deploying the program
 
 ```bash
