@@ -847,7 +847,12 @@ pub struct InitializeVault<'info> {
         seeds = [Vault::SEED, underlying_mint.key().as_ref(), quote_mint.key().as_ref()],
         bump
     )]
-    pub vault: Account<'info, Vault>,
+    // Boxed: `try_accounts` for this struct deserialises every account onto a
+    // 4 KiB SBF stack frame, and with the full vault state plus four mints and
+    // two token accounts it overran by 8 bytes. Overrunning is undefined
+    // behaviour on chain, not a warning. Heap-allocating the largest one is the
+    // standard Anchor fix and changes nothing about the account itself.
+    pub vault: Box<Account<'info, Vault>>,
 
     pub underlying_mint: Account<'info, Mint>,
     pub quote_mint: Account<'info, Mint>,
