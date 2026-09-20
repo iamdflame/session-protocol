@@ -13,6 +13,11 @@ Those are two different assets wearing one ticker. SESSION separates them into
 
 Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 
+**Live:** [session-roan.vercel.app](https://session-roan.vercel.app) — the site,
+and a vault on Solana devnet you can mint into from your wallet.
+Program [`8gWC37…KqKZ`](https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet),
+vault [`3BgELi…J9ZB`](https://explorer.solana.com/address/3BgELitNWgPNQ9qsWM8tPDAAkcAPM8mtbpnPgogAJ9ZB?cluster=devnet).
+
 ---
 
 ## What we set out to test, and what we found
@@ -30,12 +35,14 @@ Tokenized equity makes that window continuously tradeable for the first time.
 So: **does the anomaly survive when the night becomes tradeable?** Nobody had
 measured it, because until these tokens existed there was nothing to measure.
 
-We measured it. 83,322 hourly closes, 26 tokenized assets, ~220 days of real
-Solana pool history.
+We measured it. 83,322 hourly closes, 26 tokenized assets, 235 days of real
+Solana pool history — after rejecting 38 single-bar prints that reverse within
+the hour, one of which had put a permanent 12% cliff into a curve because its
+recovery landed exactly on the closing bell (`docs/AUDIT.md` §14).
 
 ```
 NIGHT minus DAY, per hour of exposure, paired across 20 US equities
-  mean difference   −1.16bp        t = −1.11
+  mean difference   −1.37bp        t = −1.31
   NIGHT wins        9/20 assets
 ```
 
@@ -55,8 +62,8 @@ The return comparison is only half the question. The night pays no more than the
 day — while carrying materially more risk:
 
 ```
-mean session volatility    NIGHT 2.77%     DAY 1.97%     the night is 41% more volatile
-fatter left tail           NIGHT in 16/20 assets
+mean session volatility    NIGHT 2.78%     DAY 1.90%     the night is 46% more volatile
+fatter left tail           NIGHT in 18/20 assets
 ```
 
 **The night is uncompensated risk.** And that asymmetry is structural rather than
@@ -79,8 +86,12 @@ Reproduce it:
 
 ```bash
 node research/fetch-hourly.mjs                                  # ~40 min, rate-limited
-node --experimental-strip-types research/session-study.ts       # the verdict above
+npm run study                                                   # the verdict above
 ```
+
+Or read it on the site: [/research](https://session-roan.vercel.app/research)
+carries every asset, every t-statistic, the controls and the method — including
+what disagrees.
 
 ## The protocol
 
@@ -202,12 +213,41 @@ The accounting decides who gets paid, so it is written twice and pinned together
 - **256-bit `mul_div`** — the naive `u128` path overflows on ordinary NAV × price.
 
 ```bash
-npm test          # 100 Rust tests + 3 TypeScript suites
+npm test          # 103 Rust tests + 4 TypeScript suites
 npm run vectors   # regenerate the cross-language vectors
 ```
 
+The site has its own chain: `cd web && npm run verify` type-checks it against
+the SDK, regenerates the pre-paint session script and refuses if it disagrees
+with the calendar across 313,117 timestamps, drives mint/redeem in a headless
+browser (local vault, then the devnet vault through an injected wallet), walks
+the local vault across boundaries, and audits every page for names, headings,
+keyboard reach and computed contrast on both grounds.
+
 Operator procedures, health thresholds and a recovery path per halt reason are
 in `docs/OPERATIONS.md`.
+
+## The site
+
+[session-roan.vercel.app](https://session-roan.vercel.app). The session is the
+interface: the page is in its night state because the market is shut, not
+because someone picked a theme, and every countdown, arc and "which class is
+parked" on it comes from the same calendar module the program settles on.
+
+- **Landing** — a live 24-hour session clock, the split, an interactive handoff
+  you can drag, the finding told honestly, and what it costs us.
+- **Markets** — all 26 assets, live Jupiter prices, both class returns.
+- **Vault** — for NVDAx, the real thing on devnet: connect a wallet, get test
+  quote from the faucet, mint into the parked class, watch the health panel
+  run the SDK's `evaluate()` on chain state. For the other 25, the same
+  settlement code running locally, and it says so.
+- **Research** — the study as a research house would present it.
+- **How it works** — the cycle, a six-week calendar drawn from the real holiday
+  rules, the status line between real and simulated, the failure modes.
+
+No chart library, no UI kit. Two validated colour poles (blue↔orange, CVD
+ΔE 26.8) rather than the category's one accent. 0.0% main thread at rest
+under 4× CPU throttle. Zero contrast failures on either ground.
 
 ## Layout
 
@@ -222,9 +262,10 @@ programs/session/src/
   lib.rs         instruction surface
   machine.rs     the session state machine — tracked, never inferred
   ops.rs         instruction policy, separated from plumbing so it is testable
-keeper/          the permissionless boundary crank and health monitor
-sdk/             calendar, settlement, account decoding, health evaluation
-research/        the session study, and live execution costs
+sdk/             calendar, settlement, account decoding, health, instruction builders
+keeper/          the permissionless crank and fill; devnet init and checks
+web/             the site — Vite + React, the wallet layer, two serverless functions
+research/        the session study, bad-print rejection, live execution costs
 docs/            the audit and the operator runbook
 tests/vectors/   the cross-language vectors
 ```
@@ -253,14 +294,17 @@ therefore variable width — a fixed-offset reader silently misreads every
   attribution drops it, which removes the first 30 minutes of every DAY session.
 - **Neither class is levered.** Each is a claim on one session's returns, not a
   short of the other.
-- **Not deployed to mainnet.** xStocks exist only on mainnet, so validator-backed
-  integration needs cloned accounts (`Anchor.toml` lists them). The local SBF
-  toolchain — platform-tools v1.48, Cargo 1.84 — cannot resolve the dependency
-  graph, because transitive crates now require edition 2024. The program builds
-  and is tested as a library; producing the `.so` needs a newer platform-tools
-  than is installed here.
+- **Devnet, with stand-ins.** Devnet has no xStocks, no USDC and no sponsored
+  feed for any tokenised equity, so the live vault uses two test mints and takes
+  its mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
+  funding, the handoff and the health signals are the mainnet program doing the
+  mainnet thing; the site says exactly which parts stand in.
+- **Mainnet** needs a Hermes key to post the xStock feeds (the public sponsored
+  ones are weeks stale on both clusters), ~3 SOL, and the local-validator
+  initialisation in the runbook. `Anchor.toml` lists the accounts to clone.
 - **Funding parameters are unproven.** They are reasoned defaults, not calibrated
   ones. There is no live market to calibrate against — which is what the protocol
   exists to create.
-- **No frontend yet**, by design — this is the system.
+- **`cargo update` breaks the SBF build.** Seven host-side crates are pinned
+  below edition 2024 in `Cargo.lock`; the runbook explains.
 - Research tool. Not investment advice.

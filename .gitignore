@@ -9,3 +9,5 @@ proptest-regressions/
 .DS_Store
 node_modules/
 package-lock.json
+!web/package-lock.json
+keeper/.devnet/
