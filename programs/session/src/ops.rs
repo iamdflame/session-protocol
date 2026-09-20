@@ -625,4 +625,43 @@ mod tests {
             }
         }
     }
+
+    /// The last redeemer of a class takes exactly what the class is worth.
+    ///
+    /// `plan_redeem` pays `mul_div_floor(shares, nav, WAD)`, which for
+    /// `shares == supply` is the same expression as `value_of(supply, nav)` —
+    /// so the class's value goes to zero at the same instant its supply does
+    /// and nothing is left owned by nobody. An earlier version of the audit
+    /// claimed this was handled by folding a residue into the surviving class;
+    /// there is no residue to fold, and this test is here so that stays true.
+    #[test]
+    fn the_last_redemption_of_a_class_strands_nothing() {
+        for nav in [WAD, WAD * 3 / 2, WAD * 7 / 3, WAD / 3, 1, WAD * 999_983 / 1_000_000] {
+            for supply in [1u64, 2, 999_983, 1_000_000_000, u32::MAX as u64] {
+                let v = VaultView {
+                    night_nav: nav,
+                    day_nav: WAD,
+                    exposed: ShareClass::Day,
+                    last_mark: WAD,
+                    owned_underlying: 0,
+                    owned_quote: u64::MAX,
+                    pending_delta: 0,
+                    fill_incentive_bps: 0,
+                };
+                let class_value = value_of(supply, nav).unwrap();
+                match plan_redeem(&v, ShareClass::Night, supply) {
+                    Ok(p) => assert_eq!(
+                        p.quote_out as u128, class_value,
+                        "nav {nav} supply {supply}: paid {} of a class worth {class_value}",
+                        p.quote_out
+                    ),
+                    // A class worth less than one atom cannot be redeemed at
+                    // all, which strands nothing either — the shares still
+                    // exist and still carry the claim.
+                    Err(OpError::AmountTooSmall) => assert_eq!(class_value, 0),
+                    Err(e) => panic!("nav {nav} supply {supply}: {e:?}"),
+                }
+            }
+        }
+    }
 }

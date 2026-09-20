@@ -63,7 +63,17 @@ With `supply == 0` the class keeps its NAV, its value reads as zero, and any
 quote that belonged to it stays in the vault owned by nobody — while the handoff
 maths continues to be computed on values that no longer match balances.
 
-**Fix:** detect the empty-class transition explicitly and fold the residue into
+**Correction (third pass):** this fix was described here before it was
+checked, and the description was wrong — there is no residue to fold.
+`plan_redeem` pays `mul_div_floor(shares, nav, WAD)`, which when
+`shares == supply` is the identical expression to `value_of(supply, nav)`, so
+the last redeemer takes exactly what the class is worth and its value reaches
+zero with its supply. What *does* accumulate is the settlement rounding — one
+atom per boundary, favouring the vault by design — and that is surplus
+backing, not an orphaned claim. Pinned by
+`ops::tests::the_last_redemption_of_a_class_strands_nothing`.
+
+**Originally written as:** detect the empty-class transition explicitly and fold the residue into
 the surviving class, or refuse the last redemption that would orphan it.
 
 ### 6. Unsolicited transfers into the vault's token accounts were unaccounted
