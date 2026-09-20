@@ -426,6 +426,7 @@ function paintBooks() {
     ? `${n} legs · ${S.stripped.size} factor${S.stripped.size > 1 ? 's' : ''} removed`
     : 'strip a band to see this change';
   paintProof();
+  paintScatter();
 }
 
 /* ── executability ──────────────────────────────────────────────────────────
@@ -495,6 +496,66 @@ async function runQuotes() {
        ${shorts ? `The ${shorts === 1 ? 'one short leg is' : `${shorts} short legs are`} expressed as
        underweights — you sell what you hold rather than borrowing, so they need no venue at all.` : ''}
      </div>`;
+}
+
+/* ── the diagnostic ─────────────────────────────────────────────────────────
+   Each dot is one day: the market's return across, the position's return up.
+   A cloud that leans is a position the market is driving. A round one isn't.
+   Both panels share one scale, so the change in tilt is the whole message.   */
+
+function scatterSVG(ev, label, accent, lim) {
+  const W = 300, H = 210, PAD = 30;
+  if (!ev.pts.length) return '';
+  const sx = x => PAD + ((x + lim) / (2 * lim)) * (W - PAD - 10);
+  const sy = y => H - PAD - ((y + lim) / (2 * lim)) * (H - PAD - 12);
+
+  const dots = ev.pts.map(p =>
+    `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2.4"
+             fill="${accent}" fill-opacity=".55"/>`).join('');
+
+  // the fitted line, clipped to the box — a steep beta would otherwise run off it
+  const b = ev.beta ?? 0;
+  const xEnd = Math.abs(b) > 1e-9 ? Math.min(lim, lim / Math.abs(b)) : lim;
+  const fit = `<line x1="${sx(-xEnd)}" y1="${sy(b * -xEnd)}" x2="${sx(xEnd)}" y2="${sy(b * xEnd)}"
+                     stroke="${accent}" stroke-width="2" stroke-opacity=".9"/>`;
+
+  const ax = `<line x1="${PAD}" y1="${sy(0)}" x2="${W - 10}" y2="${sy(0)}"
+                    stroke="var(--line-2)" stroke-width="1"/>
+              <line x1="${sx(0)}" y1="12" x2="${sx(0)}" y2="${H - PAD}"
+                    stroke="var(--line-2)" stroke-width="1"/>`;
+
+  const tick = (2 * lim > 0.1) ? 0.05 : 0.02;
+  const ticks = [-tick, tick].map(t =>
+    `<text x="${sx(t)}" y="${H - PAD + 15}" font-size="9" fill="var(--ink-3)"
+           text-anchor="middle" font-family="'JetBrains Mono',monospace">${(t * 100).toFixed(0)}%</text>`).join('');
+
+  return `<div class="scat">
+    <div class="scathead"><span>${label}</span>
+      <span class="mono" style="color:${accent}">β ${b >= 0 ? '' : '−'}${Math.abs(b).toFixed(2)}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img"
+         aria-label="${label}: daily position return against ${ev.refSymbol} return, beta ${b.toFixed(2)}">
+      ${ax}${dots}${fit}${ticks}
+      <text x="${W - 10}" y="${sy(0) - 7}" font-size="9.5" fill="var(--ink-3)"
+            text-anchor="end" font-family="Inter,sans-serif">${ev.refSymbol} daily →</text>
+    </svg>
+  </div>`;
+}
+
+function paintScatter() {
+  const a = evidence(S.w0, S.model), b = evidence(S.wNow, S.model);
+  if (!a.pts.length) { $('#scatter').innerHTML = ''; return; }
+  const same = S.stripped.size === 0;
+  // one scale for both panels: the change in tilt is the message, so the axes
+  // must not move underneath it
+  const lim = Math.max(...[...a.pts, ...b.pts]
+    .flatMap(p => [Math.abs(p.x), Math.abs(p.y)])) * 1.06 || 0.05;
+  $('#scatter').innerHTML =
+    scatterSVG(a, 'The obvious trade', 'var(--s2)', lim) +
+    scatterSVG(b, same ? 'Unchanged — nothing stripped yet' : 'After refraction', 'var(--yours)', lim) +
+    `<p class="scatnote">Each dot is one trading day over the ${S.model.T}-day window:
+      ${a.refSymbol} return across, position return up. This is a diagnostic, not a
+      backtest — no strategy is being simulated, the same two positions are simply
+      replayed to show how differently the market moves them.</p>`;
 }
 
 /* The claim, made falsifiable: run both weight vectors over the real history

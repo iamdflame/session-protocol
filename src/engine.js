@@ -321,7 +321,11 @@ const pearson = (a, b) => {
 };
 
 /** The falsifiable claim: how tied to the market is this position, really?
- *  Correlation against a reference asset, and annualised vol. */
+ *
+ *  Returns the correlation and annualised vol, the regression slope against the
+ *  market (beta), and the daily scatter behind both — so the claim can be shown
+ *  rather than asserted. A tilted cloud is market exposure; a round one is not.
+ */
 export function evidence(weights, model, refSymbol = 'SPYx') {
   const p = series(weights, model);
   let ri = model.assets.findIndex(a => a.symbol === refSymbol);
@@ -333,8 +337,20 @@ export function evidence(weights, model, refSymbol = 'SPYx') {
   let v = 0; for (let i = 0; i < n; i++) v += (p[i] - m) ** 2;
   const vol = Math.sqrt(v / (n - 1)) * Math.sqrt(365);
 
+  let beta = null, pts = [];
+  if (ref) {
+    let mr = 0; for (let i = 0; i < n; i++) mr += ref[i]; mr /= n;
+    let cov = 0, vr = 0;
+    for (let i = 0; i < n; i++) {
+      cov += (ref[i] - mr) * (p[i] - m);
+      vr += (ref[i] - mr) ** 2;
+    }
+    beta = cov / (vr || 1e-12);
+    pts = Array.from({ length: n }, (_, i) => ({ x: ref[i], y: p[i], t: model.dates[i] }));
+  }
+
   return {
-    vol,
+    vol, beta, pts,
     refSymbol: ri >= 0 ? model.assets[ri].symbol : null,
     corr: ref ? pearson(Array.from(p), ref) : null,
   };

@@ -162,6 +162,16 @@ tr:last-child td{border-bottom:0}
 .pto.good{color:var(--yours)}
 .pnote{font-size:11.5px;color:var(--ink-3);margin-top:5px}
 
+/* diagnostic scatter */
+.scatwrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:16px 18px}
+@media (max-width:640px){ .scatwrap{grid-template-columns:1fr} }
+.scat{min-width:0}
+.scathead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:12px;color:var(--ink-2);margin-bottom:4px}
+.scat svg{display:block;width:100%;height:auto}
+.scatnote{grid-column:1/-1;margin:2px 0 0;font-size:12px;color:var(--ink-3);line-height:1.6}
+@media (max-width:640px){ .scatnote{grid-column:1} }
+
 /* hover layer */
 .tip{
   position:fixed;display:none;z-index:50;pointer-events:none;
@@ -266,6 +276,14 @@ tr:last-child td{border-bottom:0}
   </div>
 
   <section class="proof" id="proof"></section>
+
+  <div class="card" style="margin-top:18px">
+    <div class="cardhead">
+      <h3>Is the market driving this position?</h3>
+      <span class="note">daily returns, plotted against the index</span>
+    </div>
+    <div class="scatwrap" id="scatter"></div>
+  </div>
 
   <div class="card" style="margin-top:18px">
     <div class="cardhead">
