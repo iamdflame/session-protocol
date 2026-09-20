@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "web"
+  ],
   "description": "Split a tokenized equity into the hours arbitrage works and the hours it does not",
   "scripts": {
     "test": "npm run test:rust && npm run test:ts",

@@ -213,6 +213,7 @@ The accounting decides who gets paid, so it is written twice and pinned together
 - **256-bit `mul_div`** — the naive `u128` path overflows on ordinary NAV × price.
 
 ```bash
+npm install       # once, at the root — a workspace; it installs the site too
 npm test          # 103 Rust tests + 4 TypeScript suites
 npm run vectors   # regenerate the cross-language vectors
 ```

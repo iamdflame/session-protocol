@@ -7,7 +7,8 @@ drives the local vault are the same code the on-chain program is pinned to.
 
 ## Run
 
-    npm install
+    npm install          # at the repository root, not here — it is a workspace
+    cd web
     npm run dev          # http://localhost:3100
     npm run build        # regenerates data, builds to dist/
     npm run preview      # serves dist/ on :3200
