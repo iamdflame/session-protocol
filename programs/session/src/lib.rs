@@ -761,12 +761,6 @@ fn supplies_after(
     })
 }
 
-fn apply_i64(base: u64, delta: i64) -> Result<u64> {
-    let v = base as i128 + delta as i128;
-    require!(v >= 0 && v <= u64::MAX as i128, SessionError::MathOverflow);
-    Ok(v as u64)
-}
-
 fn halt_and_succeed(
     v: &mut Account<Vault>,
     reason: HaltReason,

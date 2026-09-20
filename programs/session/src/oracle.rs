@@ -267,6 +267,7 @@ pub fn parse_price_update(data: &[u8]) -> Result<PriceUpdate, OracleError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     const G: Guards = Guards {
         max_stale_secs: 120,
@@ -385,6 +386,71 @@ mod tests {
         let short = encode_update(true, feed, 1, 0, -8, 0);
         assert_eq!(parse_price_update(&short[..40]), Err(OracleError::Malformed));
         assert_eq!(parse_price_update(&[]), Err(OracleError::Malformed));
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(4000))]
+
+        /// The parser reads bytes a caller supplies. It must reject anything it
+        /// does not understand and never panic, because a panic in a Solana
+        /// program aborts the transaction in a way that is far harder to reason
+        /// about than a returned error — and here the input is attacker-chosen.
+        #[test]
+        fn never_panics_on_arbitrary_bytes(raw in proptest::collection::vec(any::<u8>(), 0..400)) {
+            let _ = parse_price_update(&raw);
+        }
+
+        /// Even with the right discriminator, the rest is still hostile.
+        #[test]
+        fn never_panics_with_a_valid_discriminator(tail in proptest::collection::vec(any::<u8>(), 0..300)) {
+            let mut raw = PRICE_UPDATE_V2_DISC.to_vec();
+            raw.extend_from_slice(&tail);
+            let _ = parse_price_update(&raw);
+        }
+
+        /// Truncating a well-formed account at any point must produce an error,
+        /// never a half-read quote.
+        #[test]
+        fn any_truncation_is_rejected(cut in 0usize..129) {
+            let full = encode_update(true, [1u8; 32], 100, 1, -8, 42);
+            if cut < full.len() {
+                prop_assert!(parse_price_update(&full[..cut]).is_err(), "cut at {cut} parsed");
+            }
+        }
+
+        /// Normalisation must not panic for any plausible feed configuration.
+        #[test]
+        fn normalize_never_panics(
+            price in any::<i64>(), conf in any::<u64>(), expo in -20i32..14,
+            ud in 0u8..20, qd in 0u8..20,
+        ) {
+            let q = Quote { price, conf, expo, publish_time: 0 };
+            let _ = normalize(&q, ud, qd);
+        }
+
+        /// A wider confidence band can only ever make a mark *less* acceptable.
+        /// If widening it could let a mark through, an attacker would widen it.
+        #[test]
+        fn widening_confidence_never_helps(conf_a in 0u64..1_000_000, extra in 0u64..1_000_000) {
+            let g = Guards { max_stale_secs: 120, max_conf_bps: 100,
+                             max_move_bps: 2_000, equity_quiet_secs: 900 };
+            let base = Quote { price: 1_000_000, conf: conf_a, expo: -8, publish_time: 0 };
+            let wider = Quote { conf: conf_a.saturating_add(extra), ..base };
+            if check_mark(&base, 0, 0, 8, 6, &g).is_err() {
+                prop_assert!(check_mark(&wider, 0, 0, 8, 6, &g).is_err());
+            }
+        }
+
+        /// Staleness is monotone: if a mark is too old now, it is too old later.
+        #[test]
+        fn staleness_is_monotone(age in 0i64..10_000, extra in 0i64..10_000) {
+            let g = Guards { max_stale_secs: 120, max_conf_bps: 10_000,
+                             max_move_bps: 9_000, equity_quiet_secs: 900 };
+            let q = Quote { price: 1_000_000, conf: 0, expo: -8, publish_time: 0 };
+            if check_mark(&q, age, 0, 8, 6, &g).is_err() {
+                prop_assert!(check_mark(&q, age + extra, 0, 8, 6, &g).is_err());
+            }
+        }
     }
 
     #[test]

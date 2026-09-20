@@ -200,7 +200,7 @@ fn nav_reproduces_the_session_split_on_real_history() {
         );
 
         checked += 1;
-        if kind == "public" {
+        if r.kind == "public" {
             equity_total += 1;
             if night > day {
                 equity_night_wins += 1;

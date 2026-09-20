@@ -149,6 +149,29 @@ Every mark is gated on Pyth's confidence interval before it is allowed to move
 anyone's NAV. Pyth is the only major oracle that publishes its own uncertainty,
 and refusing to settle when it is high is the entire reason to want that number.
 
+## Safety model
+
+Every caller is assumed adversarial and every input hostile.
+
+- **Balances are tracked, never read.** Anyone can transfer into the vault's
+  token accounts. A vault deriving its position from `token_account.amount`
+  would absorb those transfers into its accounting and hand an attacker a lever
+  on settlement. The excess is surplus: skimmable, never spendable.
+- **Solvency is asserted, not assumed.** Every value-moving instruction ends by
+  proving assets still cover claims.
+- **The session is tracked, never inferred.** Inferring it from `session_at(now)`
+  cannot distinguish zero elapsed boundaries from two — and the difference is an
+  entire session's return paid to the wrong class.
+- **Ambiguity halts.** When the vault cannot know who is owed what — a missed
+  boundary, an unfilled handoff, a loss larger than the exposed class — it stops
+  and waits for an operator rather than guessing. A halt is the protocol working.
+- **Rounding always favours the vault.** Depositors receive `floor(shares)`,
+  redeemers `floor(quote)`, gains floor and losses ceil, fees round against the
+  payer. Dust accumulates as backing rather than leaking out of it.
+
+`docs/AUDIT.md` records what was wrong before this was true, including three
+silent insolvency paths that only a long randomised simulation exposed.
+
 ## Correctness
 
 The accounting decides who gets paid, so it is written twice and pinned together.
@@ -159,22 +182,32 @@ The accounting decides who gets paid, so it is written twice and pinned together
   Reproduces the real 2026 NYSE calendar including July 3 observed (July 4 falls
   on a Saturday), both early closes, Good Friday via computus, and both DST
   transitions.
-- **1,608 settlement vectors** — Rust and the SDK agree exactly on NAVs, funding
-  transfers and handoff deltas, across empty classes, maximally lopsided books,
-  and funding on and off.
-- **Property tests** on conservation, funding being zero-sum, and exposure always
-  flipping. These earned their place: one caught settlement round-tripping NAV
-  through value, which quantised NAV to the value's resolution and floored it —
-  leaking from holders at *every* boundary, one-directionally.
-- **Replay** — months of real hourly closes pushed through the same `settle()` the
-  chain runs, boundary by boundary. Fixed-point NAV tracks a floating-point
-  reference to four decimals across ~300 boundaries per asset.
-- **256-bit `mul_div`** — the naive `u128` path overflows on ordinary NAV × price
-  inputs.
+- **1,608 settlement vectors** — Rust and the SDK agree exactly on NAVs, funding,
+  handoff deltas and bad-debt shortfalls.
+- **A pinned account layout** — the program emits a serialized `Vault` and the
+  SDK decoder is tested against those exact bytes. Layout drift is otherwise
+  invisible: the client reads a field at the wrong offset, reports a plausible
+  number, and an operator acts on it.
+- **Property tests** on solvency preservation across mint, redeem and fill; that
+  a mint-then-redeem round trip can never profit; that a fill never overshoots
+  zero; that the Pyth parser never panics on arbitrary bytes; that boundaries
+  always alternate; that counting boundaries matches walking them.
+- **40 randomised year-long simulations**, checking solvency after *every* mint,
+  redeem, fill and settlement. This found three rounding-direction bugs that all
+  passed the unit tests, because each loses one atom per operation and an atom
+  looks like nothing.
+- **Replay** — months of real hourly closes through the same `settle()` the chain
+  runs. Fixed-point NAV tracks a floating-point reference to four decimals across
+  ~300 boundaries per asset.
+- **256-bit `mul_div`** — the naive `u128` path overflows on ordinary NAV × price.
 
 ```bash
-cargo test -p session          # 46 unit + property tests, plus the replay
+npm test          # 100 Rust tests + 3 TypeScript suites
+npm run vectors   # regenerate the cross-language vectors
 ```
+
+Operator procedures, health thresholds and a recovery path per halt reason are
+in `docs/OPERATIONS.md`.
 
 ## Layout
 
@@ -187,9 +220,12 @@ programs/session/src/
   oracle.rs      Pyth marks, guards, and an explicit PriceUpdateV2 parser
   state.rs       vault accounts and events
   lib.rs         instruction surface
-keeper/          the permissionless boundary crank
-sdk/             calendar + settlement mirrored in TypeScript
+  machine.rs     the session state machine — tracked, never inferred
+  ops.rs         instruction policy, separated from plumbing so it is testable
+keeper/          the permissionless boundary crank and health monitor
+sdk/             calendar, settlement, account decoding, health evaluation
 research/        the session study, and live execution costs
+docs/            the audit and the operator runbook
 tests/vectors/   the cross-language vectors
 ```
 
@@ -217,8 +253,14 @@ therefore variable width — a fixed-offset reader silently misreads every
   attribution drops it, which removes the first 30 minutes of every DAY session.
 - **Neither class is levered.** Each is a claim on one session's returns, not a
   short of the other.
-- **Not deployed to mainnet.** xStocks exist only on mainnet, so integration
-  against live mints needs a forked validator. The math, the calendar and the
-  settlement path are tested; the deploy is not.
+- **Not deployed to mainnet.** xStocks exist only on mainnet, so validator-backed
+  integration needs cloned accounts (`Anchor.toml` lists them). The local SBF
+  toolchain — platform-tools v1.48, Cargo 1.84 — cannot resolve the dependency
+  graph, because transitive crates now require edition 2024. The program builds
+  and is tested as a library; producing the `.so` needs a newer platform-tools
+  than is installed here.
+- **Funding parameters are unproven.** They are reasoned defaults, not calibrated
+  ones. There is no live market to calibrate against — which is what the protocol
+  exists to create.
 - **No frontend yet**, by design — this is the system.
 - Research tool. Not investment advice.

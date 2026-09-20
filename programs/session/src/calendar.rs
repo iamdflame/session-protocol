@@ -258,6 +258,7 @@ pub fn boundaries_between(from: i64, to: i64, cap: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn civil_date_roundtrip() {
@@ -349,6 +350,93 @@ mod tests {
         let et_day = (nb + et_offset(nb)).div_euclid(SEC_PER_DAY);
         let (y, m, d) = civil_from_days(et_day);
         assert_eq!((y, m, d), (2026, 11, 27), "should skip Thanksgiving entirely");
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(3000))]
+
+        /// A boundary is, by definition, an instant where the session differs
+        /// from the instant before it. If that ever failed, the vault would
+        /// settle on a non-event and hand a class a session it did not earn.
+        #[test]
+        fn every_boundary_actually_flips_the_session(ts in 1_600_000_000i64..2_200_000_000i64) {
+            if let Some(b) = next_boundary(ts, 12) {
+                prop_assert!(b > ts, "boundary {b} not after {ts}");
+                prop_assert_ne!(session_at(b), session_at(b - 1), "no flip at {}", b);
+                prop_assert_eq!(session_at(b - 1), session_at(ts),
+                    "session changed before the reported boundary");
+            }
+        }
+
+        /// Walking boundaries must strictly advance and alternate. A repeated
+        /// session across consecutive boundaries would mean one was missed.
+        #[test]
+        fn boundaries_alternate_and_advance(ts in 1_600_000_000i64..2_100_000_000i64) {
+            let mut t = ts;
+            let mut prev = session_at(t);
+            for _ in 0..8 {
+                let Some(b) = next_boundary(t, 12) else { break };
+                prop_assert!(b > t);
+                let here = session_at(b);
+                prop_assert_ne!(here, prev, "two boundaries without a flip at {}", b);
+                prev = here;
+                t = b;
+            }
+        }
+
+        /// `session_at` and `day_session_bounds` are two routes to the same
+        /// fact and must never disagree.
+        #[test]
+        fn open_exactly_matches_the_days_bounds(ts in 1_600_000_000i64..2_200_000_000i64) {
+            let day = (ts + et_offset(ts)).div_euclid(SEC_PER_DAY);
+            match day_session_bounds(day) {
+                Some((open, close)) => {
+                    let inside = ts >= open && ts < close;
+                    prop_assert_eq!(inside, session_at(ts) == Session::Open,
+                        "bounds and session_at disagree at {}", ts);
+                }
+                None => prop_assert_eq!(session_at(ts), Session::Closed,
+                    "non-trading day reported open at {}", ts),
+            }
+        }
+
+        /// Counting boundaries over a window must equal walking them one by one.
+        #[test]
+        fn counting_matches_walking(ts in 1_600_000_000i64..2_100_000_000i64, days in 1i64..9) {
+            let end = ts + days * SEC_PER_DAY;
+            let counted = boundaries_between(ts, end, 64);
+            let mut walked = 0u32;
+            let mut t = ts;
+            while let Some(b) = next_boundary(t, 12) {
+                if b > end { break }
+                walked += 1;
+                t = b;
+            }
+            prop_assert_eq!(counted, walked);
+        }
+    }
+
+    #[test]
+    fn leap_days_and_year_transitions_hold() {
+        // 2028 is a leap year: Feb 29 is a Tuesday and a normal session
+        let feb29 = days_from_civil(2028, 2, 29);
+        assert_eq!(weekday_from_days(feb29), 2, "2028-02-29 should be a Tuesday");
+        assert!(day_session_bounds(feb29).is_some(), "leap day should trade");
+
+        // the day after a New Year's Day that falls on a Saturday is observed
+        // on the Friday before, so Jan 1 2028 (Sat) closes Fri Dec 31 2027
+        let hol = holidays(2028);
+        assert!(hol.contains(&days_from_civil(2027, 12, 31)),
+                "a Saturday New Year is observed on the preceding Friday");
+
+        // and walking across a year boundary produces no gaps
+        let dec31 = days_from_civil(2026, 12, 31) * SEC_PER_DAY + 18 * 3600;
+        let mut t = dec31;
+        for _ in 0..6 {
+            let b = next_boundary(t, 12).expect("boundaries must continue across the year");
+            assert!(b > t);
+            t = b;
+        }
     }
 
     /// The whole point of the shared vectors: Rust must reproduce TypeScript.
