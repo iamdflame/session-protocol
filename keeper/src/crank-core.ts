@@ -24,6 +24,8 @@ import { decodeVault, decodePythQuote, normalizeMark, type Vault } from '../../s
 import { settleBoundaryIx, fillHandoffIx, createAtaIdempotentIx, ata, explainProgramError } from '../../sdk/src/ix.ts';
 import { nextBoundary, sessionAt, Session } from '../../sdk/src/calendar.ts';
 import { WAD, mulDivFloor } from '../../sdk/src/settle.ts';
+import { bytesToHex } from '../../sdk/src/ix.ts';
+import { fetchUpdateAsOf, hermesConfigured, postUpdateAndConsume, HermesUnavailable } from './hermes.ts';
 
 export interface Manifest {
   rpc: string;
@@ -54,6 +56,15 @@ export interface CrankReport {
   nextBoundaryTs: number | null;
   boundaryDue: boolean;
   settled: { signature: string } | { skipped: string } | { failed: string };
+  /**
+   * Where the settlement mark came from. `hermes-as-of` is the print Pyth
+   * published at the bell, posted and verified for this crank; `sponsored`
+   * is whatever the sponsored feed account holds at crank time, which the
+   * program admits only while its bell window is wide enough.
+   */
+  markSource: 'hermes-as-of' | 'sponsored' | null;
+  /** Why the as-of path was not taken, when it was not. */
+  markNote?: string;
   pendingBefore: string;
   pendingAfter: string;
   fills: { signature: string; underlying: string; buying: boolean }[];
@@ -101,7 +112,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     ok: true, at: now, vault: m.vault,
     exposed: v.exposed, halted: v.halted, haltReason: v.haltReason,
     lastBoundaryTs: v.lastBoundaryTs, nextBoundaryTs: null, boundaryDue: false,
-    settled: { skipped: 'not due' },
+    settled: { skipped: 'not due' }, markSource: null,
     pendingBefore: v.pendingDelta.toString(), pendingAfter: v.pendingDelta.toString(),
     fills: [], markAgeSecs: null,
     nightNav: v.nightNav.toString(), dayNav: v.dayNav.toString(),
@@ -119,12 +130,34 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
 
   if (v.halted) {
     report.settled = { skipped: `halted: ${v.haltReason}` };
-  } else if (due) {
-    const ix = settleBoundaryIx({
+  } else if (due && next !== null) {
+    const settleWith = (markPriceUpdate: PublicKey) => settleBoundaryIx({
       vault: pk(m.vault), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
-      markPriceUpdate: pk(m.markPriceUpdate), equityPriceUpdate: pk(m.equityPriceUpdate),
+      markPriceUpdate, equityPriceUpdate: pk(m.equityPriceUpdate),
     });
-    report.settled = await tryTx(conn, new Transaction().add(ix), [operator]);
+
+    // The print at the bell, if Hermes will give it to us; the sponsored
+    // account otherwise. The program decides whether either is acceptable.
+    let posted = false;
+    if (hermesConfigured()) {
+      try {
+        const feed = bytesToHex(v.markFeedId);
+        const update = await fetchUpdateAsOf(feed, next);
+        const r = await postUpdateAndConsume(conn, operator, feed, update, acc => [settleWith(acc)]);
+        report.settled = { signature: r.signatures[r.signatures.length - 2] ?? r.signatures[0] };
+        report.markSource = 'hermes-as-of';
+        posted = true;
+      } catch (e: unknown) {
+        const err = e as { message?: string; logs?: string[] };
+        report.markNote = e instanceof HermesUnavailable ? e.message : (explainProgramError(err.logs) ?? err.message ?? String(e));
+      }
+    } else {
+      report.markNote = 'HERMES_API_KEY not set; the sponsored feed is the only mark available';
+    }
+    if (!posted) {
+      report.settled = await tryTx(conn, new Transaction().add(settleWith(pk(m.markPriceUpdate))), [operator]);
+      report.markSource = 'sponsored';
+    }
     v = await readVault(conn, m);
     report.exposed = v.exposed; report.halted = v.halted; report.haltReason = v.haltReason;
     report.lastBoundaryTs = v.lastBoundaryTs;

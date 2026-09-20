@@ -231,7 +231,8 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
     if ('error' in r) { setLast({ at, text: r.error, ok: false }); return; }
     const rep = r.report;
     if ('signature' in rep.settled) {
-      setLast({ at, ok: true, sig: rep.settled.signature, text: `Boundary settled${rep.fills.length ? ` and handoff filled (${rep.fills.length})` : ''}` });
+      const source = rep.markSource === 'hermes-as-of' ? ' at the bell\u2019s own print' : rep.markSource === 'sponsored' ? ' on the sponsored feed' : '';
+      setLast({ at, ok: true, sig: rep.settled.signature, text: `Boundary settled${source}${rep.fills.length ? ` and handoff filled (${rep.fills.length})` : ''}` });
       onDone();
     } else if ('failed' in rep.settled) {
       setLast({ at, ok: false, text: `Settlement failed: ${rep.settled.failed}` });

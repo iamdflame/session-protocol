@@ -283,6 +283,9 @@ export interface CrankReport {
   fillError?: string;
   pendingAfter: string;
   markAgeSecs: number | null;
+  /** `hermes-as-of`: the print from the bell, posted for this crank. `sponsored`: the feed as it stood at crank time. */
+  markSource?: 'hermes-as-of' | 'sponsored' | null;
+  markNote?: string;
 }
 
 export async function pingCrank(): Promise<{ cached: boolean; report: CrankReport } | { error: string }> {
