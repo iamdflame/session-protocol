@@ -1,0 +1,14 @@
+/* The resting state is plain visible — see Reveal.tsx. The animation is only
+   ever added on top, so a block that is never triggered still reads. */
+.reveal[data-enter] {
+  animation: reveal-in 560ms var(--ease-out) both;
+}
+
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal[data-enter] { animation: none; }
+}
