@@ -19,6 +19,7 @@ const H = +arg('h', 1900), W = +arg('w', 1320);
 const extraWait = +arg('wait', 1200);
 const clickSel = arg('click', '');
 const theme = arg('theme', '');
+const hoverSel = arg('hover', '');
 
 const PORT = 9222 + Math.floor(Math.random() * 400);
 const chrome = spawn('google-chrome', [
@@ -102,6 +103,21 @@ for (const sel of clickSel.split('|').filter(Boolean)) {
   });
   if (!r.result?.result?.value) console.log(`  (no element for ${sel})`);
   await sleep(+arg('gap', 1600));
+}
+if (hoverSel) {
+  const r = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const n = document.querySelector(${JSON.stringify(hoverSel)});
+      if (!n) return false;
+      const b = n.getBoundingClientRect();
+      const ev = new MouseEvent('mouseenter', { bubbles:false, clientX: b.left+20, clientY: b.top+14 });
+      n.dispatchEvent(ev);
+      n.dispatchEvent(new MouseEvent('mousemove', { bubbles:false, clientX: b.left+20, clientY: b.top+14 }));
+      return true; })()`,
+    returnByValue: true,
+  });
+  if (!r.result?.result?.value) console.log(`  (no element for hover ${hoverSel})`);
+  await sleep(600);
 }
 await sleep(extraWait);
 

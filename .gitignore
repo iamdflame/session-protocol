@@ -4,3 +4,4 @@ data/_history.json
 .DS_Store
 /tmp/
 *.png
+dist/

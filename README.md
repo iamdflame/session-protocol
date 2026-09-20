@@ -19,17 +19,25 @@ thinks*, *private AI labs eat big tech*, *the defense buildout is underpriced*. 
 market only sells tickers, so you translate — and the translation is where the idea
 dies.
 
-Buy NVDA to bet on AI and here is what you actually own:
+Say you think robotaxis are further away than the market believes. The obvious trade
+is to short Tesla. One position, done. Here is what you would actually own — measured,
+not asserted:
 
-| | |
+| | share of your risk |
 |---|---|
-| the stock market going up | ~60% of your risk |
-| the AI trade in general | ~25% |
-| semiconductors specifically | ~9% |
-| **the opinion you actually had** | **~6%** |
+| the stock market going down | **47.1%** |
+| a defensive-sector rotation | 15.5% |
+| three other factor exposures | 7.6% |
+| **the opinion you actually had** | **39.9%** |
 
-You wanted one bet. You made four, and the one you wanted is the smallest. Separating
-them out requires a factor model and a short book — which is to say, a hedge fund.
+You wanted one bet. You made five, and the biggest one is a call on the S&P that you
+never made. Separating them out requires a factor model and a short book — which is to
+say, a hedge fund.
+
+Strip the market band and Prism rebuilds the position: **76%** of the risk is now your
+idea, correlation to the S&P falls from **−0.57 to −0.02**, and annualised volatility
+drops from **48% to 19%** — the same opinion, expressed with 60% less risk. Those
+numbers print from `npm run check`; none of them are illustrative.
 
 Every tokenized-stock app so far assumes you already know which ticker you want.
 Prism is for the much more common case where you know what you *think*.
@@ -39,11 +47,12 @@ Prism is for the much more common case where you know what you *think*.
 Type a belief. Watch it refract.
 
 ```
-        your belief ──▶ ◢ ──┬──▶  Market beta ................ 61.4%
-                            ├──▶  The AI trade ............... 23.9%
-                            ├──▶  Private markets ............  8.2%
-                            ├──▶  Semiconductors .............  1.1%
-                            └──▶ ★ YOUR ACTUAL IDEA ..........  5.4%
+        your belief ──▶ ◢ ──┬──▶  Market beta ................ 47.1%
+                            ├──▶  Big tech vs semiconductors ..  1.8%
+                            ├──▶  Index beta vs crypto proxies   2.4%
+                            ├──▶  Private markets vs the AI trade 0.7%
+                            ├──▶  Defensive / staples ......... 15.5%
+                            └──▶ ★ YOUR ACTUAL IDEA .......... 39.9%
 ```
 
 Click a band and it's projected out of your position. The light re-refracts, the book
@@ -134,14 +143,20 @@ network — the demo never depends on a key.
 | Public equities | xStocks (Backed Finance) |
 | Private companies | PreStocks |
 
-Two traps the pipeline avoids, both of which silently corrupt this kind of dataset:
+Three traps the pipeline avoids, each of which silently corrupts this kind of dataset:
 
 1. **Orientation.** Tokens are frequently the *quote* side of a pool (`WC / ANDURL`).
-   Reading that pool's OHLCV naively returns the *other* token's price. Every request
-   is pinned with `?token=<mint>`.
-2. **Dishonest pools.** A thin pool can quote 48% away from the aggregate. Any series
-   whose last close drifts more than 25% from Jupiter's spot is rejected outright
-   rather than used as a best effort.
+   Reading that pool's OHLCV naively returns the *other* token's price — which is how
+   Anduril ends up with KIRKINATOR's chart. Every request is pinned with `?token=<mint>`.
+2. **Dishonest pools.** A thin pool can quote far from where an asset really trades, so
+   no single pool is trusted. Several are fetched and the **median last close** is taken
+   as the reference; pools that disagree with it by more than 30% are dropped.
+3. **A bad reference.** The obvious check — compare against Jupiter's `usdPrice` — is
+   itself unreliable for thin pre-IPO tokens. For `OPENAI` that field reports **$1,144**
+   while four independent pools *and* the executable Jupiter swap quote all agree on
+   **~$1,701** (the token has 9 decimals). An earlier version of this pipeline trusted
+   that field and threw OpenAI out of the dataset entirely. The pools decide; Jupiter's
+   field is recorded for comparison and flagged when it disagrees.
 
 ## Layout
 
@@ -161,6 +176,14 @@ effort is in the one thing that makes this worth building.
 - The factor model sees ~6 months of daily data, because that is how long some of these
   tokens have existed. It is enough for a stable PC1 and interpretable PC2–PC5; it is
   not enough to claim anything about a regime it hasn't seen.
+- PC1 explains ~23% of universe variance, well under the 40–60% a traditional equity
+  risk model shows. That gap is real and worth naming: these tokens trade 24/7 against
+  underlyings that trade 6.5 hours a day, and the overnight drift on thin pools is
+  genuine idiosyncratic noise. It inflates the residual — so the "your idea" number is
+  if anything generous, never flattering in the other direction.
+- Driving the residual to 100% by stripping every factor is circular, and the interface
+  is not built for it. The point is to strip the bands you didn't mean and keep the ones
+  you did; the outputs that matter are the book and the measured correlation.
 - Purity is measured against the factors Prism found. A risk it cannot see cannot be
   stripped.
 - Underweighting is not shorting. A view needing true short exposure is expressed as

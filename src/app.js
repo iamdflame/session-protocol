@@ -52,12 +52,10 @@ const S = {
   }
 
   let data;
-  try {
-    data = await (await fetch('../data/universe.json')).json();
-  } catch {
-    try { data = await (await fetch('./data/universe.json')).json(); }
-    catch { $('#vsay').textContent = 'Could not load the universe snapshot.'; return; }
+  for (const p of ['./data/universe.json', '../data/universe.json']) {
+    try { const r = await fetch(p); if (r.ok) { data = await r.json(); break; } } catch {}
   }
+  if (!data) { $('#vsay').textContent = 'Could not load the universe snapshot.'; return; }
 
   S.model = buildReturns(data.assets);
   S.fm = buildFactors(S.model, 5);
@@ -466,10 +464,16 @@ async function runQuotes() {
       const imp = Math.abs(+(q.priceImpactPct ?? 0)) * 100;
       const outTok = +q.outAmount / 10 ** r.a.decimals;
       return { ...r, usd, ok: true, imp, outTok, hops: q.routePlan?.length ?? 0 };
-    } catch (e) { return { ...r, usd, ok: false, err: String(e.message || e) }; }
+    } catch (e) { return { ...r, usd, ok: false, err: 'blocked' }; }
   }));
 
   const filled = rows.filter(r => r.ok);
+  if (!filled.length) {
+    $('#exec').innerHTML = `<p class="empty">This sandbox blocks requests to
+      outside hosts, so Jupiter can't be reached from here. Run the repo version
+      (<code>npm start</code>) to price the book against live routes.</p>`;
+    return;
+  }
   const wImp = filled.reduce((s, r) => s + r.imp * r.usd, 0) / (filled.reduce((s, r) => s + r.usd, 0) || 1);
 
   $('#exec').innerHTML = `<table><thead><tr>
