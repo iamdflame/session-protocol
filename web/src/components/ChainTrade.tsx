@@ -39,7 +39,7 @@ export function ChainTrade({
 }) {
   const sess = useSession();
   const id = useId();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signMessage } = useWallet();
   const { setOpen } = useWalletModal();
   const send = useSendTx();
 
@@ -113,7 +113,7 @@ export function ChainTrade({
   const faucet = async () => {
     if (!publicKey) return;
     setBusy('faucet'); setFlash(null);
-    const r = await requestFaucet(publicKey);
+    const r = await requestFaucet(publicKey, signMessage);
     setBusy(null);
     if ('error' in r) setFlash({ kind: 'err', text: r.error });
     else {
@@ -222,7 +222,8 @@ export function ChainTrade({
             <p className={c.faucetTitle}>Test quote</p>
             <p className={c.faucetSub}>
               You hold <span className="num">{fmtUsd(fromAtoms(quoteHeld, qd), 2)}</span>. The faucet mints
-              10,000 of the devnet USDC stand-in to your wallet.
+              10,000 of the devnet USDC stand-in to your wallet — it will ask you to sign a
+              message first, to prove the address is yours. No transaction, no fee.
             </p>
           </div>
           <button type="button" className={c.faucetBtn} onClick={faucet} disabled={!!busy}>

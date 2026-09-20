@@ -1,15 +1,23 @@
 /* ───────────────────────────────────────────────────────────────────────────
-   POST /api/faucet { wallet } — test quote for a devnet wallet.
+   POST /api/faucet { wallet, message, signature } — test quote for a devnet
+   wallet, to someone who can prove they hold it.
 
    Mints 10,000 of the devnet quote token (the USDC stand-in) to the wallet's
    token account, creating the account if needed, and drips a little SOL for
-   fees if the wallet has almost none. Refuses a wallet that already holds
-   plenty, because a faucet is for getting started, not for farming a token
-   that is worth nothing.
+   fees if the wallet has almost none.
+
+   The signature is the point. An unauthenticated faucet takes a public key in
+   a JSON body, so anyone can drain the operator's SOL into fresh keypairs at
+   0.02 a call, or spray tokens at addresses whose owners never asked. Asking
+   the caller to sign a short dated message costs a connected wallet one click
+   and makes both pointless: you can only fund a wallet you control, and the
+   per-wallet cap then actually caps something.
    ─────────────────────────────────────────────────────────────────────────── */
 import {
   PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction, LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
+import nacl from 'tweetnacl';
+import bs58 from 'bs58';
 import { ata, createAtaIdempotentIx, TOKEN_PROGRAM_ID } from '../../sdk/src/ix.ts';
 import { connection, json, loadManifest, operator, nodeHandler } from './_shared.ts';
 
@@ -17,6 +25,13 @@ const AMOUNT = 10_000n * 10n ** 6n;          // 10,000.000000
 const CAP = 50_000n * 10n ** 6n;             // stop at 50,000 held
 const SOL_DRIP = 0.02 * LAMPORTS_PER_SOL;
 const SOL_FLOOR = 0.01 * LAMPORTS_PER_SOL;
+/** How stale a signed request may be. Long enough to sign, short enough that a
+    captured message is not a reusable faucet key. */
+const MAX_AGE_MS = 5 * 60_000;
+
+/** The message the site asks the wallet to sign. Must match src/lib/chain.ts. */
+export const faucetMessage = (wallet: string, ts: number) =>
+  `SESSION devnet faucet\nwallet: ${wallet}\nissued: ${ts}`;
 
 /** SPL Token `MintTo`: instruction 7, then the amount as a little-endian u64. */
 function mintToIx(mint: PublicKey, dest: PublicKey, authority: PublicKey, amount: bigint): TransactionInstruction {
@@ -39,11 +54,23 @@ async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'POST { wallet }' }, 405);
 
   let wallet: PublicKey;
+  let issued: number;
+  let signature: Uint8Array;
   try {
-    const body = await req.json() as { wallet?: string };
+    const body = await req.json() as { wallet?: string; issued?: number; signature?: string };
     wallet = new PublicKey(String(body.wallet ?? ''));
+    issued = Number(body.issued);
+    signature = bs58.decode(String(body.signature ?? ''));
   } catch {
-    return json({ error: 'wallet must be a valid public key' }, 400);
+    return json({ error: 'send { wallet, issued, signature }' }, 400);
+  }
+
+  if (!Number.isFinite(issued) || Math.abs(Date.now() - issued) > MAX_AGE_MS) {
+    return json({ error: 'the signed request has expired; try again' }, 400);
+  }
+  const expected = new TextEncoder().encode(faucetMessage(wallet.toBase58(), issued));
+  if (signature.length !== 64 || !nacl.sign.detached.verify(expected, signature, wallet.toBytes())) {
+    return json({ error: 'signature does not prove control of that wallet' }, 401);
   }
 
   try {
