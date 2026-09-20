@@ -1,0 +1,309 @@
+/* ── hero ────────────────────────────────────────────────────────────────── */
+
+.hero {
+  position: relative;
+  padding-block: clamp(56px, 8vw, 108px) clamp(64px, 9vw, 120px);
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.heroInner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: clamp(32px, 6vw, 88px);
+  align-items: center;
+}
+
+.heroCopy { display: flex; flex-direction: column; align-items: flex-start; }
+
+/* The live badge. Its dot takes the holder's colour, not a green "all clear" —
+   a shut market is not a fault, and green would say the opposite of the words
+   next to it. */
+.status {
+  display: inline-flex; align-items: center; gap: 7px;
+  flex-wrap: wrap; row-gap: 3px;
+  font-size: var(--t-xs);
+  line-height: 1.3;
+  color: var(--ink-2);
+  padding: 6px 13px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--bg-raised) 70%, transparent);
+
+  --tone: var(--ink-3);
+  --tone-ink: var(--ink-3);
+}
+.status[data-holder='night'] { --tone: var(--night); --tone-ink: var(--night-ink); }
+.status[data-holder='day'] { --tone: var(--day); --tone-ink: var(--day-ink); }
+
+/* The ring is a pseudo-element animating transform and opacity, not the dot
+   animating its box-shadow. A blurred shadow has to be repainted on every
+   frame of the pulse; a scaled ring is handed to the compositor. Measured at
+   4x CPU throttle it was the single largest cost on an otherwise idle page. */
+.statusDot {
+  position: relative;
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--tone);
+}
+.statusDot::after {
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--tone);
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .statusDot::after { animation: pulse-ring 2.8s var(--ease) infinite; }
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.7); opacity: 0.5; }
+    70%  { transform: scale(1.9); opacity: 0; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+}
+.statusLabel { letter-spacing: 0.005em; white-space: nowrap; }
+.statusHolder {
+  color: var(--tone-ink); font-weight: 600;
+  font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.statusTime { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.statusSep { color: var(--ink-3); opacity: 0.6; }
+
+/* Sized so "Or own the night." holds one line in the hero column at 1440, and
+   breaks where the <br/> says everywhere below that. */
+.title {
+  font-size: clamp(2.55rem, 1.1rem + 4.6vw, 4.3rem);
+  margin-top: var(--sp-5);
+  line-height: 1.04;
+}
+
+.lead { margin-top: var(--sp-5); max-width: 46ch; }
+
+.actions { display: flex; gap: var(--sp-3); margin-top: var(--sp-7); flex-wrap: wrap; }
+
+.primary {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  height: 46px; padding: 0 22px;
+  border-radius: var(--r-2);
+  background: var(--ink); color: var(--ink-inverse);
+  font-size: var(--t-sm); font-weight: 510;
+  transition: transform var(--t-hover) var(--ease), opacity var(--t-hover) var(--ease);
+}
+.primary svg { transition: transform var(--t-hover) var(--ease); }
+.primary:hover { opacity: 0.9; }
+.primary:hover svg { transform: translateX(2px); }
+.primary:active { transform: translateY(1px); }
+
+.secondary {
+  display: inline-flex; align-items: center;
+  height: 46px; padding: 0 22px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: var(--t-sm); font-weight: 450;
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.secondary:hover { background: var(--bg-raised); border-color: var(--ink-3); }
+
+.facts {
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-6) clamp(24px, 4vw, 48px);
+  margin: var(--sp-8) 0 0;
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--line);
+  width: 100%;
+}
+.facts > div { display: flex; flex-direction: column; gap: 3px; }
+.factVal { font-size: var(--t-h3); font-weight: 500; color: var(--ink); line-height: 1; }
+.factKey {
+  margin: 0; font-size: var(--t-xs); color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+
+/* ── hero clock ──────────────────────────────────────────────────────────── */
+
+.heroClock {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-6);
+}
+
+.upNext {
+  width: 100%;
+  max-width: 380px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: color-mix(in srgb, var(--bg-raised) 80%, transparent);
+  backdrop-filter: blur(8px);
+  padding: var(--sp-4) var(--sp-5) var(--sp-5);
+}
+.upNext > p { color: var(--ink-3); margin-bottom: var(--sp-3); }
+.upNext ul { list-style: none; display: flex; flex-direction: column; }
+.upNext li {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 7px 0;
+  font-size: var(--t-xs);
+  border-top: 1px solid var(--line);
+}
+.upNext li:first-child { border-top: 0; }
+.upTo {
+  font-size: var(--t-micro); font-weight: 600; letter-spacing: 0.08em;
+}
+.upTo[data-holder='day'] { color: var(--day-ink); }
+.upTo[data-holder='night'] { color: var(--night-ink); }
+.upWhen { color: var(--ink-2); }
+.upTime { color: var(--ink-3); }
+
+/* ── sections ────────────────────────────────────────────────────────────── */
+
+.section { padding-block: clamp(64px, 9vw, 128px); }
+.sectionSunken {
+  background: var(--bg-sunken);
+  border-block: 1px solid var(--line);
+}
+
+.h2 { font-size: var(--t-h1); margin-top: var(--sp-3); text-wrap: balance; max-width: 22ch; }
+.sectionLead { margin-top: var(--sp-5); }
+.sectionLead + .sectionLead { margin-top: var(--sp-4); }
+.emph { color: var(--ink); font-weight: 500; }
+
+/* ── the two tokens ──────────────────────────────────────────────────────── */
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 2.4vw, 28px);
+  margin-top: var(--sp-8);
+}
+
+.token {
+  position: relative;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-4);
+  padding: clamp(22px, 3vw, 34px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: border-color var(--t-state) var(--ease), transform var(--t-state) var(--ease);
+}
+.token::before {
+  content: '';
+  position: absolute; inset: 0 0 auto 0; height: 2px;
+}
+.token[data-class='day']::before { background: var(--day); }
+.token[data-class='night']::before { background: var(--night); }
+.token:hover { transform: translateY(-2px); }
+.token[data-class='day']:hover { border-color: color-mix(in srgb, var(--day-ink) 45%, var(--line)); }
+.token[data-class='night']:hover { border-color: color-mix(in srgb, var(--night-ink) 45%, var(--line)); }
+
+.token header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.tokenTag {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.02em;
+}
+.token[data-class='day'] .tokenTag { color: var(--day-ink); }
+.token[data-class='night'] .tokenTag { color: var(--night-ink); }
+.tokenHours { font-size: var(--t-xs); color: var(--ink-3); }
+
+.tokenTitle {
+  font-size: var(--t-h3); font-weight: 500;
+  margin-top: var(--sp-4); letter-spacing: -0.012em;
+}
+.tokenBody {
+  margin-top: var(--sp-3);
+  font-size: var(--t-body); line-height: 1.62; color: var(--ink-2);
+}
+.tokenList {
+  list-style: none;
+  margin-top: var(--sp-5); padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  font-size: var(--t-sm); color: var(--ink-2);
+}
+.tokenList li { position: relative; padding-left: 18px; }
+.tokenList li::before {
+  content: ''; position: absolute; left: 0; top: 0.58em;
+  width: 7px; height: 1px; background: var(--ink-3);
+}
+
+/* ── the finding ─────────────────────────────────────────────────────────── */
+
+.findingGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(16px, 2.4vw, 28px);
+  margin-top: var(--sp-8);
+  align-items: start;
+}
+
+.chartCard { padding: clamp(20px, 2.6vw, 28px); }
+.chartHead {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--sp-4); margin-bottom: var(--sp-5);
+}
+.chartTitle { font-size: var(--t-body); font-weight: 550; letter-spacing: -0.005em; }
+.chartSub { font-size: var(--t-xs); color: var(--ink-3); margin-top: 4px; max-width: 42ch; }
+.chartLink {
+  flex: none;
+  font-size: var(--t-xs); color: var(--ink-2);
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 1px;
+  transition: color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.chartLink:hover { color: var(--ink); border-color: var(--ink); }
+.chartError { font-size: var(--t-sm); color: var(--ink-2); max-width: 44ch; padding: var(--sp-6) 0; }
+
+.caveat {
+  margin-top: var(--sp-7);
+  padding: var(--sp-5) var(--sp-6);
+  border-left: 2px solid var(--s4);
+  background: color-mix(in srgb, var(--s4) 5%, transparent);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  font-size: var(--t-sm); line-height: 1.66; color: var(--ink-2);
+  max-width: 76ch;
+}
+.caveat strong { color: var(--ink); font-weight: 550; }
+.caveatLink {
+  color: var(--ink); border-bottom: 1px solid var(--line-strong);
+  transition: border-color var(--t-hover) var(--ease);
+}
+.caveatLink:hover { border-color: var(--ink); }
+
+/* ── close ───────────────────────────────────────────────────────────────── */
+
+.closing { border-top: 1px solid var(--line); }
+.closeTitle { font-size: var(--t-h1); max-width: 18ch; text-wrap: balance; }
+.marketCount { margin-top: var(--sp-6); font-size: var(--t-xs); color: var(--ink-3); }
+
+/* ── responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+  .heroInner { grid-template-columns: 1fr; gap: clamp(40px, 7vw, 64px); }
+  /* The live object leads on a narrow screen: it is the thing that makes the
+     page make sense, and it fits above the fold where the headline would not. */
+  .heroClock { order: -1; align-items: center; }
+  .upNext { max-width: 460px; }
+  .findingGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .pair { grid-template-columns: 1fr; }
+  .heroClock { align-self: center; align-items: center; }
+  .facts { gap: var(--sp-5) var(--sp-6); }
+  .factVal { font-size: 1.12rem; }
+}
+
+@media (max-width: 440px) {
+  .actions { width: 100%; }
+  .actions > * { flex: 1 1 auto; justify-content: center; }
+  /* Three facts, three columns — a 2+1 wrap orphans the third and reads as
+     an accident rather than a row. */
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4) var(--sp-3); }
+  .factVal { font-size: 1.02rem; }
+  .factKey { font-size: var(--t-micro); line-height: 1.35; }
+  /* The trailing "to the bell" is the first thing to go when the pill has to
+     wrap: the countdown reads without it. */
+  .statusLabel:last-child { display: none; }
+}

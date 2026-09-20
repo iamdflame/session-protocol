@@ -1,0 +1,142 @@
+.wrap { margin-top: var(--sp-7); display: flex; flex-direction: column; gap: var(--sp-5); }
+
+.stage {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-4);
+  padding: clamp(20px, 3.4vw, 36px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+/* ── the two sides ───────────────────────────────────────────────────────── */
+
+.lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(20px, 3vw, 44px);
+}
+@media (max-width: 720px) { .lanes { grid-template-columns: 1fr; gap: var(--sp-5); } }
+
+.lane { display: flex; flex-direction: column; gap: var(--sp-2); }
+.laneHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.laneLabel {
+  font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.lane[data-tone='day'] .laneLabel { color: var(--day-ink); }
+.lane[data-tone='night'] .laneLabel { color: var(--night-ink); }
+.laneVal { font-size: var(--t-sm); color: var(--ink); font-weight: 500; }
+.laneHint { font-size: var(--t-xs); color: var(--ink-3); margin-bottom: var(--sp-1); }
+
+.track {
+  position: relative;
+  height: 34px;
+  border-radius: var(--r-1);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.fill {
+  position: absolute; inset: 0 auto 0 0;
+  border-radius: 0 3px 3px 0;
+  transition: width 90ms linear;
+}
+.lane[data-tone='day'] .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--day) 55%, transparent), var(--day)); }
+.lane[data-tone='night'] .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--night) 55%, transparent), var(--night)); }
+
+/* The real control sits on top of the painted track, invisible but complete —
+   keyboard, screen reader and touch all get the native range behaviour. */
+.range {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; margin: 0;
+  appearance: none; background: transparent;
+  cursor: ew-resize;
+}
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 4px; height: 34px;
+  background: var(--ink);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--bg-raised);
+}
+.range::-moz-range-thumb {
+  width: 4px; height: 34px; border: 0;
+  background: var(--ink); border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--bg-raised);
+}
+.range:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--r-1); }
+
+/* ── the flow ────────────────────────────────────────────────────────────── */
+
+.flow { padding-top: var(--sp-1); }
+.flowBar {
+  display: flex;
+  height: 46px;
+  border-radius: var(--r-2);
+  overflow: hidden;
+  gap: 2px;                      /* the 2px surface gap between adjacent fills */
+  font-size: var(--t-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.internal, .external {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 0; overflow: hidden; white-space: nowrap;
+  transition: flex-grow 90ms linear;
+}
+.internal {
+  flex-basis: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ink-3) 13%, transparent) 0 6px,
+    transparent 6px 12px
+  ), var(--bg-sunken);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.external {
+  flex-basis: 0;
+  background: var(--s4);
+  color: #10131b;
+  font-weight: 600;
+}
+.external[data-tiny='true'] span { opacity: 0; }
+
+/* ── readout ─────────────────────────────────────────────────────────────── */
+
+.readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-5);
+  margin: 0;
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 720px) { .readout { grid-template-columns: 1fr; gap: var(--sp-4); } }
+
+.readout dt {
+  font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.readout dd { margin: 0; }
+.big {
+  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.8rem);
+  font-weight: 500; color: var(--ink);
+  margin-top: 3px; line-height: 1.1;
+}
+.big em { font-style: normal; font-size: 0.55em; color: var(--ink-3); margin-left: 2px; }
+.readout > div[data-emph='true'] .big { color: var(--s4); }
+.sub { font-size: var(--t-xs); color: var(--ink-3); margin-top: 5px; line-height: 1.45; }
+
+.caption {
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  line-height: 1.62;
+  max-width: var(--measure-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill, .internal, .external { transition: none; }
+}
