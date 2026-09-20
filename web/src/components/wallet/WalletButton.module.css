@@ -1,0 +1,62 @@
+.connect {
+  display: inline-flex; align-items: center;
+  height: 34px; padding: 0 14px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: var(--t-xs); font-weight: 510; white-space: nowrap;
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.connect:hover:not(:disabled) { background: var(--bg-raised); border-color: var(--ink-3); }
+.connect:disabled { opacity: 0.6; cursor: wait; }
+.connect[data-compact='true'] { height: 30px; padding: 0 11px; }
+
+.wrap { position: relative; }
+
+.account {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 10px 0 9px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--ink-2);
+  font-size: var(--t-xs);
+  transition: border-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease);
+}
+.account:hover, .account[aria-expanded='true'] { border-color: var(--line-strong); color: var(--ink); }
+.account[data-compact='true'] { height: 30px; }
+.icon { border-radius: 4px; }
+.addr { letter-spacing: 0; }
+
+.menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 232px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-2);
+  padding: var(--sp-2);
+  z-index: 70;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .menu { animation: menu-in 140ms var(--ease-out) both; }
+  @keyframes menu-in { from { opacity: 0; transform: translateY(-4px) } }
+}
+.menuHead {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-2);
+}
+.menuLabel { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.menuAddr { font-size: 10.5px; color: var(--ink-2); word-break: break-all; line-height: 1.4; }
+
+.item {
+  display: block; width: 100%; text-align: left;
+  padding: 8px var(--sp-3);
+  border-radius: var(--r-1);
+  font-size: var(--t-xs); color: var(--ink);
+  transition: background-color var(--t-hover) var(--ease);
+}
+.item:hover { background: var(--bg-sunken); }
+.danger { color: var(--crit-ink); }
