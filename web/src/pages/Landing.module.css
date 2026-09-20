@@ -79,7 +79,31 @@
 
 .lead { margin-top: var(--sp-5); max-width: 46ch; }
 
-.actions { display: flex; gap: var(--sp-3); margin-top: var(--sp-7); flex-wrap: wrap; }
+/* Sits between the lead and the buttons: a reader who never scrolls still
+   sees what is and is not deployed. */
+.chainLine {
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-4);
+  max-width: 54ch;
+  border: 1px solid color-mix(in srgb, var(--s4) 30%, var(--line));
+  border-left: 2px solid var(--s4);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  background: color-mix(in srgb, var(--s4) 5%, transparent);
+  font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2);
+}
+.chainLine strong { color: var(--ink); font-weight: 550; }
+.chainLine em { font-style: normal; color: var(--ink); font-weight: 550; }
+.chainLine .mono { color: var(--ink); font-size: 0.92em; }
+.chainDot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none; margin-top: 7px;
+  background: var(--s4);
+}
+.chainDot[data-live='false'] { background: var(--ink-3); }
+.chainLink { color: var(--ink); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.chainLink:hover { border-color: var(--ink); }
+
+.actions { display: flex; gap: var(--sp-3); margin-top: var(--sp-6); flex-wrap: wrap; }
 
 .primary {
   display: inline-flex; align-items: center; gap: var(--sp-2);

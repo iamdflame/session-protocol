@@ -6,6 +6,7 @@ import { CurveChart } from '@/components/charts/CurveChart';
 import { VolBars } from '@/components/charts/VolBars';
 import { useSession, useClockSize, countdown, upcoming, etClock, SESSION_HOURS, NIGHT_SHARE } from '@/lib/session';
 import { useCurve, useMarkets, fmtPctAbs, type Headline } from '@/lib/data';
+import { useDevnet } from '@/lib/chain';
 import s from './Landing.module.css';
 
 /**
@@ -52,6 +53,40 @@ function HeroStatus() {
 
 function HeroClock() {
   return <SessionClock size={useClockSize(380)} />;
+}
+
+/**
+ * What is actually deployed, above the fold.
+ *
+ * A reader who scrolls no further should still leave knowing the live vault
+ * is on devnet against stand-in mints and a SOL mark, because the alternative
+ * is that they infer from a page full of NVDAx and real prices that the thing
+ * holds NVDAx. It does not, and §2 of every honest review starts there.
+ */
+function ChainLine() {
+  const m = useDevnet();
+  if (m === undefined) return null;
+  if (m === null) {
+    return (
+      <p className={s.chainLine}>
+        <span className={s.chainDot} data-live="false" aria-hidden="true" />
+        No vault is deployed. Every figure below is measured from real pool
+        history; the vault pages run the settlement code locally.
+      </p>
+    );
+  }
+  return (
+    <p className={s.chainLine}>
+      <span className={s.chainDot} data-live="true" aria-hidden="true" />
+      <span>
+        <strong>One vault is live, on devnet.</strong> It runs the real program —
+        settlement, funding, the handoff — but devnet has no xStocks and no USDC,
+        so it holds <em>test mints</em> and marks them with Pyth&rsquo;s{' '}
+        <span className="mono">{m.markFeed}</span>. Nothing here holds NVDAx yet.{' '}
+        <Link to="/how-it-works#status" className={s.chainLink}>The full line</Link>
+      </span>
+    </p>
+  );
 }
 
 function UpNext() {
@@ -125,6 +160,8 @@ export default function Landing() {
               for six and a half. Those are two different assets wearing one ticker —
               and until now you had to hold both.
             </p>
+
+            <ChainLine />
 
             <div className={s.actions}>
               <Link to="/markets" className={s.primary}>
