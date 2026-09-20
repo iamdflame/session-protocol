@@ -1,0 +1,24 @@
+[package]
+name = "session"
+version = "0.1.0"
+edition = "2021"
+description = "Split a tokenized equity into the hours arbitrage works and the hours it does not"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "session"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = []
+
+[dependencies]
+
+[dev-dependencies]
+serde_json = "1"
+proptest = "1"

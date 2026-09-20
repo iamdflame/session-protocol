@@ -59,10 +59,24 @@ Click a band and it's projected out of your position. The light re-refracts, the
 below rewrites itself, and the number you care about grows. The band widths *are* the
 variance shares — the picture is the arithmetic, not an illustration of it.
 
-Then the falsifiable part: Prism replays both weight vectors over real history and
-shows you the correlation of each to the S&P. If the refracted position is genuinely
-market-neutral, that number goes to roughly zero. If it doesn't, the claim was false
-and you can see it.
+Then the falsifiable part. A correlation number asks to be taken on trust, so Prism
+draws it instead: one dot per trading day, index return across, position return up.
+
+```
+   the obvious trade                  after refraction
+        ·                                    ·
+      ·  ·                                 · · ·
+   ·  · ·                                ·· ··· ·
+  ──────·──·────                        ───·····──────
+       ·  · ·                              · ·· ·
+         ·   ·                               · ·
+          β −2.07                            β −0.03
+```
+
+A cloud that leans is a position the market is driving. A round one isn't. Both panels
+share one scale — a per-panel scale would rescale the tilt away and destroy the
+comparison. It is a diagnostic, not a backtest: no strategy is simulated, the same two
+positions are simply replayed over the window.
 
 ## Why this needs Solana
 
@@ -188,4 +202,10 @@ effort is in the one thing that makes this worth building.
   stripped.
 - Underweighting is not shorting. A view needing true short exposure is expressed as
   far as a long-only book allows, and the residual says so.
+- Tokenized pre-IPO exposure is a contested instrument, not settled plumbing. These
+  tokens reference private companies through SPVs, and in May 2026 both OpenAI and
+  Anthropic publicly disputed the validity of the underlying share transfers — their
+  tokens fell 39% and 34% in a week. Prism treats those prices as what they are: a
+  live market in a claim, which is exactly what makes them interesting to model and
+  exactly why nobody should mistake the token for the equity.
 - Research tool. Not investment advice.

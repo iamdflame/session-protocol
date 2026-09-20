@@ -1,7 +1,9 @@
 node_modules/
+target/
+.anchor/
+test-ledger/
 data/_raw-universe.json
 data/_history.json
+data/_hourly.json
+proptest-regressions/
 .DS_Store
-/tmp/
-*.png
-dist/
