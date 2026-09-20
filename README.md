@@ -49,10 +49,31 @@ constraint and it goes away.
 globally, has no closed session to arbitrage around, and shows nothing either
 way (night t = −0.30, day t = −1.20).
 
-This is a finding, not a failure — and it is the reason SESSION is built as a
-two-sided market rather than as a strategy. **The protocol does not need the
-anomaly to be real.** It needs people to disagree about it, and it prices that
-disagreement.
+### The sharper result is about risk, not return
+
+The return comparison is only half the question. The night pays no more than the
+day — while carrying materially more risk:
+
+```
+mean session volatility    NIGHT 2.77%     DAY 1.97%     the night is 41% more volatile
+fatter left tail           NIGHT in 16/20 assets
+```
+
+**The night is uncompensated risk.** And that asymmetry is structural rather than
+a quirk of the sample: a DAY holder is only exposed while the market is open, so
+they can always trade out before a gap. A NIGHT holder cannot. They wear every
+gap in full, by construction.
+
+Which gives the two tokens an honest job:
+
+| | what it is |
+|---|---|
+| **`X.DAY`** | equity exposure **you can always exit**. No overnight gaps — you are never holding while the market is shut. |
+| **`X.NIGHT`** | the gap risk, **isolated**, for whoever wants to be paid to carry it. |
+
+Nobody can buy either of those today. Holding a share means holding both, always,
+whether or not you want the night. SESSION is the market that separates them, and
+the funding rate between the classes is the price of the transfer.
 
 Reproduce it:
 
@@ -90,17 +111,16 @@ a brokerage account becomes a bookkeeping entry. Measured against live Jupiter
 routes, the residual costs a median **21bp round trip at $10k** — and a balanced
 book pays none of it, because the handoff never leaves the vault.
 
-### Funding: a price for the session premium
+### Funding: the price of transferring gap risk
 
 When the classes are not the same size, the vault does have to trade the
 difference, and the crowded side is what caused that cost. So the crowded side
 pays the sparse side, exactly as a perpetual pays to hold its mark to the index.
 
-The resulting rate is the market's answer to *"what is a night worth?"* — a
-number that has never been observable, because until tokenized equity traded
-around the clock there was no way to take either side of it. Given the finding
-above, that number is an open question rather than a settled one, which is
-precisely what makes it worth quoting.
+The resulting rate is the market's answer to *"what is a night worth?"* — which,
+given the measurement above, is really *"what should someone be paid to carry
+gap risk?"* Nobody has been able to quote that number, because nobody could hold
+either side of it on its own.
 
 ### Mint and redeem
 

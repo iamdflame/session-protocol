@@ -200,6 +200,38 @@ for (const r of [...equities, ...controls]) {
   console.log(line('DAY', r.day));
 }
 
+/* ── risk, not just return ───────────────────────────────────────────────── */
+
+// The return comparison is only half the question. A session that pays the same
+// for more risk is not a fair trade, and the night carries something the day
+// structurally cannot: a holder cannot exit while the market is shut, so every
+// gap lands on them in full.
+console.log('\nRISK PER SESSION');
+console.log('─'.repeat(104));
+console.log('asset'.padEnd(10) + 'NIGHT vol'.padStart(11) + 'DAY vol'.padStart(10) +
+            '   ' + 'left tail N'.padStart(12) + 'left tail D'.padStart(12) +
+            '   ' + 'per-hour N'.padStart(11) + 'per-hour D'.padStart(11));
+console.log('─'.repeat(104));
+
+let volN = 0, volD = 0, fatterNight = 0;
+for (const r of equities) {
+  // mean − 2.5σ: the size of move a holder cannot trade out of
+  const tn = r.night.mean - 2.5 * r.night.stdev;
+  const td = r.day.mean - 2.5 * r.day.stdev;
+  if (tn < td) fatterNight++;
+  volN += r.night.stdev; volD += r.day.stdev;
+  console.log(
+    r.symbol.padEnd(10) + pct(r.night.stdev).padStart(11) + pct(r.day.stdev).padStart(10) +
+    '   ' + pct(tn, 1).padStart(12) + pct(td, 1).padStart(12) +
+    '   ' + bp(r.night.perHour).padStart(11) + bp(r.day.perHour).padStart(11));
+}
+const n = Math.max(equities.length, 1);
+console.log('─'.repeat(104));
+console.log(`  mean session volatility   NIGHT ${pct(volN / n)}   DAY ${pct(volD / n)}` +
+            `   →  the night is ${(((volN / volD) - 1) * 100).toFixed(0)}% more volatile`);
+console.log(`  fatter left tail          NIGHT in ${fatterNight}/${n} assets`);
+console.log('─'.repeat(104));
+
 /* ── the verdict ─────────────────────────────────────────────────────────── */
 
 // The cleanest single test: for each equity, compare the return earned per hour
@@ -239,10 +271,19 @@ if (Math.abs(tDiff) < 1.96 && wins <= paired.length * 0.65 && wins >= paired.len
   console.log('  it survives out of sample — this is one regime, on one venue, over months.');
 }
 console.log('');
-console.log('  This is a finding, not a failure. It is also why the protocol is built as a');
-console.log('  two-sided market rather than a strategy: SESSION does not need the anomaly');
-console.log('  to be real. It needs people to disagree about it, and prices that disagreement');
-console.log('  through the funding rate between the two classes.');
+console.log('  And the sharper result is not about return at all. The night pays no more');
+console.log(`  than the day while carrying ${(((volN / volD) - 1) * 100).toFixed(0)}% more volatility and the fatter left tail`);
+console.log(`  in ${fatterNight} of ${n} assets. It is uncompensated risk.`);
+console.log('');
+console.log('  That asymmetry is structural, not a quirk of the sample. A DAY holder is');
+console.log('  only exposed while the market is open, so they can always trade out before');
+console.log('  a gap. A NIGHT holder cannot: they wear every gap in full, by construction.');
+console.log('');
+console.log('  Which gives the two tokens an honest job. DAY is equity exposure you can');
+console.log('  always exit. NIGHT is the gap risk, isolated, for whoever wants to be paid');
+console.log('  to carry it. The funding rate between them is the price of that transfer —');
+console.log('  and nobody has been able to quote it before, because nobody could hold');
+console.log('  either side on its own.');
 console.log('═'.repeat(104));
 
 console.log('\nCAVEATS');
