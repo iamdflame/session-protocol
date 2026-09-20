@@ -18,7 +18,9 @@
     "exec-cost": "node research/executability.mjs",
     "devnet:init": "node --experimental-strip-types keeper/src/devnet-init.ts",
     "devnet:crank": "node --experimental-strip-types keeper/src/devnet-crank.ts",
-    "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts"
+    "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts",
+    "build:program": "./scripts/build-sbf.sh",
+    "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
