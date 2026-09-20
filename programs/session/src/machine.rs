@@ -20,18 +20,23 @@
 //! intermediate boundary is gone, and no price available now can reconstruct who
 //! was owed what. The vault halts instead of guessing.
 
-use crate::calendar::{boundaries_between, session_at, Session};
+use crate::calendar::{boundaries_between, next_boundary, session_at, Session};
 
 /// The most boundaries worth counting. Beyond this the vault is halting anyway,
 /// so the exact number is only useful for the operator's alert.
 pub const BOUNDARY_SCAN_CAP: u32 = 24;
+/// Days the boundary walker may look ahead. A Friday close to a Monday open is
+/// 3; a long holiday weekend is 4. Twelve is slack, and bounded.
+pub const BOUNDARY_SCAN_DAYS: i64 = 12;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Decision {
     /// The session has not changed since the last settlement.
     UpToDate,
-    /// Exactly one boundary elapsed. Settle into `to`.
-    Settle { to: Session },
+    /// Exactly one boundary elapsed. Settle into `to`, and stamp the vault
+    /// with `at` — the instant the bell actually rang, not the instant the
+    /// crank landed. A crank is allowed to be late; the accounting is not.
+    Settle { to: Session, at: i64 },
     /// Two or more boundaries elapsed. Settling now would attribute a whole
     /// session to the wrong class, so the vault must halt for an operator.
     Stale { missed: u32 },
@@ -65,7 +70,13 @@ pub fn decide(last_session: Session, last_boundary_ts: i64, now: i64) -> Decisio
 
     match missed {
         0 => Decision::UpToDate,
-        1 => Decision::Settle { to: here },
+        1 => match next_boundary(last_boundary_ts, BOUNDARY_SCAN_DAYS) {
+            // The one boundary between the last settlement and now.
+            Some(at) if at <= now => Decision::Settle { to: here, at },
+            // Counted a boundary the walker cannot find: the two disagree and
+            // nothing built on either is safe.
+            _ => Decision::Inconsistent,
+        },
         n => Decision::Stale { missed: n },
     }
 }
@@ -93,7 +104,7 @@ mod tests {
     fn one_boundary_settles() {
         // settled at the open; now just after the close
         let d = decide(Session::Open, mon(9, 30), mon(16, 1));
-        assert_eq!(d, Decision::Settle { to: Session::Closed });
+        assert_eq!(d, Decision::Settle { to: Session::Closed, at: mon(16, 0) });
     }
 
     /// The bug this module exists to make impossible.
@@ -147,7 +158,8 @@ mod tests {
             let now = mon(16, 0) + minutes_late * 60;
             assert_eq!(
                 decide(Session::Open, settled_at, now),
-                Decision::Settle { to: Session::Closed },
+                // However late the crank, the boundary it reports is the bell.
+                Decision::Settle { to: Session::Closed, at: mon(16, 0) },
                 "retry {minutes_late}min after the close should still be settleable"
             );
         }
@@ -180,7 +192,7 @@ mod tests {
     fn settling_exactly_on_the_boundary_instant_is_a_boundary() {
         // 16:00:00 ET is the first instant of NIGHT, not the last of DAY
         let d = decide(Session::Open, mon(9, 30), mon(16, 0));
-        assert_eq!(d, Decision::Settle { to: Session::Closed });
+        assert_eq!(d, Decision::Settle { to: Session::Closed, at: mon(16, 0) });
     }
 
     #[test]
@@ -203,15 +215,44 @@ mod tests {
             // a crank that fires one second late, every time
             let now = b + 1;
             match decide(session, t, now) {
-                Decision::Settle { to } => {
+                Decision::Settle { to, at } => {
                     assert_eq!(to, session_at(now));
+                    assert_eq!(at, b, "the reported boundary must be the bell itself");
                     session = to;
-                    t = now;
+                    // Stamp the bell, which is what the program now stores.
+                    t = at;
                     settled += 1;
                 }
                 other => panic!("punctual crank produced {other:?} at {now}"),
             }
         }
         assert!(settled > 400, "expected a full year of boundaries, got {settled}");
+    }
+
+    /// The reason `Settle` carries a timestamp at all.
+    ///
+    /// A crank is allowed to be late — a weekend outage, a stale mark that
+    /// clears at noon, a cron that fires on the wrong side of a DST change.
+    /// Whatever it reports must be the bell, because the vault stamps it and
+    /// the next session's length is measured from it. Stamping the crank
+    /// instead charges the incoming class for the operator's lateness.
+    #[test]
+    fn the_reported_boundary_is_the_bell_however_late_the_crank() {
+        let settled_at = mon(9, 30);
+        let bell = mon(16, 0);
+        for late_secs in [0i64, 1, 60, 3600, 6 * 3600, 12 * 3600, 17 * 3600] {
+            match decide(Session::Open, settled_at, bell + late_secs) {
+                Decision::Settle { at, .. } => assert_eq!(
+                    at, bell,
+                    "a crank {late_secs}s late must still report the bell"
+                ),
+                // Past the next open two boundaries have elapsed; that halts,
+                // which is the other half of the guarantee.
+                other => assert!(
+                    matches!(other, Decision::Stale { .. }),
+                    "unexpected {other:?} at {late_secs}s late"
+                ),
+            }
+        }
     }
 }

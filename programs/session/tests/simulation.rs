@@ -156,7 +156,7 @@ impl Sim {
     fn settle_at(&mut self, ts: i64, mark: u128, fp: &FundingParams) -> Decision {
         let d = decide(self.last_session, self.last_boundary_ts, ts);
         match d {
-            Decision::Settle { to } => {
+            Decision::Settle { to, at } => {
                 // The program refuses to settle on top of a handoff it never
                 // filled: carrying one means real inventory no longer matches
                 // what NAV claims, and a price move against that gap is how a
@@ -190,7 +190,9 @@ impl Sim {
                     self.pending_delta += out.handoff_delta;
                     self.last_mark = mark;
                     self.last_session = to;
-                    self.last_boundary_ts = ts;
+                    // The bell, like the program — not `ts`, which is when
+                    // this crank happened to fire.
+                    self.last_boundary_ts = at;
 
                     // The vault's inventory is re-pointed at the newly exposed
                     // class; the part it could not match is what must trade.

@@ -82,4 +82,13 @@ pub enum SessionError {
     // ── configuration ────────────────────────────────────────────────────
     #[msg("parameter out of range")]
     BadParameter,
+
+    // ── appended, never inserted ─────────────────────────────────────────
+    // Anchor assigns error codes by declaration order, so a new variant goes
+    // at the end. Inserting one above renumbers everything after it and every
+    // client that maps a code to a message starts lying.
+    #[msg("price update is only partially verified; a fully verified update is required")]
+    PartialVerification,
+    #[msg("token account is not owned by the signer")]
+    WrongOwner,
 }

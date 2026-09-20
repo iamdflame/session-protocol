@@ -46,7 +46,7 @@ use errors::SessionError;
 use fixed::{mul_div_floor, WAD};
 use machine::Decision;
 use ops::OpError;
-use oracle::{effective_session, parse_price_update, Quote};
+use oracle::{effective_session, parse_price_update, Quote, Verification};
 use settle::{settle, value_of};
 use state::*;
 
@@ -299,7 +299,7 @@ pub mod session {
             }
         }
 
-        match machine::decide(
+        let boundary_ts = match machine::decide(
             ctx.accounts.vault.last_session(),
             ctx.accounts.vault.last_boundary_ts,
             now,
@@ -315,8 +315,8 @@ pub mod session {
                     &mut ctx.accounts.vault, HaltReason::Inconsistent, now, 0,
                 );
             }
-            Decision::Settle { .. } => {}
-        }
+            Decision::Settle { at, .. } => at,
+        };
 
         let night_supply = ctx.accounts.night_mint.supply;
         let day_supply = ctx.accounts.day_mint.supply;
@@ -366,7 +366,13 @@ pub mod session {
         v.exposed = out.exposed.into();
         v.set_last_session(effective);
         v.last_mark = mark;
-        v.last_boundary_ts = now;
+        // The bell, not the crank. A crank that lands an hour late must not
+        // charge the incoming class that hour: the session it is being paid
+        // for began when the calendar says it began. The mark is still the
+        // one the crank read — an on-chain program cannot fetch a historical
+        // price — which is why `max_stale_secs` bounds how far from the bell
+        // that mark is allowed to be.
+        v.last_boundary_ts = boundary_ts;
         v.boundary_count = v.boundary_count.saturating_add(1);
         // Carry, never overwrite: a residue from the previous boundary is still
         // owed and stays owed.
@@ -796,6 +802,15 @@ fn read_quote(ai: &AccountInfo, expect: &[u8; 32]) -> Result<Quote> {
     let data = ai.try_borrow_data()?;
     let update = parse_price_update(&data).map_err(map_oracle)?;
     require!(update.feed_id == *expect, SessionError::WrongFeed);
+    // A `Partial(n)` update has been checked against only n of the Wormhole
+    // guardian set. Anyone may post one, and it lands in an account this
+    // program's owner and feed checks both accept — so refusing it here is the
+    // only thing standing between a cheaply-attested price and everyone's NAV.
+    // Parsing the level and then discarding it was the whole gap.
+    require!(
+        update.verification == Verification::Full,
+        SessionError::PartialVerification
+    );
     Ok(update.quote)
 }
 
@@ -903,9 +918,16 @@ pub struct MintShares<'info> {
     pub day_mint: Account<'info, Mint>,
     #[account(mut, address = vault.quote_vault)]
     pub quote_vault: Account<'info, TokenAccount>,
-    #[account(mut, constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint)]
+    // Owner as well as mint. A wrong-owner CPI fails anyway, but only after
+    // the signature exists: without this a caller can be induced to sign a
+    // mint whose shares land in someone else's account.
+    #[account(mut,
+        constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint,
+        constraint = user_quote.owner == user.key() @ SessionError::WrongOwner)]
     pub user_quote: Account<'info, TokenAccount>,
-    #[account(mut, constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint)]
+    #[account(mut,
+        constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint,
+        constraint = user_shares.owner == user.key() @ SessionError::WrongOwner)]
     pub user_shares: Account<'info, TokenAccount>,
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -923,9 +945,16 @@ pub struct RedeemShares<'info> {
     pub day_mint: Account<'info, Mint>,
     #[account(mut, address = vault.quote_vault)]
     pub quote_vault: Account<'info, TokenAccount>,
-    #[account(mut, constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint)]
+    // Owner as well as mint. A wrong-owner CPI fails anyway, but only after
+    // the signature exists: without this a caller can be induced to sign a
+    // mint whose shares land in someone else's account.
+    #[account(mut,
+        constraint = user_quote.mint == vault.quote_mint @ SessionError::WrongMint,
+        constraint = user_quote.owner == user.key() @ SessionError::WrongOwner)]
     pub user_quote: Account<'info, TokenAccount>,
-    #[account(mut, constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint)]
+    #[account(mut,
+        constraint = user_shares.mint == class_mint.key() @ SessionError::WrongMint,
+        constraint = user_shares.owner == user.key() @ SessionError::WrongOwner)]
     pub user_shares: Account<'info, TokenAccount>,
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -960,9 +989,13 @@ pub struct FillHandoff<'info> {
     pub night_mint: Account<'info, Mint>,
     #[account(address = vault.day_mint)]
     pub day_mint: Account<'info, Mint>,
-    #[account(mut, constraint = filler_underlying.mint == vault.underlying_mint @ SessionError::WrongMint)]
+    #[account(mut,
+        constraint = filler_underlying.mint == vault.underlying_mint @ SessionError::WrongMint,
+        constraint = filler_underlying.owner == filler.key() @ SessionError::WrongOwner)]
     pub filler_underlying: Account<'info, TokenAccount>,
-    #[account(mut, constraint = filler_quote.mint == vault.quote_mint @ SessionError::WrongMint)]
+    #[account(mut,
+        constraint = filler_quote.mint == vault.quote_mint @ SessionError::WrongMint,
+        constraint = filler_quote.owner == filler.key() @ SessionError::WrongOwner)]
     pub filler_quote: Account<'info, TokenAccount>,
     pub filler: Signer<'info>,
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
