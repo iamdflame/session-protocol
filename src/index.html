@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prism</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root{
+  color-scheme: light;
+  --bg:#fcfcfb; --panel:#ffffff; --panel-2:#f6f5f2; --line:#e3e1dc; --line-2:#d2cfc8;
+  --ink:#0b0b0b; --ink-2:#52514e; --ink-3:#8b8880;
+  --beam:#111; --glass:#e9edf2; --glass-2:#f7f9fb;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  --yours:#008300;
+  --long:#2a78d6; --short:#e34948;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#131312; --panel:#1a1a19; --panel-2:#211f1d; --line:#2e2c29; --line-2:#3d3a35;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8a877d;
+    --beam:#fff; --glass:#20262d; --glass-2:#171b20;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --yours:#22c55e;
+    --long:#3987e5; --short:#e66767;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 36px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#131312; --panel:#1a1a19; --panel-2:#211f1d; --line:#2e2c29; --line-2:#3d3a35;
+  --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8a877d;
+  --beam:#fff; --glass:#20262d; --glass-2:#171b20;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --yours:#22c55e;
+  --long:#3987e5; --short:#e66767;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 36px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px 96px}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:"Instrument Serif",Georgia,serif;font-weight:400}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+header{padding:44px 0 26px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:13px}
+.markglass{width:34px;height:34px;flex:none}
+h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:38px;line-height:1;margin:0;letter-spacing:-.01em}
+.tag{color:var(--ink-2);font-size:14.5px;max-width:46ch;margin:0}
+.tag em{font-style:italic;color:var(--ink)}
+.spacer{flex:1}
+.themer{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink-2);
+  border-radius:999px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit;
+}
+.themer:hover{border-color:var(--line-2);color:var(--ink)}
+
+/* ── console ────────────────────────────────────────────────────────────── */
+.console{
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:18px;box-shadow:var(--shadow);
+}
+.lbl{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);margin:0 0 9px}
+.inrow{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+#belief{
+  flex:1 1 400px;min-width:0;background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:11px;padding:14px 16px;
+  font-family:"Instrument Serif",Georgia,serif;font-size:21px;line-height:1.3;
+}
+#belief:focus{outline:none;border-color:var(--ink-3);background:var(--panel)}
+#belief::placeholder{color:var(--ink-3);font-style:italic}
+#go{
+  background:var(--ink);color:var(--bg);border:0;border-radius:11px;
+  padding:0 26px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;gap:9px;white-space:nowrap;
+}
+#go:hover{opacity:.88} #go:active{transform:translateY(1px)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.chip{
+  background:transparent;border:1px solid var(--line);color:var(--ink-2);
+  border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer;font-family:inherit;
+  text-align:left;
+}
+.chip:hover{border-color:var(--ink-3);color:var(--ink);background:var(--panel-2)}
+
+/* ── bench ──────────────────────────────────────────────────────────────── */
+.bench{
+  margin-top:20px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;overflow:hidden;box-shadow:var(--shadow);
+}
+.benchhead{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding:15px 20px;border-bottom:1px solid var(--line);
+}
+.benchhead h2{margin:0;font-size:13px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.benchhead .hint{font-size:12.5px;color:var(--ink-3)}
+#optics{display:block;width:100%;height:auto;background:var(--glass-2)}
+@media (max-width:860px){ #optics{display:none} }
+
+/* mobile spectrum */
+.mstack{display:none;padding:16px 18px}
+@media (max-width:860px){ .mstack{display:block} }
+.mbar{display:flex;gap:2px;height:30px;border-radius:7px;overflow:hidden;margin-bottom:14px}
+.mseg{transition:flex-grow .5s cubic-bezier(.3,.9,.3,1)}
+.mrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.mrow:first-of-type{border-top:0}
+.msw{width:11px;height:11px;border-radius:3px;flex:none}
+
+/* ── verdict ────────────────────────────────────────────────────────────── */
+.verdict{
+  display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center;
+  padding:20px 22px;border-top:1px solid var(--line);background:var(--panel-2);
+}
+@media (max-width:640px){ .verdict{grid-template-columns:1fr;gap:12px} }
+.bignum{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:62px;line-height:.92;letter-spacing:-.03em;color:var(--yours);font-variant-numeric:tabular-nums}
+.bigcap{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);margin-top:7px}
+.vsay{font-family:"Instrument Serif",Georgia,serif;font-size:25px;line-height:1.3;margin:0}
+.vsub{color:var(--ink-2);font-size:13.5px;margin:7px 0 0}
+
+/* ── book ───────────────────────────────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px;align-items:start}
+@media (max-width:880px){ .grid{grid-template-columns:1fr} }
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.cardhead{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cardhead h3{margin:0;font-size:13px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.cardhead .note{font-size:12px;color:var(--ink-3)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:9px 18px;border-bottom:1px solid var(--line)}
+td{padding:9px 18px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+.sym{font-family:"JetBrains Mono",monospace;font-weight:500}
+.co{color:var(--ink-3);font-size:12px}
+.pill{display:inline-block;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;padding:1px 6px;border-radius:4px;border:1px solid var(--line-2);color:var(--ink-3);margin-left:6px;vertical-align:1px}
+.pill.priv{border-color:var(--yours);color:var(--yours)}
+.wt{text-align:right;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dirL{color:var(--long)} .dirS{color:var(--short)}
+.wbar{height:3px;border-radius:2px;margin-top:3px}
+
+/* evidence */
+.proof{
+  margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:16px 20px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;
+}
+.pcell .plbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.pval{display:flex;align-items:baseline;gap:9px;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+.pfrom{font-size:19px;color:var(--ink-3);text-decoration:line-through;text-decoration-thickness:1px}
+.parrow{color:var(--ink-3);font-size:13px}
+.pto{font-size:26px;font-weight:700;color:var(--ink);line-height:1}
+.pto.good{color:var(--yours)}
+.pnote{font-size:11.5px;color:var(--ink-3);margin-top:5px}
+
+/* hover layer */
+.tip{
+  position:fixed;display:none;z-index:50;pointer-events:none;
+  background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
+  box-shadow:0 8px 30px rgba(0,0,0,.22);padding:13px 15px;max-width:360px;
+}
+.tiphead{font-weight:600;font-size:14px;margin-bottom:5px}
+.tipbody{font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px}
+.tipcols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tipcap{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
+.tiprow{display:flex;align-items:center;gap:5px;font-size:12px;padding:1.5px 0}
+.tiprow .sym{font-size:11.5px}
+.tipv{margin-left:auto;color:var(--ink-2);font-size:11.5px}
+
+.foot{margin-top:26px;color:var(--ink-3);font-size:12.5px;line-height:1.7}
+.foot code{font-family:"JetBrains Mono",monospace;font-size:11.5px;background:var(--panel-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+.foot a{color:var(--ink-2)}
+.empty{padding:26px 18px;color:var(--ink-3);font-size:13.5px}
+
+/* strip control */
+.stripbtn{cursor:pointer}
+.band-off{opacity:.3}
+.beamflow{animation:flow 1.8s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-36}}
+@media (prefers-reduced-motion:reduce){ .beamflow{animation:none} .mseg{transition:none} }
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <svg class="markglass" viewBox="0 0 34 34" aria-hidden="true">
+        <path d="M17 3 L31 29 L3 29 Z" fill="var(--glass)" stroke="var(--line-2)" stroke-width="1.2"/>
+        <path d="M0 18 L11.6 18" stroke="var(--beam)" stroke-width="1.6"/>
+        <path d="M22 21 L34 14"  stroke="var(--s1)" stroke-width="1.6"/>
+        <path d="M22.6 23 L34 19" stroke="var(--s4)" stroke-width="1.6"/>
+        <path d="M23.2 25 L34 24" stroke="var(--yours)" stroke-width="1.6"/>
+      </svg>
+      <div>
+        <h1>Prism</h1>
+      </div>
+    </div>
+    <p class="tag">Every belief is a bundle of bets. Most of them aren't yours.<br>
+      <em>Type what you think. Keep only the part you meant.</em></p>
+    <div class="spacer"></div>
+    <button class="themer" id="themer" type="button">Theme</button>
+  </header>
+
+  <section class="console">
+    <p class="lbl">What do you believe?</p>
+    <div class="inrow">
+      <input id="belief" autocomplete="off" spellcheck="false"
+             placeholder="Robotaxis are further away than the market thinks">
+      <button id="go" type="button">
+        Refract
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+          <path d="M1 7.5h12M8.5 3l4.5 4.5L8.5 12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="bench">
+    <div class="benchhead">
+      <h2>The refraction</h2>
+      <span class="hint" id="benchhint">Click a band to strip it out. Keep the one you meant.</span>
+    </div>
+    <svg id="optics" viewBox="0 0 1100 520" role="img" aria-labelledby="opticsTitle">
+      <title id="opticsTitle">Your belief split into the factors it is exposed to</title>
+    </svg>
+    <div class="mstack" id="mstack"></div>
+    <div class="verdict">
+      <div>
+        <div class="bignum" id="bignum">—</div>
+        <div class="bigcap">is actually your idea</div>
+      </div>
+      <div>
+        <p class="vsay serif" id="vsay">Type a belief above.</p>
+        <p class="vsub" id="vsub"></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="card">
+      <div class="cardhead">
+        <h3>The obvious trade</h3>
+        <span class="note">what you'd have bought</span>
+      </div>
+      <div id="book-naive"><p class="empty">—</p></div>
+    </div>
+    <div class="card">
+      <div class="cardhead">
+        <h3>After refraction</h3>
+        <span class="note" id="afternote">your idea, isolated</span>
+      </div>
+      <div id="book-pure"><p class="empty">—</p></div>
+    </div>
+  </div>
+
+  <section class="proof" id="proof"></section>
+
+  <div class="card" style="margin-top:18px">
+    <div class="cardhead">
+      <h3>Can you actually put this on?</h3>
+      <span class="note">
+        <label for="notional" style="color:var(--ink-3)">notional</label>
+        <input id="notional" class="mono" type="number" min="100" step="500" value="10000"
+               style="width:92px;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12.5px">
+        <button id="quote" type="button" class="chip" style="margin-left:6px">Get live quotes</button>
+      </span>
+    </div>
+    <div id="exec"><p class="empty">Live Jupiter quotes for every long leg, so you can see the real slippage before believing any of this.</p></div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

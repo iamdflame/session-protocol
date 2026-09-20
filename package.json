@@ -1,0 +1,16 @@
+{
+  "name": "prism",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Every belief is a bundle of bets. Prism keeps the one you meant.",
+  "scripts": {
+    "discover": "node scripts/discover.mjs > data/_raw-universe.json",
+    "history": "node scripts/history.mjs",
+    "snapshot": "node scripts/build.mjs",
+    "data": "npm run discover && npm run history && npm run snapshot",
+    "check": "node scripts/check.mjs",
+    "start": "node scripts/serve.mjs"
+  },
+  "license": "MIT"
+}
