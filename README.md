@@ -1,211 +1,204 @@
-# Prism
+# SESSION
 
-**Every belief is a bundle of bets. Most of them aren't yours.**
+**Wall Street is shut for 17.5 hours a day. Nobody has ever been able to own
+those hours separately.**
 
-Prism takes a sentence — *"AI is a bubble but Anthropic survives it"* — splits it into
-the factors it is secretly exposed to, and lets you strip out every bet you didn't
-mean to make. What's left is the position that is actually your idea.
+A tokenized share trades around the clock, but the stock behind it trades for
+6.5 hours. During those hours an arbitrageur can hedge the token against the
+real share and the two stay pinned together. Outside them nobody can, and the
+token is free to drift.
+
+Those are two different assets wearing one ticker. SESSION separates them into
+`X.NIGHT` and `X.DAY`.
 
 Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 
 ---
 
-## The problem
+## What we set out to test, and what we found
 
-Nobody has a view shaped like a ticker.
+The overnight effect is the most durable anomaly in equities. The US equity risk
+premium accrues almost entirely between the close and the next open; intraday
+returns are roughly zero. Cooper, Cliff and Gulen documented it in 2008 and it
+has held for seventeen years across NYSE and Nasdaq. In IWM, a dollar held only
+overnight grew to $3.72 while a dollar held only intraday fell to $0.66.
 
-People have views shaped like sentences: *robotaxis are further away than the market
-thinks*, *private AI labs eat big tech*, *the defense buildout is underpriced*. The
-market only sells tickers, so you translate — and the translation is where the idea
-dies.
+Nobody harvests it. Capturing the overnight stream means a full round trip
+roughly 250 times a year, and the spread grinds the edge to nothing.
 
-Say you think robotaxis are further away than the market believes. The obvious trade
-is to short Tesla. One position, done. Here is what you would actually own — measured,
-not asserted:
+Tokenized equity makes that window continuously tradeable for the first time.
+So: **does the anomaly survive when the night becomes tradeable?** Nobody had
+measured it, because until these tokens existed there was nothing to measure.
 
-| | share of your risk |
-|---|---|
-| the stock market going down | **47.1%** |
-| a defensive-sector rotation | 15.5% |
-| three other factor exposures | 7.6% |
-| **the opinion you actually had** | **39.9%** |
-
-You wanted one bet. You made five, and the biggest one is a call on the S&P that you
-never made. Separating them out requires a factor model and a short book — which is to
-say, a hedge fund.
-
-Strip the market band and Prism rebuilds the position: **76%** of the risk is now your
-idea, correlation to the S&P falls from **−0.57 to −0.02**, and annualised volatility
-drops from **48% to 19%** — the same opinion, expressed with 60% less risk. Those
-numbers print from `npm run check`; none of them are illustrative.
-
-Every tokenized-stock app so far assumes you already know which ticker you want.
-Prism is for the much more common case where you know what you *think*.
-
-## The trick
-
-Type a belief. Watch it refract.
+We measured it. 83,322 hourly closes, 26 tokenized assets, ~220 days of real
+Solana pool history.
 
 ```
-        your belief ──▶ ◢ ──┬──▶  Market beta ................ 47.1%
-                            ├──▶  Big tech vs semiconductors ..  1.8%
-                            ├──▶  Index beta vs crypto proxies   2.4%
-                            ├──▶  Private markets vs the AI trade 0.7%
-                            ├──▶  Defensive / staples ......... 15.5%
-                            └──▶ ★ YOUR ACTUAL IDEA .......... 39.9%
+NIGHT minus DAY, per hour of exposure, paired across 20 US equities
+  mean difference   −1.16bp        t = −1.11
+  NIGHT wins        9/20 assets
 ```
 
-Click a band and it's projected out of your position. The light re-refracts, the book
-below rewrites itself, and the number you care about grows. The band widths *are* the
-variance shares — the picture is the arithmetic, not an illustration of it.
+**There is no session premium in tokenized equities.**
 
-Then the falsifiable part. A correlation number asks to be taken on trust, so Prism
-draws it instead: one dot per trading day, index return across, position return up.
+The most economical reading is that the overnight premium was never a reward for
+bearing overnight risk. It was a reward for being unable to trade. Remove the
+constraint and it goes away.
 
-```
-   the obvious trade                  after refraction
-        ·                                    ·
-      ·  ·                                 · · ·
-   ·  · ·                                ·· ··· ·
-  ──────·──·────                        ───·····──────
-       ·  · ·                              · ·· ·
-         ·   ·                               · ·
-          β −2.07                            β −0.03
-```
+`GLDx` is the control the mechanism predicts, and it behaves: gold trades ~24h
+globally, has no closed session to arbitrage around, and shows nothing either
+way (night t = −0.30, day t = −1.20).
 
-A cloud that leans is a position the market is driving. A round one isn't. Both panels
-share one scale — a per-panel scale would rescale the tilt away and destroy the
-comparison. It is a diagnostic, not a backtest: no strategy is simulated, the same two
-positions are simply replayed over the window.
+This is a finding, not a failure — and it is the reason SESSION is built as a
+two-sided market rather than as a strategy. **The protocol does not need the
+anomaly to be real.** It needs people to disagree about it, and it prices that
+disagreement.
 
-## Why this needs Solana
-
-Prism's universe holds **private companies and public companies in the same position**.
-
-`OpenAI` and `Alphabet` in one book. `Anduril` short against `Palantir`. `SpaceX` next
-to `NVIDIA`. There is no brokerage on Earth where those can be legs of the same order —
-pre-IPO equity is locked behind accreditation, SPVs, and lockups, and it has no
-continuous price at all.
-
-On Solana both halves are SPL tokens in one composable namespace, both priced every
-second, both routable through the same DEX aggregator. That is not "the same product,
-faster." It is a position that could not previously be expressed.
-
-Two further consequences, both load-bearing here:
-
-- **A factor model over private companies.** Because PreStocks print a continuous price,
-  you can compute a covariance matrix that includes OpenAI and Anthropic. Prism's
-  "Private markets" factor is a real principal component discovered in real returns —
-  an object that did not exist before these tokens did.
-- **No shorting infrastructure required.** Prism never opens a new position; it
-  *re-points money you already hold*. A short leg is an underweight. Every leg is a
-  swap, so the whole thing routes through Jupiter with no borrow, no margin, no perps
-  and no vault.
-
-## The math
-
-No black box. Four steps, all in [`src/engine.js`](src/engine.js).
-
-**1 · Returns.** Daily log returns for every asset, from its deepest *honest* Solana
-pool. Winsorised at ±4σ because thin pools print absurd candles. The window is chosen
-to maximise assets × days, since these tokens have different birthdays.
-
-**2 · Factors.** Correlation matrix → Jacobi eigendecomposition. The principal
-components *are* the factors — discovered from the data, not declared. PC1 is always
-"everything moves together"; the rest get named by correlating their loadings against
-sector membership, so the label follows the data rather than the other way round.
-
-**3 · The spectrum.** For weights `w`, exposure to factor `k` is `bₖ = vₖ·w` and the
-variance it contributes is `bₖ²λₖ`. Divide by total variance `wᵀCw` and you have the
-bands. Whatever no factor explains is the residual — and the residual is the only part
-that is *your idea*. That is what idiosyncratic risk means.
-
-**4 · The refraction.** Because principal components are orthonormal, projecting onto
-the null space of the unwanted loadings collapses to a subtraction:
-
-```
-w ← w − Σ (vₖ · w) vₖ
-```
-
-Exact, closed form, instant. Clipping for tradeability knocks it slightly off-neutral,
-so projection and clipping alternate a few passes — each one lands closer to both.
-
-Run `npm run check` to see all of it printed from a terminal, with assertions that the
-attribution sums to 1 and that refraction actually increases purity.
-
-## Running it
+Reproduce it:
 
 ```bash
-npm run data     # discover universe → fetch history → build snapshot  (~12 min, rate-limited)
-npm run check    # verify the engine against the snapshot
-npm start        # serve on :8080
+node research/fetch-hourly.mjs                                  # ~40 min, rate-limited
+node --experimental-strip-types research/session-study.ts       # the verdict above
 ```
 
-A committed snapshot lives in `data/universe.json`, so `npm start` works without
-re-fetching.
+## The protocol
 
-Optional: paste an Anthropic API key into `localStorage.prism_key` and the sentence is
-read by Claude instead of the built-in parser. The parser is the default and needs no
-network — the demo never depends on a key.
+A vault holding one xStock issues two SPL tokens. Exactly one holds the stock at
+any moment; the other holds quote.
 
-## Data
-
-| | |
+| | earns |
 |---|---|
-| Spot, liquidity, holders | Jupiter Token API |
-| Daily OHLCV | GeckoTerminal, pinned per-mint |
-| Public equities | xStocks (Backed Finance) |
-| Private companies | PreStocks |
+| `X.NIGHT` | the return while the US market is **closed** — nights, weekends, holidays |
+| `X.DAY` | the return during the **NYSE regular session** |
 
-Three traps the pipeline avoids, each of which silently corrupts this kind of dataset:
+### Why this is possible here and not in a brokerage
 
-1. **Orientation.** Tokens are frequently the *quote* side of a pool (`WC / ANDURL`).
-   Reading that pool's OHLCV naively returns the *other* token's price — which is how
-   Anduril ends up with KIRKINATOR's chart. Every request is pinned with `?token=<mint>`.
-2. **Dishonest pools.** A thin pool can quote far from where an asset really trades, so
-   no single pool is trusted. Several are fetched and the **median last close** is taken
-   as the reference; pools that disagree with it by more than 30% are dropped.
-3. **A bad reference.** The obvious check — compare against Jupiter's `usdPrice` — is
-   itself unreliable for thin pre-IPO tokens. For `OPENAI` that field reports **$1,144**
-   while four independent pools *and* the executable Jupiter swap quote all agree on
-   **~$1,701** (the token has 9 decimals). An earlier version of this pipeline trusted
-   that field and threw OpenAI out of the dataset entirely. The pools decide; Jupiter's
-   field is recorded for comparison and flagged when it disagrees.
+At every boundary, a day-holder wants to be flat at precisely the instant a
+night-holder wants to be long. **They are perfect counterparties.** Pair them in
+one vault and the inventory changes owner at the oracle mark without touching a
+market.
+
+Only the *difference in size* between the two sides ever has to trade:
+
+```
+delta = value(newly exposed class) − value(previously exposed class)
+delta == 0  →  nothing trades at all
+```
+
+That is the whole unlock. The round trip that makes this strategy impossible in
+a brokerage account becomes a bookkeeping entry. Measured against live Jupiter
+routes, the residual costs a median **21bp round trip at $10k** — and a balanced
+book pays none of it, because the handoff never leaves the vault.
+
+### Funding: a price for the session premium
+
+When the classes are not the same size, the vault does have to trade the
+difference, and the crowded side is what caused that cost. So the crowded side
+pays the sparse side, exactly as a perpetual pays to hold its mark to the index.
+
+The resulting rate is the market's answer to *"what is a night worth?"* — a
+number that has never been observable, because until tokenized equity traded
+around the clock there was no way to take either side of it. Given the finding
+above, that number is an open question rather than a settled one, which is
+precisely what makes it worth quoting.
+
+### Mint and redeem
+
+**A class may only be minted or redeemed while it is parked in quote.** Mint
+NIGHT during the day; mint DAY at night. A parked class holds only quote, so
+issuance moves quote in or out and never has to buy or sell stock — primary
+issuance has no market impact by construction. It is the discipline an ETF uses:
+authorised participants create at NAV, everyone else trades the secondary market.
+
+## Pyth does three separate jobs
+
+The protocol cannot function without any of them.
+
+| feed | job |
+|---|---|
+| `Crypto.<SYM>X/USD` | the mark for NAV — the vault holds the **token**, not the stock |
+| `Equity.US.<SYM>/USD` | **session detector.** It only publishes while the real market is open, so its staleness *is* the closing bell |
+| `Crypto.<SYM>X/<SYM>.RR` | the token-to-stock ratio — the basis itself, published directly |
+
+The second is the interesting one. The vault does not trust its own calendar
+alone: if the calendar says "open" but the US equity feed has gone quiet, the
+market is treated as **shut**. An unencoded holiday or a trading halt degrades
+safely. The calendar can only be wrong in the safe direction.
+
+Every mark is gated on Pyth's confidence interval before it is allowed to move
+anyone's NAV. Pyth is the only major oracle that publishes its own uncertainty,
+and refusing to settle when it is high is the entire reason to want that number.
+
+## Correctness
+
+The accounting decides who gets paid, so it is written twice and pinned together.
+
+- **4,734 calendar vectors** — Rust and TypeScript agree on every one. Integer
+  date arithmetic only, no timezone database: a tz database that updates
+  underneath a deployed program is an unreviewed change to who gets paid.
+  Reproduces the real 2026 NYSE calendar including July 3 observed (July 4 falls
+  on a Saturday), both early closes, Good Friday via computus, and both DST
+  transitions.
+- **1,608 settlement vectors** — Rust and the SDK agree exactly on NAVs, funding
+  transfers and handoff deltas, across empty classes, maximally lopsided books,
+  and funding on and off.
+- **Property tests** on conservation, funding being zero-sum, and exposure always
+  flipping. These earned their place: one caught settlement round-tripping NAV
+  through value, which quantised NAV to the value's resolution and floored it —
+  leaking from holders at *every* boundary, one-directionally.
+- **Replay** — months of real hourly closes pushed through the same `settle()` the
+  chain runs, boundary by boundary. Fixed-point NAV tracks a floating-point
+  reference to four decimals across ~300 boundaries per asset.
+- **256-bit `mul_div`** — the naive `u128` path overflows on ordinary NAV × price
+  inputs.
+
+```bash
+cargo test -p session          # 46 unit + property tests, plus the replay
+```
 
 ## Layout
 
 ```
-src/engine.js   eigendecomposition, attribution, projection, evidence
-src/belief.js   sentence → naive position (local parser + optional Claude)
-src/meta.js     company metadata, theme lexicon, polarity lexicon
-src/app.js      the optical bench
-scripts/        discovery → history → snapshot, plus the checker
+programs/session/src/
+  calendar.rs    NYSE session oracle — DST, holidays, half-days, computus
+  fixed.rs       256-bit mul_div, WAD fixed point
+  settle.rs      boundary settlement, NAV roll, handoff sizing
+  funding.rs     skew-based funding between the classes
+  oracle.rs      Pyth marks, guards, and an explicit PriceUpdateV2 parser
+  state.rs       vault accounts and events
+  lib.rs         instruction surface
+keeper/          the permissionless boundary crank
+sdk/             calendar + settlement mirrored in TypeScript
+research/        the session study, and live execution costs
+tests/vectors/   the cross-language vectors
 ```
 
-There is deliberately no auth, no backend, no database and no custody layer. All of the
-effort is in the one thing that makes this worth building.
+### On the Pyth SDK
+
+`pyth-solana-receiver-sdk` is deliberately not a dependency. Its current release
+pins `anchor-lang` 1.2.0 against this program's 0.31, and the last release that
+accepts 0.31 no longer compiles on current Rust. Pinning a path that decides who
+gets paid to a dependency's release schedule is worse than owning ~90 lines of
+documented layout.
+
+The account owner is checked against the Pyth receiver program and the feed id
+against the vault's configuration; neither is optional. Parsing is sequential
+rather than fixed-offset because `verification_level` is a borsh enum and
+therefore variable width — a fixed-offset reader silently misreads every
+`Partial` update.
 
 ## Honest limits
 
-- The factor model sees ~6 months of daily data, because that is how long some of these
-  tokens have existed. It is enough for a stable PC1 and interpretable PC2–PC5; it is
-  not enough to claim anything about a regime it hasn't seen.
-- PC1 explains ~23% of universe variance, well under the 40–60% a traditional equity
-  risk model shows. That gap is real and worth naming: these tokens trade 24/7 against
-  underlyings that trade 6.5 hours a day, and the overnight drift on thin pools is
-  genuine idiosyncratic noise. It inflates the residual — so the "your idea" number is
-  if anything generous, never flattering in the other direction.
-- Driving the residual to 100% by stripping every factor is circular, and the interface
-  is not built for it. The point is to strip the bands you didn't mean and keep the ones
-  you did; the outputs that matter are the book and the measured correlation.
-- Purity is measured against the factors Prism found. A risk it cannot see cannot be
-  stripped.
-- Underweighting is not shorting. A view needing true short exposure is expressed as
-  far as a long-only book allows, and the residual says so.
-- Tokenized pre-IPO exposure is a contested instrument, not settled plumbing. These
-  tokens reference private companies through SPVs, and in May 2026 both OpenAI and
-  Anthropic publicly disputed the validity of the underlying share transfers — their
-  tokens fell 39% and 34% in a week. Prism treats those prices as what they are: a
-  live market in a claim, which is exactly what makes them interesting to model and
-  exactly why nobody should mistake the token for the equity.
+- **~220 days, one venue, one regime.** The verdict above is a measurement, not a
+  proof. It says the premium is not detectable here; it does not say it can never
+  appear.
+- **Hourly closes.** The 16:00 ET close lands on the hour and is clean; the 09:30
+  open does not, so the 09:00–10:00 interval straddles a boundary. Strict
+  attribution drops it, which removes the first 30 minutes of every DAY session.
+- **Neither class is levered.** Each is a claim on one session's returns, not a
+  short of the other.
+- **Not deployed to mainnet.** xStocks exist only on mainnet, so integration
+  against live mints needs a forked validator. The math, the calendar and the
+  settlement path are tested; the deploy is not.
+- **No frontend yet**, by design — this is the system.
 - Research tool. Not investment advice.
