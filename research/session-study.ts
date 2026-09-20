@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sessionAt, Session, weekdayFromDays, SEC_PER_DAY } from '../sdk/src/calendar.ts';
 import { summarise, pct, bp, type Summary } from './stats.ts';
+import { dropSpikes } from './clean.ts';
 
 const MAX_ABS_HOURLY = 0.25;     // a >25% move in one hour is a bad print, not a return
 const MIN_RUNS = 20;             // below this, statistics are theatre
@@ -135,7 +136,17 @@ function table(title: string, rs: AssetResult[]) {
 /* ── main ────────────────────────────────────────────────────────────────── */
 
 const raw = JSON.parse(readFileSync('data/_hourly.json', 'utf8'));
-const assets: { symbol: string; kind: string; rows: Row[] }[] = raw.assets;
+const rawAssets: { symbol: string; kind: string; rows: Row[] }[] = raw.assets;
+
+// Reject single-bar spikes before anything is attributed to a session. A bad
+// print whose recovery happens to land on the bell is charged in full to one
+// class and never given back — see research/clean.ts.
+let spikesDropped = 0;
+const assets = rawAssets.map(a => {
+  const { rows, dropped } = dropSpikes(a.rows);
+  spikesDropped += dropped;
+  return { ...a, rows };
+});
 const policy = (process.argv.includes('--end') ? 'end' : 'strict') as Policy;
 
 console.log(`\nSESSION STUDY   ${assets.length} tokenized assets   ` +
@@ -298,6 +309,10 @@ console.log('  · A cumulative return is not evidence on its own. Read the t-sta
 writeFileSync('data/session-study.json', JSON.stringify({
   generated: new Date().toISOString(),
   policy, snapshot: raw.generated,
+  spikesDropped,
+  barsTotal: rawAssets.reduce((n, a) => n + a.rows.length, 0),
   equities, controls, pooled: { night: pn, day: pd },
 }, null, 1));
+console.log(`\nrejected ${spikesDropped} single-bar spikes of ` +
+  `${rawAssets.reduce((n, a) => n + a.rows.length, 0).toLocaleString()} hourly closes`);
 console.log(`\nwrote data/session-study.json`);
