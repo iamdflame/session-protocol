@@ -115,6 +115,17 @@ const INJECT = `
     el.onerror = () => reject(new Error('could not load web3 from CDN'));
     document.head.appendChild(el);
   });
+  // Ed25519 over the raw message — the faucet verifies this, so it has to be real.
+  let naclLib = null;
+  const naclP = () => new Promise((resolve, reject) => {
+    if (naclLib) return resolve(naclLib);
+    if (window.nacl) return resolve(naclLib = window.nacl);
+    const el = document.createElement('script');
+    el.src = 'https://unpkg.com/tweetnacl@1.0.3/nacl-fast.min.js';
+    el.onload = () => resolve(naclLib = window.nacl);
+    el.onerror = () => reject(new Error('could not load nacl from CDN'));
+    document.head.appendChild(el);
+  });
   const account = {
     address: ADDRESS,
     publicKey: Uint8Array.from(SECRET.slice(32)),
@@ -187,7 +198,13 @@ const INJECT = `
           return out;
         },
       },
-      'solana:signMessage': { version: '1.0.0', signMessage: async (...inputs) => inputs.map(i => ({ signedMessage: i.message, signature: new Uint8Array(64) })) },
+      'solana:signMessage': { version: '1.0.0', signMessage: async (...inputs) => {
+        const nacl = await naclP();
+        return inputs.map(i => ({
+          signedMessage: i.message,
+          signature: nacl.sign.detached(i.message, Uint8Array.from(SECRET)),
+        }));
+      } },
     },
   };
   const register = (api) => { try { api.register(wallet); } catch (e) { console.error('register failed', e); } };
