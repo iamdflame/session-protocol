@@ -296,10 +296,20 @@ therefore variable width — a fixed-offset reader silently misreads every
 - **Neither class is levered.** Each is a claim on one session's returns, not a
   short of the other.
 - **Devnet, with stand-ins.** Devnet has no xStocks, no USDC and no sponsored
-  feed for any tokenised equity, so the live vault uses two test mints and takes
-  its mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
+  feed for any tokenised equity, so the live vault uses test mints and takes its
+  mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
   funding, the handoff and the health signals are the mainnet program doing the
-  mainnet thing; the site says exactly which parts stand in.
+  mainnet thing; the site says which parts stand in, above the fold.
+- **The deployed program predates the Token-2022 work.** The vault can now hold
+  a Token-2022 underlying alongside a classic-SPL quote — which is what a real
+  NVDAx/USDC pair is — and that is built, unit-tested and covered by a validator
+  test. It is **not yet redeployed**, so the live devnet vault is still the
+  classic-SPL one. `npm run test:validator` is the only thing that proves the
+  new path end to end, and it needs a CPU with AVX2.
+- **The issuer holds powers no program can take away.** NVDAx carries a
+  permanent delegate, a pause switch and a freeze authority. A vault holding it
+  can be emptied, paused or frozen by the issuer. That is true of holding the
+  token at all; it is stated here because a vault makes it easy to forget.
 - **Mainnet** needs a Hermes key to post the xStock feeds (the public sponsored
   ones are weeks stale on both clusters), ~3 SOL, and the local-validator
   initialisation in the runbook. `Anchor.toml` lists the accounts to clone.
