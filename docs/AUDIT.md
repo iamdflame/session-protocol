@@ -175,3 +175,53 @@ every mint, redeem, fill and settlement rather than at the end.
 
 Under that load 4 of 40 runs trip a guard — enough to prove the guards fire,
 not so many that they fire spuriously.
+
+# Third pass — found while building the product on top
+
+Two findings from putting a website and a devnet deployment on the program.
+Neither is in the settlement maths; both would have shipped wrong numbers.
+
+### 14. A single bad print became a permanent 12% cliff in one class
+
+A thin-pool fill put one hourly close 12% below its neighbours and the next
+bar put it straight back. Harmless on its own. But the recovery bar landed
+exactly on the 16:00 ET bell — 20:00 UTC — so it straddled a boundary and was
+dropped as unattributable, while the drop before it was charged in full to
+DAY. SPYx's day curve fell off a cliff that never happened, and the study's
+headline figure inherited it.
+
+**Fix:** `research/clean.ts` rejects a bar that sits far from *both* its
+neighbours while they agree with each other, with the threshold scaled to the
+asset's own median hourly move (a fixed 6% cut shredded TQQQx, a 3× ETF). 38
+of 83,322 bars. The study and the site's data prep import the same function,
+and the site's headline figures are computed at build time from the study
+rather than typed into prose, so the two cannot disagree again. The corrected
+result is stronger: 46% more overnight volatility, wider in 18 of 20.
+
+### 15. `InitializeVault` overran the SBF stack frame by 8 bytes
+
+Surfaced the first time the program was actually built for the chain: the
+account-validation function for `initialize_vault` needed 4,104 bytes of a
+4,096-byte frame. The toolchain prints this as a warning and writes the
+artifact anyway; on chain it is an access violation in the one instruction
+that creates a vault.
+
+**Fix:** box the vault account so it is deserialised on the heap. No semantic
+change. The runbook now says a build with that warning is not deployable.
+
+### Also: the SBF build itself
+
+The program could not be built for the chain because seven *host-side*
+crates (proc-macro and test dependencies — none in the program's own graph)
+had moved to Rust edition 2024, which the toolchain's Cargo 1.84 cannot parse.
+`Cargo.lock` pins each to its last pre-1.85 release; a bare `cargo update`
+undoes that. Recorded in the runbook because it will bite the next person.
+
+## Verified on chain
+
+The program is deployed on devnet and a vault is initialised. Every
+instruction's account list has been sent to it: mint and redeem executed and
+reconciled; `settle_boundary` and `fill_handoff` reach the program's own logic
+and are refused for the right reason (no boundary elapsed, nothing to fill)
+while a deliberately swapped account list is refused earlier by an Anchor
+constraint. The first settlement runs at the first bell after initialisation.

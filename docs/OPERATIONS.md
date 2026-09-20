@@ -15,14 +15,81 @@ not rush to clear it — find out what produced it first.
 Prerequisites: `anchor 0.31.1`, `agave 2.3.x`, a funded authority key.
 
 ```bash
-cargo test -p session                 # 81 unit + property tests
+cargo test -p session                 # 103 unit + property tests
 cargo test -p session --test simulation   # 40 randomised year-long lifecycles
-node --experimental-strip-types tests/layout.test.ts   # SDK layout matches the program
+npm run test:ts                       # calendar, layout, health, instruction encoding
 ```
 
 All three must pass before a build is deployed. The layout test in particular:
 it is the only thing standing between a struct reordering and a client that
 reports the wrong field at the right-looking magnitude.
+
+### Building the program
+
+```bash
+cargo build-sbf                        # → target/deploy/session.so
+```
+
+The build must finish with **no** "Stack offset ... exceeded" line. That line
+is printed as a warning and the artifact is still written, but on chain it is
+an access violation in whichever instruction overran. `InitializeVault` boxes
+its vault account for exactly this reason.
+
+**Do not run a bare `cargo update`.** platform-tools v1.48–v1.50 ship Cargo
+1.84, which cannot parse a crate on edition 2024, and the current releases of
+seven *host-side* crates require 1.85 (`proc-macro-crate`, `toml_edit`,
+`indexmap`, `hashbrown`, `unicode-segmentation`, `getrandom 0.4`, `proptest`).
+`Cargo.lock` pins each to its last pre-1.85 release; a blanket update re-pulls
+them and the SBF build fails at manifest parsing. Update crates individually
+with `cargo update -p <crate>@<ver> --precise <ver>`, or move to a
+platform-tools release whose Cargo is ≥ 1.85 and drop the pins. None of the
+seven is in the program's own dependency graph — they are proc-macro and
+test-only — so the pins change nothing that ships.
+
+### Deploying the program
+
+```bash
+solana-keygen pubkey target/deploy/session-keypair.json   # must print 8gWC37…KqKZ
+solana program deploy target/deploy/session.so \
+  --program-id target/deploy/session-keypair.json \
+  --url <cluster> --keypair ~/.config/solana/id.json
+```
+
+Costs the rent-exempt minimum for the program account (≈2.64 SOL for a 518 KB
+binary at current rent) plus fees; the deployer keypair becomes the upgrade
+authority. The program id is baked into the SDK (`sdk/src/vault.ts`) and the
+site's PDAs, so deploying under a *different* keypair means changing
+`declare_id!`, `Anchor.toml` and `PROGRAM_ID` together, then rebuilding.
+
+### Devnet
+
+There is a live devnet deployment, and the site is wired to it.
+
+| | |
+|---|---|
+| program | `8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ` |
+| vault | `3BgELitNWgPNQ9qsWM8tPDAAkcAPM8mtbpnPgogAJ9ZB` — NVDAx stand-in |
+| manifest | `keeper/.devnet/manifest.json`, served by the site as `/devnet.json` |
+| operator | `keeper/.devnet/operator.json` (gitignored); mint authority for the test tokens, the faucet signer and the crank/fill signer. Its secret is `OPERATOR_KEYPAIR` in the Vercel environment. |
+
+Devnet has no xStocks, no USDC and no sponsored feed for any tokenised
+equity, so the vault uses two test mints and takes its mark from Pyth's
+`Crypto.SOL/USD`, with `Crypto.BTC/USD` as the session detector (a feed that
+never goes quiet never trips it). `max_stale_secs` is 900 rather than 120
+because Pyth refreshes the sponsored devnet feeds every few minutes, not every
+second. Everything else is the mainnet program doing the mainnet thing.
+
+```bash
+npm run devnet:init     # once: mints, vault, operator inventory, manifest
+npm run devnet:crank    # one settle + fill cycle from a terminal
+npm run devnet:check    # prove every instruction's encoding against the program
+```
+
+The crank is also a serverless endpoint (`GET /api/crank` on the site): the
+vault page pings it when its calendar says a bell has passed, and a Vercel
+cron pokes it after each bell. Anyone can call it; `settle_boundary` takes no
+signer. `POST /api/faucet { wallet }` mints 10,000 test quote and drips fee
+SOL to an empty wallet, capped at 50,000 held.
 
 ### Choosing the assets
 
