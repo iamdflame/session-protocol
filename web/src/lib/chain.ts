@@ -606,7 +606,7 @@ export function useLedger(vault: string | null, limit = 20) {
           // off and ask again rather than abandoning the history on the first
           // 429 — anything summing across it is useless until it is whole.
           let txs = null;
-          for (let attempt = 0; attempt < 3 && live && !txs; attempt++) {
+          for (let attempt = 0; attempt < 5 && live && !txs; attempt++) {
             if (attempt) await nap(1_500 * 2 ** (attempt - 1));
             txs = await connection.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0 })
               .catch(() => null);
