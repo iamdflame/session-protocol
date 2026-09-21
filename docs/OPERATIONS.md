@@ -46,6 +46,20 @@ platform-tools release whose Cargo is ≥ 1.85 and drop the pins. None of the
 seven is in the program's own dependency graph — they are proc-macro and
 test-only — so the pins change nothing that ships.
 
+### The share classes
+
+`NVDA.NIGHT` and `NVDA.DAY` are Token-2022 mints carrying their own on-chain
+metadata, so a wallet shows the ticker rather than a base58 address. Nothing
+else about them is a 2022 feature — no fee, no hook, no delegate, no pause.
+An event vault names them `NOW` and `THEN` instead, on the same two mints.
+
+The off-chain half is `{metadata_base}/{TICKER}.json`, supplied at creation:
+the program owns no domain and does not pretend to. An empty base is legal
+and leaves the names on chain regardless.
+
+That a class shaped this way can still back a Meteora pool was settled on
+devnet before the program changed — `npm run gate:pool`.
+
 ### Token-2022
 
 The underlying and the quote can live under different token programs, and for
@@ -98,7 +112,7 @@ There is a live devnet deployment, and the site is wired to it.
 | | |
 |---|---|
 | program | `8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ` |
-| vault | `2FCbM3gX492PAmEpEm4kJ798Tp9LBjYnPS8f143jn2DJ` — NVDAx stand-in: Token-2022 underlying with a permanent delegate, classic-SPL quote |
+| vault | `DqdXeMbPHiDMMrVPeiGDBCNtDAxtMZNtEtTLN4eYoBti` — NVDAx stand-in: Token-2022 underlying with a permanent delegate, classic-SPL quote, Token-2022 share classes |
 | manifest | `keeper/.devnet/manifest.json`, served by the site as `/devnet.json` |
 | operator | `keeper/.devnet/operator.json` (gitignored); mint authority for the test tokens, the faucet signer and the crank/fill signer. Its secret is `OPERATOR_KEYPAIR` in the Vercel environment. |
 

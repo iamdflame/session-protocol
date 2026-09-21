@@ -16,7 +16,7 @@ Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 **Live:** [session-roan.vercel.app](https://session-roan.vercel.app) — the site,
 and a vault on Solana devnet you can mint into from your wallet.
 Program [`8gWC37…KqKZ`](https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet),
-vault [`2FCbM3…n2DJ`](https://explorer.solana.com/address/2FCbM3gX492PAmEpEm4kJ798Tp9LBjYnPS8f143jn2DJ?cluster=devnet).
+vault [`DqdXeM…oBti`](https://explorer.solana.com/address/DqdXeMbPHiDMMrVPeiGDBCNtDAxtMZNtEtTLN4eYoBti?cluster=devnet).
 
 ---
 
@@ -300,6 +300,12 @@ therefore variable width — a fixed-offset reader silently misreads every
   mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
   funding, the handoff and the health signals are the mainnet program doing the
   mainnet thing; the site says which parts stand in, above the fold.
+- **The live vault is the Phase-A program.** The mark for a settlement must
+  come from the bell's own window; a missed bell is replayed by `recap`
+  rather than written off; an issuer hook, pause, freeze or seizure halts
+  with a named reason; a 20% gap settles instead of refusing; the residual
+  clears in a call auction at one price; and the share classes carry their
+  own names on chain.
 - **The live vault holds a Token-2022 underlying.** Real xStocks are Token-2022
   with extensions, and USDC is not, so the program takes two token programs and
   the devnet vault is shaped like the real pair: a Token-2022 underlying with a

@@ -36,7 +36,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
   const curve = useCurve(asset.symbol);
   const clockSize = useClockSize(196, 72);
 
-  if (chain.status === 'loading') return <ChainSkeleton />;
+  if (chain.status === 'loading') return <ChainSkeleton symbol={asset.symbol} />;
 
   if (chain.status === 'error' && !chain.data) {
     return (
@@ -383,10 +383,16 @@ function Ledger({ vault }: { vault: string }) {
   );
 }
 
-function ChainSkeleton() {
+function ChainSkeleton({ symbol }: { symbol: string }) {
   return (
     <div className={s.page} aria-busy="true">
       <div className={`shell ${s.head}`}>
+        {/* A page that is loading still has a name. Without this the document
+            has no level-1 heading while the chain read is in flight, which is
+            what a screen-reader user lands on and what the a11y pass caught
+            intermittently — the race was the symptom, the missing heading was
+            the bug. */}
+        <h1 className="sr-only">{symbol} vault</h1>
         <div className="skeleton" style={{ width: 160, height: 12 }} />
         <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="skeleton" style={{ width: 220, height: 38 }} />
@@ -398,7 +404,7 @@ function ChainSkeleton() {
         <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
         <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
       </div>
-      <span className="sr-only">Reading the vault from devnet</span>
+      <p className="sr-only" role="status">Reading the vault from devnet</p>
     </div>
   );
 }

@@ -109,6 +109,24 @@ const u64At = (d: Uint8Array | undefined, at: number): bigint => {
   return v;
 };
 
+/* The epoch only picks which transfer-fee schedule is in force, and an epoch
+   is about two days. Fetching it on every twelve-second refresh is an RPC
+   call per tick for a number that almost never moves — and on a rate-limited
+   public endpoint it is the call that makes the page slow. Cached, with a
+   short life so a schedule change is still picked up the same session. */
+let epochCache: { epoch: number; at: number } | null = null;
+async function currentEpoch(conn: Connection): Promise<number> {
+  const now = Date.now();
+  if (epochCache && now - epochCache.at < 10 * 60_000) return epochCache.epoch;
+  try {
+    const { epoch } = await conn.getEpochInfo();
+    epochCache = { epoch, at: now };
+    return epoch;
+  } catch {
+    return epochCache?.epoch ?? 0;
+  }
+}
+
 export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey | null): Promise<ChainVault> {
   const address = new PublicKey(m.vault);
   const keys = [
@@ -128,14 +146,12 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     );
   }
 
-  const [{ context, value }, epochInfo] = await Promise.all([
+  const [{ context, value }, epoch] = await Promise.all([
     conn.getMultipleAccountsInfoAndContext(keys),
-    conn.getEpochInfo().catch(() => null),
+    currentEpoch(conn),
   ]);
   const [vAcc, nMint, dMint, uVault, qVault, markAcc, eqAcc, uMint, meQ, meN, meD] = value;
   if (!vAcc) throw new Error(`no vault account at ${m.vault}`);
-  const epoch = epochInfo?.epoch ?? 0;
-
   // What the issuer can do to this vault, and whether it already has. Read
   // the way the program reads it, so the card and the halt never disagree.
   let issuer: IssuerState | null = null;
@@ -214,6 +230,10 @@ export function useChainVault(m: Devnet | null | undefined, intervalMs = 12_000)
       const data = await readChainVault(connection, m, publicKey);
       if (g === gen.current) setState({ status: 'ready', data, error: null });
     } catch (e) {
+      // Say why, always. A read that fails silently and leaves a skeleton on
+      // screen is indistinguishable from a slow RPC, and that ambiguity has
+      // cost real debugging time.
+      console.error('[chain] vault read failed:', e);
       if (g === gen.current) {
         setState(s => ({ status: 'error', data: s.data, error: e instanceof Error ? e : new Error(String(e)) }));
       }

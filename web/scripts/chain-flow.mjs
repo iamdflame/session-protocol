@@ -314,10 +314,19 @@ try {
   const beforeHeld = await ev(`(() => { const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)}); return [...card.querySelectorAll('dl dd')][2].textContent.trim(); })()`);
 
   check('enter 100', await type('form input[inputmode="decimal"]', '100'));
-  await wait(200);
-  check('preview shows shares out', await ev(`/^\\d/.test([...document.querySelectorAll('form dl dd')][1].textContent.trim())`));
+  // Wait for the preview to be computed rather than guessing at a delay. The
+  // panel needs the wallet's balances, which arrive on the refresh that
+  // follows connecting, and a fixed sleep turns that into a coin flip.
+  check('preview shows shares out',
+    await until(() => ev(`/^\\d/.test([...document.querySelectorAll('form dl dd')][1].textContent.trim())`), 20000, 300));
   check('mint button enabled with a wallet connected', await ev(`!document.querySelector('form button[type="submit"]').disabled`));
-  check('click mint', await ev(`(() => { document.querySelector('form button[type="submit"]').click(); return true; })()`));
+  // Poll for the button rather than assume the DOM held still. Against the
+  // deployed site a refresh can land between two evaluations, and a null
+  // dereference here reads as a product failure when it is a race in the
+  // harness.
+  check('click mint', await until(() => ev(
+    `(() => { const b = document.querySelector('form button[type="submit"]'); if (!b || b.disabled) return false; b.click(); return true; })()`,
+  ), 20000, 300));
 
   const minted = await until(() => ev(`/Minted 100/.test(document.body.innerText)`), 60000, 600);
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
@@ -341,7 +350,9 @@ try {
   await wait(200);
   check('enter 40', await type('form input[inputmode="decimal"]', '40'));
   await wait(200);
-  check('click redeem', await ev(`(() => { const b = document.querySelector('form button[type="submit"]'); if (b.disabled) return false; b.click(); return true; })()`));
+  check('click redeem', await until(() => ev(
+    `(() => { const b = document.querySelector('form button[type="submit"]'); if (!b || b.disabled) return false; b.click(); return true; })()`,
+  ), 20000, 300));
   const redeemed = await until(() => ev(`/Redeemed for \\$40\\.00/.test(document.body.innerText)`), 60000, 600);
   check('redeem confirmed on chain at NAV 1.0', redeemed, (await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`)).slice(0, 160));
 
