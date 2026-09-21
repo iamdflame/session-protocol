@@ -66,10 +66,14 @@
 }
 .max:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
 
+/* `var(--day)` is the session accent, not a surface to put white on: it is
+   3.20:1 against #fff, under the 4.5 a 14px label needs. The rest of the site
+   solves this the same way — ink on its inverse, which holds in both
+   themes — and an accent that only reads in one is not an accent. */
 .submit {
   padding: 11px 16px; border-radius: var(--r-1);
   font-size: var(--t-sm); font-weight: 500;
-  background: var(--day); color: #fff;
+  background: var(--ink); color: var(--ink-inverse);
   transition: opacity var(--t-hover) var(--ease);
 }
 .submit:disabled { opacity: 0.45; }

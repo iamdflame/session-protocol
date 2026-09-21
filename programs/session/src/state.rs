@@ -288,6 +288,14 @@ pub struct Protocol {
     /// The key that may flip `Vault::curated`. It cannot halt a vault, move
     /// a token, or change a parameter.
     pub curator: Pubkey,
+    /// How many vaults the desk **shows**, not how many exist.
+    ///
+    /// `curate` is the only thing that moves it, so it counts curated vaults
+    /// and nothing else: anyone can open a vault without touching this
+    /// account, and the number here will be smaller than the number a scan of
+    /// the program returns. Reading it as a total is the mistake the name
+    /// invites, which is why this says so rather than the name being fixed —
+    /// renaming a serialised field costs a layout version.
     pub vault_count: u64,
 }
 

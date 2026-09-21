@@ -39,7 +39,8 @@ export function Census({ pages }: { pages: Map<string, string> }) {
           <p className={s.sub}>
             Read from the program by scanning its accounts, not from a list this site
             keeps. Anyone can open one — <span className="mono">initialize_vault</span> takes
-            no permission, and the signer becomes its authority.
+            no permission, and the signer becomes its authority.{' '}
+            <Link className={s.addr} to="/list">Open one →</Link>
           </p>
         </div>
         {vaults && vaults.length > curatedCount && (

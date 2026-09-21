@@ -43,18 +43,16 @@ import {
   initializeVaultIx, createAtaIdempotentIx, ata, pythFeedAccount, hexToBytes, TOKEN_PROGRAM_ID,
   type VaultParams,
 } from '../../sdk/src/ix.ts';
+import { FEEDS as FEED_TABLE } from '../../sdk/src/feeds.ts';
 
 const RPC = process.env.DEVNET_RPC ?? 'https://api.devnet.solana.com';
 const OUT_DIR = 'keeper/.devnet';
 const MANIFEST = 'web/public/devnet.json';
 
 /** Pyth feed ids. Only the first two are sponsored on devnet. */
-const FEEDS = {
-  'Crypto.SOL/USD':     'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d',
-  'Crypto.BTC/USD':     'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
-  'Crypto.NVDAX/USD':   '4244d07890e4610f46bbde67de8f43a4bf8b569eebe904f136b469f148503b7f',
-  'Equity.US.NVDA/USD': 'b1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
-};
+/* One table, in the SDK, because the listing form on the site needs the same
+   ids and the same warning about which of them devnet actually publishes. */
+const FEEDS = Object.fromEntries(FEED_TABLE.map(f => [f.name, f.id])) as Record<string, string>;
 
 /**
  * Devnet parameters. Two differ from the mainnet defaults and both are about

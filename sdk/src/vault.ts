@@ -284,6 +284,11 @@ export interface Protocol {
   version: number;
   bump: number;
   curator: PublicKey;
+  /**
+   * How many vaults the desk shows, not how many exist. Only `curate` moves
+   * it, and opening a vault never touches this account — so a scan of the
+   * program returns at least this many and usually more.
+   */
   vaultCount: bigint;
 }
 

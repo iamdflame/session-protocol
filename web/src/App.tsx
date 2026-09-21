@@ -13,6 +13,7 @@ const Vault = lazy(() => import('@/pages/Vault'));
 const Research = lazy(() => import('@/pages/Research'));
 const HowItWorks = lazy(() => import('@/pages/HowItWorks'));
 const Bell = lazy(() => import('@/pages/Bell'));
+const List = lazy(() => import('@/pages/List'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
 /**
@@ -87,6 +88,7 @@ export function App() {
               <Route path="/research" element={<Research />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="/bell" element={<Bell />} />
+              <Route path="/list" element={<List />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

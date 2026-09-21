@@ -56,7 +56,9 @@ if (!head) {
   process.exit(1);
 }
 const proto = decodeProtocol(head.data);
-console.log(`protocol ${protocol.toBase58()}  curator ${proto.curator.toBase58()}  ${proto.vaultCount} vault(s) counted\n`);
+// `vault_count` moves only on `curate`, so it is how many the desk shows —
+// never how many exist. The scan below is the total.
+console.log(`protocol ${protocol.toBase58()}  curator ${proto.curator.toBase58()}  ${proto.vaultCount} curated\n`);
 
 /* ── every vault the program knows about ─────────────────────────────────── */
 

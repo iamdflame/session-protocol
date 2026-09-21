@@ -13,7 +13,7 @@
    before the run (SOL for fees, test quote to spend) because the faucet is a
    serverless function that only exists on the deployed site.
 
-   usage: node scripts/chain-flow.mjs [--base http://localhost:3100]
+   usage: node scripts/chain-flow.mjs [--base http://localhost:3100] [--list]
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { spawn } from 'node:child_process';
@@ -21,6 +21,9 @@ import { createConnection } from 'node:net';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { WebSocket } from 'ws';
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+
+/** The classic SPL token program, for the throwaway mint the listing test opens a vault over. */
+const SPL_TOKEN = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
@@ -488,7 +491,123 @@ try {
   check('public keys survive the round trip as keys, not as bare strings', (cache?.keys ?? 0) > 0, JSON.stringify(cache));
   check('and u64 fields survive as bigints', (cache?.bigints ?? 0) > 0, JSON.stringify(cache));
 
-  /* ── 7. disconnect ───────────────────────────────────────────────────── */
+  /* ── 7. open a vault, as somebody who is not the operator ────────────── */
+  //
+  // `initialize_vault` takes no permission: the signer becomes the authority
+  // and the address is derived from the mint pair. That has been true since
+  // the program shipped and was not reachable from a browser, which is the
+  // difference between a property and a claim. This is the claim, exercised
+  // by the *test* wallet — not the operator, not the deploy key.
+  /* Opt-in, because this one is not idempotent: there is no `close_vault`, so
+     every run leaves a vault on chain for good and spends the test wallet's
+     rent doing it. `--list` runs it; the rest of the suite stays repeatable. */
+  const freshMint = Keypair.generate();
+  const listSymbol = 'T' + Date.now().toString(36).slice(-5).toUpperCase();
+  if (!argv.includes('--list')) {
+    skip('opening a vault from the browser', 'pass --list; it creates a vault that cannot be closed');
+  } else try {
+    const rent = await conn.getMinimumBalanceForRentExemption(82);
+    const mk = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: operator.publicKey, newAccountPubkey: freshMint.publicKey,
+        lamports: rent, space: 82, programId: SPL_TOKEN,
+      }),
+      // InitializeMint2: [0x14][decimals][mint authority][freeze option]
+      new TransactionInstruction({
+        programId: SPL_TOKEN,
+        keys: [{ pubkey: freshMint.publicKey, isSigner: false, isWritable: true }],
+        data: Buffer.concat([
+          Buffer.from([20, 6]), operator.publicKey.toBuffer(), Buffer.from([0]),
+        ]),
+      }),
+    );
+    await sendAndConfirmTransaction(conn, mk, [operator, freshMint], { commitment: 'confirmed' });
+  } catch (e) {
+    skip('opening a vault from the browser', `could not create a mint to open it over: ${e.message ?? e}`);
+  }
+
+  const mintExists = argv.includes('--list')
+    && !!(await conn.getAccountInfo(freshMint.publicKey).catch(() => null));
+  if (mintExists) {
+    await send('Page.navigate', { url: `${BASE}/list` });
+    await until(() => ev(`!!document.querySelector('#list-symbol')`), 20000);
+
+    check('the listing form is reachable without asking anybody',
+      await ev(`!!document.querySelector('#list-underlying') && !!document.querySelector('#list-quote')`));
+
+    await type('#list-symbol', listSymbol);
+    await type('#list-underlying', freshMint.publicKey.toBase58());
+    await type('#list-quote', manifest.quoteMint);
+    // The form reads both mints off the chain before it derives anything.
+    const read = await until(() => ev(
+      `document.querySelectorAll('form [class*="read"]').length >= 2`), 20000, 400);
+    check('it reads both mints from the chain rather than trusting the box', read);
+
+    const decimalsShown = await ev(`[...document.querySelectorAll('form [class*="read"]')].map(e => e.textContent).join(' | ')`);
+    check('and reports the decimals and the token program it found',
+      /6 decimals/.test(decimalsShown) && /SPL Token \(classic\)/.test(decimalsShown), decimalsShown.slice(0, 160));
+
+    // The address is not the form's opinion: it is `findProgramAddress` over
+    // the two mints, so the page and the SDK must agree to the character.
+    const [want] = PublicKey.findProgramAddressSync(
+      [Buffer.from('vault'), freshMint.publicKey.toBuffer(), new PublicKey(manifest.quoteMint).toBuffer()],
+      new PublicKey(manifest.programId),
+    );
+    const shownAddr = await ev(`(() => {
+      const rows = [...document.querySelectorAll('form [class*="derivedRow"]')];
+      const v = rows.find(r => /vault/i.test(r.textContent));
+      return v ? v.querySelector('a').textContent.trim() : '';
+    })()`);
+    const w = want.toBase58();
+    check('the vault address the page shows is the one the seeds derive',
+      shownAddr.startsWith(w.slice(0, 6)) && shownAddr.includes(w.slice(-6)), `${shownAddr} vs ${w}`);
+
+    const why = await ev(`(() => {
+      const b = document.querySelector('form button[type="submit"]');
+      return {
+        label: b ? b.textContent.trim() : 'no button',
+        disabled: b ? b.disabled : null,
+        connected: !!document.body.innerText.match(/Connect wallet/) ? 'nav says connect' : 'nav looks connected',
+        form: [...document.querySelectorAll('form p')].map(p => p.textContent.trim()).join(' | ').slice(0, 200),
+      };
+    })()`);
+    check('the button is live once both mints resolve', why.disabled === false, JSON.stringify(why));
+
+    check('click open', await ev(`(() => {
+      const b = document.querySelector('form button[type="submit"]');
+      if (!b || b.disabled) return false; b.click(); return true;
+    })()`));
+
+    const opened = await until(() => ev(`/is open/.test(document.body.innerText)`), 90000, 1000);
+    const said = await ev(`[...document.querySelectorAll('form p')].map(p => p.textContent).join(' | ')`);
+    check('the vault opens, signed by a wallet that is nobody in particular', opened, said.slice(0, 200));
+
+    if (opened) {
+      const acc = await conn.getAccountInfo(want).catch(() => null);
+      check('and the account exists on devnet', !!acc, w);
+      // Anchor stamps sha256("account:Vault")[..8]; the census filters on it.
+      check('carrying the vault discriminator the catalog scans for',
+        !!acc && [211, 8, 232, 43, 2, 152, 117, 119].every((b, i) => acc.data[i] === b));
+
+      await send('Page.navigate', { url: `${BASE}/markets` });
+      /* Wait for the scan to land, not for the section to exist. An empty
+         skeleton contains neither the new symbol nor the toggle, so asserting
+         against it would pass for the wrong reason and then fail to click. */
+      const scanned = await until(() => ev(
+        `!!document.querySelector('section[aria-label="Vaults on chain"] a[class*="item"], section[aria-label="Vaults on chain"] button')`),
+        30000, 500);
+      check('the catalog finished scanning the program', scanned);
+      const curatedOnly = await ev(`document.querySelector('section[aria-label="Vaults on chain"]').innerText`);
+      check('a new vault is not curated, so the catalog does not show it by default',
+        !curatedOnly.includes(listSymbol), curatedOnly.slice(0, 160));
+      check('but it is one click away', await clickText('section[aria-label="Vaults on chain"] button', 'Show all'));
+      const all = await until(() => ev(
+        `document.querySelector('section[aria-label="Vaults on chain"]').innerText.includes(${JSON.stringify(listSymbol)})`), 10000);
+      check('and then it is listed, marked uncurated', all);
+    }
+  }
+
+  /* ── 8. disconnect ───────────────────────────────────────────────────── */
   check('open the account menu', await clickText('header button[aria-haspopup="menu"]', wallet.publicKey.toBase58().slice(0, 4)));
   await wait(150);
   check('disconnect', await clickText('[role="menu"] button', 'Disconnect'));

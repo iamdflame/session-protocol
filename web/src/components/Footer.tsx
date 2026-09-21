@@ -8,6 +8,7 @@ const GROUPS = [
     links: [
       { href: '/markets', label: 'Markets' },
       { href: '/how-it-works', label: 'How it works' },
+      { href: '/list', label: 'Open a vault' },
     ],
   },
   {

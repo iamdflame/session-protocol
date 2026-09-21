@@ -25,7 +25,7 @@ import {
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
 import {
   ata, createAtaIdempotentIx, mintSharesIx, redeemSharesIx, explainProgramError,
-  auctionBidIx, claimAuctionIx,
+  auctionBidIx, claimAuctionIx, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID,
 } from '@sdk/ix.ts';
 import { eventsFromLogs, type VaultEvent } from '@sdk/events.ts';
 import type { TimedEvent } from '@sdk/statement.ts';
@@ -100,6 +100,48 @@ export function useDevnets() {
 export function useDevnet() {
   const all = useDevnets();
   return all === undefined ? undefined : (all[0] ?? null);
+}
+
+/* ── opening one ─────────────────────────────────────────────────────────── */
+
+/** What a mint is, read from the chain rather than typed in by hand. */
+export interface MintFacts {
+  address: string;
+  decimals: number;
+  tokenProgram: PublicKey;
+  supply: bigint;
+  /** True for a Token-2022 mint, which a real xStock is and USDC is not. */
+  token2022: boolean;
+}
+
+/**
+ * Read a mint, or say why not.
+ *
+ * The listing form asks for two addresses and derives everything else. The
+ * decimals and the owning token program are the two things it must not guess:
+ * the program stores the decimals on the vault and validates every transfer
+ * against them, and a Token-2022 mint passed as classic SPL fails account
+ * validation rather than doing something subtle.
+ */
+export async function readMint(conn: Connection, address: string): Promise<MintFacts | string> {
+  let key: PublicKey;
+  try { key = new PublicKey(address); } catch { return 'that is not a Solana address'; }
+  const info = await conn.getAccountInfo(key).catch(() => null);
+  if (!info) return 'no account at that address on this cluster';
+  const owner = info.owner.toBase58();
+  const token2022 = owner === TOKEN_2022_PROGRAM_ID.toBase58();
+  if (owner !== TOKEN_PROGRAM_ID.toBase58() && !token2022) {
+    return 'that account is not a token mint';
+  }
+  // Mint layout: supply is a u64 at 36, decimals a u8 at 44.
+  if (info.data.length < 45) return 'that account is a token account, not a mint';
+  return {
+    address: key.toBase58(),
+    decimals: info.data[44],
+    tokenProgram: info.owner,
+    supply: u64At(info.data, 36),
+    token2022,
+  };
 }
 
 /* ── every vault there is ────────────────────────────────────────────────── */
