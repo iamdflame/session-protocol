@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
 import { CurveChart } from './charts/CurveChart';
 import { SessionClock } from './SessionClock';
 import { ChainTrade } from './ChainTrade';
@@ -11,8 +9,10 @@ import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/sess
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
   useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
+  useLedger,
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
+import { describe, kindOf } from '@sdk/events.ts';
 import { SESSION_EVENT } from '@sdk/vault.ts';
 import type { ShareClass } from '@/lib/localVault';
 import s from '@/pages/Vault.module.css';
@@ -190,7 +190,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
           </div>
 
           <Crank d={d} onDone={chain.refresh} />
-          <Ledger vault={m.vault} />
+          <Ledger vault={m.vault} dec={qd} label={label} />
         </div>
 
         <div className={s.side}>
@@ -372,49 +372,52 @@ function ChainHealth({ d }: { d: ChainState }) {
 }
 
 /** The vault's own transaction history, from the chain. */
-function Ledger({ vault }: { vault: string }) {
-  const { connection } = useConnection();
-  const [rows, setRows] = useState<{ sig: string; at: number | null; err: boolean }[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    const go = async () => {
-      try {
-        const sigs = await connection.getSignaturesForAddress(new PublicKey(vault), { limit: 12 });
-        if (live) setRows(sigs.map(x => ({ sig: x.signature, at: x.blockTime ?? null, err: !!x.err })));
-      } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : String(e));
-      }
-    };
-    go();
-    const id = setInterval(go, 30_000);
-    return () => { live = false; clearInterval(id); };
-  }, [connection, vault]);
+function Ledger({ vault, dec, label }: { vault: string; dec: number; label: (c: ShareClass) => string }) {
+  const { rows, error } = useLedger(vault, 20);
 
   return (
     <section className={c.ledger}>
       <h2 className={s.cardTitle}>On-chain ledger</h2>
-      <p className={s.cardSub}>The last twelve transactions that touched this vault, newest first — initialisation, mints, redemptions, settlements and fills.</p>
+      <p className={s.cardSub}>
+        Every transaction that touched this vault, newest first — and what the program
+        itself said happened, decoded from the events it emitted. Nothing here is this
+        site&rsquo;s account of it; the same rows can be rebuilt from the chain by anyone.
+      </p>
       {error ? (
-        <p className={c.ledgerNote}>Could not load history: {error}</p>
+        <p className={c.ledgerNote}>Could not load history: {error.message}</p>
       ) : rows === null ? (
         <div className={c.ledgerSkel}>{Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton" style={{ height: 34 }} />)}</div>
       ) : rows.length === 0 ? (
         <p className={c.ledgerNote}>No transactions yet.</p>
       ) : (
         <ol className={s.events}>
-          {rows.map(r => (
-            <li key={r.sig} className={s.event} data-kind={r.err ? 'redeem' : 'settle'}>
-              <span className={s.eventKind}>{r.err ? 'failed' : 'tx'}</span>
-              <span className={s.eventWhen}>
-                {r.at ? <><span className="num">{etClock(r.at)}</span><span className={s.eventDate}>{etDate(r.at)}</span></> : <span className={s.eventDate}>pending</span>}
-              </span>
-              <span className={s.eventDetail}>
-                <a className={`mono ${c.sig}`} href={explorer(r.sig)} target="_blank" rel="noreferrer">{short(r.sig, 8)} ↗</a>
-              </span>
-            </li>
-          ))}
+          {rows.map(r => {
+            // A transaction may emit several events — a settle that also
+            // halted, a fill that paid an incentive. Each gets its own line;
+            // one with none at all is still shown, because a transaction that
+            // touched the vault and said nothing is itself worth seeing.
+            const lines = r.events.length
+              ? r.events.map(ev => ({ kind: kindOf(ev.name), text: describe(ev, dec, cl => label(cl as ShareClass)) }))
+              : [{ kind: r.failed ? 'halt' : 'admin', text: r.failed ? 'Reverted — nothing was written' : 'Touched the vault without emitting an event' }];
+            return lines.map((l, i) => (
+              <li key={`${r.signature}-${i}`} className={s.event} data-kind={l.kind}>
+                <span className={s.eventKind}>{l.kind}</span>
+                <span className={s.eventWhen}>
+                  {r.at
+                    ? <><span className="num">{etClock(r.at)}</span><span className={s.eventDate}>{etDate(r.at)}</span></>
+                    : <span className={s.eventDate}>pending</span>}
+                </span>
+                <span className={s.eventDetail}>
+                  <span className={c.ledgerText}>{l.text}</span>
+                  {i === 0 && (
+                    <a className={`mono ${c.sig}`} href={explorer(r.signature)} target="_blank" rel="noreferrer">
+                      {short(r.signature, 6)} ↗
+                    </a>
+                  )}
+                </span>
+              </li>
+            ));
+          })}
         </ol>
       )}
     </section>

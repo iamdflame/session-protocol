@@ -24,6 +24,7 @@ import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote
 import {
   ata, createAtaIdempotentIx, mintSharesIx, redeemSharesIx, explainProgramError,
 } from '@sdk/ix.ts';
+import { eventsFromLogs, type VaultEvent } from '@sdk/events.ts';
 import { evaluate, type Health, type VaultState } from '@sdk/health.ts';
 import { inspectMint, uiMultiplier, type IssuerState } from '@sdk/issuer.ts';
 import { valueOf, skewWad } from '@sdk/settle.ts';
@@ -394,6 +395,89 @@ export function buildRedeem(m: Devnet, user: PublicKey, cls: ShareClass, shareAt
     createAtaIdempotentIx(user, user, quoteMint, tokenProgram),
     redeemSharesIx(accounts, cls, shareAtoms),
   ];
+}
+
+/* ── the ledger ──────────────────────────────────────────────────────────── */
+
+export interface LedgerRow {
+  signature: string;
+  at: number | null;
+  failed: boolean;
+  /** What the program said happened. Empty when the transaction emitted nothing. */
+  events: VaultEvent[];
+}
+
+/**
+ * A vault's history, as the program itself recorded it.
+ *
+ * Signatures alone are a list of links. The events inside them are the
+ * receipt — who minted, what a boundary settled at, which class wore a jump —
+ * and anyone can reconstruct the same thing from the chain without trusting
+ * this site's copy of it.
+ */
+/* A confirmed transaction never changes, so its events are worth keeping.
+   Module-level rather than per-component: the ledger unmounts when a reader
+   switches vaults and comes back, and re-fetching what has not changed is
+   what gets a public RPC to start refusing. */
+const eventCache = new Map<string, VaultEvent[]>();
+
+export function useLedger(vault: string | null, limit = 20) {
+  const { connection } = useConnection();
+  const [rows, setRows] = useState<LedgerRow[] | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!vault) return;
+    let live = true;
+
+    const go = async () => {
+      try {
+        const sigs = await connection.getSignaturesForAddress(new PublicKey(vault), { limit });
+        if (!live) return;
+
+        // Show the signatures immediately, with whatever is already decoded,
+        // so a slow or throttled RPC degrades to a shorter description rather
+        // than to an error where a ledger should be.
+        const build = () => sigs.map(x => ({
+          signature: x.signature,
+          at: x.blockTime ?? null,
+          failed: !!x.err,
+          events: eventCache.get(x.signature) ?? [],
+        }));
+        setRows(build());
+        setError(null);
+
+        // Then fill in the ones never seen, slowly. This is the lowest-value
+        // request the page makes and it shares one rate-limited endpoint with
+        // the highest — the one confirming somebody's mint. It waits, goes in
+        // small batches, and stops entirely the moment it is throttled, so a
+        // reader's transaction is never queued behind a history nobody asked
+        // to refresh.
+        const missing = sigs.map(x => x.signature).filter(sg => !eventCache.has(sg));
+        if (missing.length) await new Promise(r => setTimeout(r, 2_500));
+        for (let i = 0; i < missing.length && live; i += 3) {
+          const chunk = missing.slice(i, i + 3);
+          const txs = await connection.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0 })
+            .catch(() => null);
+          if (!txs) break;              // throttled: keep what we have
+          txs.forEach((t, j) => eventCache.set(chunk[j], eventsFromLogs(t?.meta?.logMessages)));
+          if (live) setRows(build());
+          if (i + 3 < missing.length) await new Promise(r => setTimeout(r, 800));
+        }
+      } catch (e) {
+        if (live && rows === null) setError(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
+
+    go();
+    const id = setInterval(go, 45_000);
+    return () => { live = false; clearInterval(id); };
+    // `rows` is read only to decide whether an error should replace a
+    // rendered ledger; including it would restart the fetch on every fill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, vault, limit]);
+
+  return { rows, error };
 }
 
 /* ── the serverless pair ─────────────────────────────────────────────────── */

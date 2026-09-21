@@ -328,7 +328,9 @@ try {
     `(() => { const b = document.querySelector('form button[type="submit"]'); if (!b || b.disabled) return false; b.click(); return true; })()`,
   ), 20000, 300));
 
-  const minted = await until(() => ev(`/Minted 100/.test(document.body.innerText)`), 60000, 600);
+  // Scoped to the form. The ledger below now describes past mints in the
+  // same words, so a body-wide search matches history rather than this one.
+  const minted = await until(() => ev(`/Minted 100/.test(document.querySelector('form')?.innerText ?? '')`), 60000, 600);
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
   check('mint confirmed on chain with a signature link', minted && /view transaction/.test(flash), flash.slice(0, 160));
   const sig1 = await ev(`document.querySelector('form p[role="status"] a[href*="explorer.solana.com/tx/"]')?.href.match(/tx\\/([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null`);
