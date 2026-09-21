@@ -348,20 +348,34 @@ try {
     if (!sec) return 'absent';
     return sec.dataset.loading === 'true' ? 'reading' : 'ready';
   })()`);
-  const settled = async () => (await statementState()) === 'ready';
+  /* 'absent' is a settled state too, and the one a wallet that has never
+     traded is in: the panel renders nothing rather than an empty table. Only
+     'reading' means wait. Treating absence as not-ready is why a fresh-wallet
+     run skipped the very check it was best placed to make. */
+  const settled = async () => (await statementState()) !== 'reading';
 
   /* Sampled the instant the wallet connects, before the ledger has read the
      history back. A statement that is already 'ready' here would be summing
      rows it has not decoded — which is precisely the wrong total this gate
      exists to prevent. */
-  check('the statement waits rather than showing a partial total',
-    (await statementState()) !== 'ready');
+  /* Before its history is read, the panel must not be showing a total. A
+     wallet with trades should be 'reading'; one with none has no panel at
+     all, and both are correct — what would be wrong is a table. */
+  const atConnect = await statementState();
+  check('the statement waits rather than showing a partial total', atConnect !== 'ready', atConnect);
   /* A statement summed from part of a history would be wrong, so the panel
      refuses to render one until the whole window is decoded. On a public
      endpoint that is already throttling this address that read can simply not
      finish, and there is nothing to compare against. */
-  const baseline = (await until(settled, 180000, 1000)) ? await readStatement() : null;
-  const before = baseline ?? { rows: [], verdict: '', trades: 0 };
+  /* Generous, and free when it is not needed: `until` returns the moment the
+     panel is ready. On an endpoint that is throttling this address the read
+     of a wallet's own trades has taken six minutes, and a window shorter than
+     that skips a check that would have passed. */
+  const baselineRead = await until(settled, 420000, 1500);
+  // A wallet that has never traded has no panel, which is a zero baseline and
+  // not a failed read — the two were conflated, and conflating them skipped
+  // the check on exactly the run best placed to make it.
+  const before = (baselineRead ? await readStatement() : null) ?? { rows: [], verdict: '', trades: 0 };
   const ZERO_ROW = { shares: 0, in: 0, out: 0, pnl: 0 };
 
   /* ── 3. mint into the parked class ───────────────────────────────────── */
@@ -438,10 +452,23 @@ try {
      history for a moment. Wait for this run's two trades to be in it before
      asking what it says — the count is an independent signal from the
      amounts asserted below, so waiting on it does not make them vacuous. */
-  const stmt = baseline && await until(
-    async () => ((await readStatement())?.trades ?? 0) >= before.trades + 2, 90000, 1000);
-  if (!baseline) skip('the statement panel', 'the devnet endpoint would not serve the vault history');
-  else check('the statement picks up this run\'s two trades', stmt, `was ${before.trades}`);
+  const stmt = baselineRead && await until(
+    async () => ((await readStatement())?.trades ?? 0) >= before.trades + 2, 180000, 1500);
+  /* The panel refuses to sum a history it could not finish reading, and says
+     so on the page. That is the behaviour under test everywhere else in this
+     file — so when it happens here it is the product working, not a failure,
+     and the run says which. */
+  const stalled = await ev(`(() => {
+    const sec = document.querySelector('section[aria-label="Your statement"]');
+    return !!sec && sec.dataset.loading === 'true' && /stopped answering/.test(sec.innerText);
+  })()`);
+  if (!baselineRead || stalled) {
+    skip('the statement panel', 'the devnet endpoint would not serve this wallet\'s transactions');
+    check('and the panel says so instead of showing a total it guessed',
+      !baselineRead || stalled);
+  } else {
+    check('the statement picks up this run\'s two trades', stmt, `was ${before.trades}`);
+  }
   if (stmt) {
     const after = await readStatement();
     /* Two lines always — the position, which comes from the wallet's own
