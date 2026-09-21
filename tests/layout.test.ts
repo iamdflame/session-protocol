@@ -1,6 +1,6 @@
 /* The SDK decoder must agree with the program's serializer, byte for byte. */
 import { readFileSync } from 'node:fs';
-import { decodeVault, PAUSE_REDEEM } from '../sdk/src/vault.ts';
+import { decodeVault, incentiveAt, PAUSE_REDEEM } from '../sdk/src/vault.ts';
 
 const doc = JSON.parse(readFileSync('tests/vectors/vault-account.json', 'utf8'));
 const bytes = Uint8Array.from(doc.bytes as number[]);
@@ -80,6 +80,40 @@ try {
   decodeVault(wrong);
   console.log('  FAIL wrong version decoded'); failed++;
 } catch (e) { console.log(`  ok   wrong version rejected (${(e as Error).message.slice(0, 40)}…)`); }
+
+
+/* ── the incentive ramp, mirrored ────────────────────────────────────────── */
+//
+// `incentiveAt` exists because its absence cost this protocol its first real
+// handoff. The keeper sized a fill against the vault's flat `fillIncentiveBps`
+// while the chain was charging the ramp's second tier, asked the vault to pay
+// more quote than it held, and the program refused the whole fill — correctly,
+// and with an error that named the symptom rather than the cause.
+//
+// These are the Rust cases from `state.rs`, case for case, because a mirror
+// that drifts is worse than no mirror.
+{
+  console.log('\nthe incentive ramp');
+  const v = (ramp: [number, number, number], auctionSecs: number, lastBoundaryTs: number) =>
+    ({ incentiveRamp: ramp, auctionSecs, lastBoundaryTs });
+  const ramped = v([10, 25, 50], 120, 1_000);
+
+  eq('at the bell, the first tier', incentiveAt(ramped, 1_000) === 10, true);
+  eq('inside the auction window, still the first', incentiveAt(ramped, 1_119) === 10, true);
+  eq('one window later, the second', incentiveAt(ramped, 1_120) === 25, true);
+  eq('and it holds for that window', incentiveAt(ramped, 1_239) === 25, true);
+  eq('two windows later, the third', incentiveAt(ramped, 1_240) === 50, true);
+  eq('and it stops there', incentiveAt(ramped, 9_999_999) === 50, true);
+  eq('a clock skewed backwards pays the first tier, not the last',
+    incentiveAt(ramped, 900) === 10, true);
+
+  const flat = v([10, 10, 10], 120, 1_000);
+  eq('a flat ramp is the old fixed incentive',
+    [1_000, 1_200, 100_000].every(t => incentiveAt(flat, t) === 10), true);
+
+  const noWindow = v([10, 25, 50], 0, 1_000);
+  eq('no auction window means no ramp', incentiveAt(noWindow, 999_999) === 10, true);
+}
 
 console.log(failed ? `\n${failed} FAILURES` : '\nlayout matches the program exactly');
 process.exit(failed ? 1 : 0);

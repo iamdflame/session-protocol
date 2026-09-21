@@ -155,6 +155,13 @@ export async function postUpdateAndConsume(
   feedIdHex: string,
   updateData: string,
   consume: (priceUpdateAccount: PublicKey) => TransactionInstruction[],
+  /**
+   * What the consuming instruction actually costs. The builder is asked for a
+   * tight budget, and a tight budget means *this* number — left unset it
+   * assumes the runtime default of 200,000, which is less than settling a
+   * boundary takes, and the transaction dies mid-instruction.
+   */
+  computeUnits = 400_000,
 ): Promise<PostedSettle> {
   const PythSolanaReceiver = loadReceiver();
   const receiver = new PythSolanaReceiver({ connection: conn, wallet: walletFor(payer) });
@@ -164,7 +171,7 @@ export async function postUpdateAndConsume(
   let account: PublicKey | null = null;
   await tb.addPriceConsumerInstructions(async (getPriceUpdateAccount) => {
     account = getPriceUpdateAccount(`0x${id}`);
-    return consume(account).map(instruction => ({ instruction, signers: [] }));
+    return consume(account).map(instruction => ({ instruction, signers: [], computeUnits }));
   });
   if (!account) throw new Error('no price update account was allocated for the feed');
   const txs = await tb.buildVersionedTransactions({ computeUnitPriceMicroLamports: 50_000, tightComputeBudget: true });

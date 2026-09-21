@@ -18,9 +18,10 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import {
-  Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction,
+  ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction,
+  sendAndConfirmTransaction, type TransactionInstruction,
 } from '@solana/web3.js';
-import { decodeVault, decodePythQuote, normalizeMark, type Vault } from '../../sdk/src/vault.ts';
+import { decodeVault, decodePythQuote, normalizeMark, incentiveAt, type Vault } from '../../sdk/src/vault.ts';
 import { settleBoundaryIx, fillHandoffIx, openAuctionIx, createAtaIdempotentIx, ata, explainProgramError } from '../../sdk/src/ix.ts';
 import { auctionPda } from '../../sdk/src/vault.ts';
 import { nextBoundary, sessionAt, Session } from '../../sdk/src/calendar.ts';
@@ -87,6 +88,20 @@ export interface CrankReport {
 }
 
 const pk = (s: string) => new PublicKey(s);
+
+/* Settling a boundary costs about 265,000 compute units — the oracle reads,
+   the issuer inspection, the roll, funding, and the handoff sizing, in one
+   instruction. The runtime's default is 200,000, so every settle this keeper
+   ever sent failed with `exceeded CUs meter` and reported it as a failed
+   simulation, which is why no boundary had settled on chain.
+   
+   Asked for explicitly, with headroom, rather than left to a default that is
+   smaller than the work. */
+export const CRANK_CU = 400_000;
+const budgeted = (...ix: TransactionInstruction[]) =>
+  new Transaction()
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: CRANK_CU }))
+    .add(...ix);
 
 export async function readVault(conn: Connection, m: Manifest): Promise<Vault> {
   const info = await conn.getAccountInfo(pk(m.vault));
@@ -161,7 +176,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
       try {
         const feed = bytesToHex(v.markFeedId);
         const update = (await fetchAsOf(feed, next)).data;
-        const r = await postUpdateAndConsume(conn, operator, feed, update, acc => [settleWith(acc)]);
+        const r = await postUpdateAndConsume(conn, operator, feed, update, acc => [settleWith(acc)], CRANK_CU);
         report.settled = { signature: r.signatures[r.signatures.length - 2] ?? r.signatures[0] };
         report.markSource = 'hermes-as-of';
         posted = true;
@@ -173,7 +188,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
       report.markNote = 'HERMES_API_KEY not set; the sponsored feed is the only mark available';
     }
     if (!posted) {
-      report.settled = await tryTx(conn, new Transaction().add(settleWith(pk(m.markPriceUpdate))), [operator]);
+      report.settled = await tryTx(conn, budgeted(settleWith(pk(m.markPriceUpdate))), [operator]);
       report.markSource = 'sponsored';
     }
     v = await readVault(conn, m);
@@ -197,7 +212,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
       if (exists) {
         report.auction = { skipped: 'already open for this bell' };
       } else {
-        const r = await tryTx(conn, new Transaction().add(
+        const r = await tryTx(conn, budgeted(
           openAuctionIx(pk(m.vault), auction, operator.publicKey),
         ), [operator]);
         report.auction = 'signature' in r
@@ -226,7 +241,28 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     // or the vault's stock does not cover the whole delta.
     for (let pass = 0; pass < 4 && v.pendingDelta !== 0n; pass++) {
       const buying = v.pendingDelta > 0n;
-      const need = buying ? v.pendingDelta : -v.pendingDelta;          // quote atoms
+      let need = buying ? v.pendingDelta : -v.pendingDelta;            // quote atoms
+
+      /* Buying, the vault pays the filler `gross + incentive` out of its own
+         quote, while the incentive is charged to the larger class's NAV. A
+         vault whose quote is exactly the exposure — which is every vault
+         that has only ever been minted into — therefore cannot afford the
+         whole handoff in one fill: it is short by precisely the incentive.
+         Asking anyway is how the first real bell produced `InsufficientQuote`
+         and filled nothing at all.
+         
+         So take what it can pay for. Each pass leaves a residual the size of
+         the incentive on the part just filled, which shrinks by four orders
+         of magnitude a pass at 10 bp and reaches zero inside the loop. What
+         is still open when it ends is what the auction is for. */
+      if (buying) {
+        // The ramp, not the flat field: the chain charges `incentive_at(now)`,
+        // and sizing against the wrong tier is what refuses the whole fill.
+        const bps = BigInt(incentiveAt(v, now));
+        const affordable = mulDivFloor(v.ownedQuote, 10_000n, 10_000n + bps);
+        if (affordable < need) need = affordable;
+      }
+
       let amount = mulDivFloor(need, WAD, mark);                       // underlying atoms
       if (!buying && amount > v.ownedUnderlying) amount = v.ownedUnderlying;
       if (amount === 0n) break;
@@ -243,7 +279,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
         underlyingTokenProgram, quoteTokenProgram,
       }, amount, gross * 2n + 1_000_000n, 0n);
 
-      const tx = new Transaction().add(
+      const tx = budgeted(
         createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.underlyingMint), underlyingTokenProgram),
         createAtaIdempotentIx(operator.publicKey, operator.publicKey, pk(m.quoteMint), quoteTokenProgram),
         ix,

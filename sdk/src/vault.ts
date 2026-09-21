@@ -441,3 +441,28 @@ export function normalizeMark(
   if (numPow < 0) { denPow -= numPow; numPow = 0; }
   return (q.price * WAD * 10n ** BigInt(numPow)) / 10n ** BigInt(denPow);
 }
+
+/**
+ * What a fill pays right now, in basis points — mirrors `Vault::incentive_at`.
+ *
+ * The incentive is not `fillIncentiveBps`; it is a ramp. A residual nobody
+ * took at 10 bp is offered at 25 after one auction window and 50 after two,
+ * because the vault would rather pay for the fill than carry the imbalance
+ * into the next bell. `fillIncentiveBps` is only the tier the vault was
+ * initialised with.
+ *
+ * Reading the flat field instead is not a cosmetic error: a keeper sizing a
+ * fill against 10 bp when the chain is charging 25 asks the vault to pay more
+ * quote than it holds, and the program refuses the whole fill. That is
+ * exactly what happened at this protocol's first real bell.
+ */
+export function incentiveAt(
+  v: Pick<Vault, 'incentiveRamp' | 'auctionSecs' | 'lastBoundaryTs'>,
+  now: number,
+): number {
+  const since = now - v.lastBoundaryTs;
+  const w = v.auctionSecs;
+  if (w <= 0 || since < w) return v.incentiveRamp[0];
+  if (since < 2 * w) return v.incentiveRamp[1];
+  return v.incentiveRamp[2];
+}
