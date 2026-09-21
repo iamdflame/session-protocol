@@ -38,11 +38,13 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
     self as token, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
 };
+use anchor_spl::token_2022::spl_token_2022::state::AccountState;
 
 pub mod calendar;
 pub mod errors;
 pub mod fixed;
 pub mod funding;
+pub mod issuer;
 pub mod machine;
 pub mod ops;
 pub mod oracle;
@@ -102,6 +104,19 @@ pub mod session {
         );
 
         let now = Clock::get()?.unix_timestamp;
+
+        // A mint whose issuer has already set a hook or paused it, or whose
+        // new accounts start frozen, cannot be custodied. Refuse now rather
+        // than mint shares against inventory that can never move.
+        require!(
+            issuer_condition(
+                0,
+                &ctx.accounts.underlying_mint.to_account_info(),
+                &ctx.accounts.underlying_vault,
+            )?
+            .is_none(),
+            SessionError::IssuerAction
+        );
 
         // Both feeds are read at creation, so a vault can never be initialised
         // pointing at an account that does not exist or does not match.
@@ -328,6 +343,17 @@ pub mod session {
             require!(!v.halted, SessionError::Halted);
         }
 
+        // The issuer acted: a hook, a pause, a freeze, or inventory moved out
+        // under a permanent delegate. There is nothing to settle against and
+        // no guessing about it — stop with the reason, keep the state.
+        if let Some(c) = issuer_condition(
+            ctx.accounts.vault.owned_underlying,
+            &ctx.accounts.underlying_mint.to_account_info(),
+            &ctx.accounts.underlying_vault,
+        )? {
+            return halt_and_succeed(&mut ctx.accounts.vault, HaltReason::IssuerAction, now, c as i64);
+        }
+
         // The calendar proposes; the equity feed disposes. A feed that has gone
         // quiet during a nominal session means an unencoded holiday or a halt.
         let equity_feed = ctx.accounts.vault.equity_feed_id;
@@ -504,9 +530,35 @@ pub mod session {
         let night_supply = ctx.accounts.night_mint.supply;
         let day_supply = ctx.accounts.day_mint.supply;
 
+        // A fill is a transfer of the underlying; an issuer condition is a
+        // clear refusal here rather than a halt, because the caller pays the
+        // fee and the next settlement will halt the vault with the reason.
+        let mint_ai = ctx.accounts.underlying_mint.to_account_info();
+        let issuer = {
+            let data = mint_ai.try_borrow_data()?;
+            issuer::inspect_mint(&data, mint_ai.owner, Clock::get()?.epoch)
+                .map_err(|_| error!(SessionError::NotAMint))?
+        };
+        let frozen = ctx.accounts.underlying_vault.state == AccountState::Frozen;
+        require!(
+            issuer::condition(&issuer, frozen, ctx.accounts.underlying_vault.amount, v.owned_underlying).is_none(),
+            SessionError::IssuerAction
+        );
+
+        // A transfer *into* the vault arrives short by the mint's transfer
+        // fee. The vault credits — and pays for — what it receives, never
+        // what was sent; a filler delivering into a fee-bearing mint is paid
+        // for the net. On the way out the vault's books lose exactly what it
+        // sends and the fee is the receiver's.
+        let buying = v.pending_delta > 0;
+        let fee_in = if buying { issuer::transfer_fee(&issuer, underlying_amount) } else { 0 };
+        let credited = underlying_amount.checked_sub(fee_in).ok_or(SessionError::MathOverflow)?;
+        require!(credited > 0, SessionError::AmountTooSmall);
+
         // Sizing, pricing, the fee payer and every bound are decided in `ops`.
-        let plan = ops::plan_fill(&v.view(), mark, underlying_amount, night_supply, day_supply)
+        let plan = ops::plan_fill(&v.view(), mark, credited, night_supply, day_supply)
             .map_err(map_op)?;
+        let before = ctx.accounts.underlying_vault.amount;
 
         // The caller's own protection, which only they can specify.
         if plan.buying {
@@ -546,7 +598,12 @@ pub mod session {
                 plan.quote_amount,
                 v.quote_decimals,
             )?;
-            (underlying_amount as i64, -(plan.quote_amount as i64))
+            // Defence in depth: the fee was computed from the mint's own
+            // schedule; the balance delta says what actually arrived.
+            ctx.accounts.underlying_vault.reload()?;
+            let arrived = ctx.accounts.underlying_vault.amount.saturating_sub(before);
+            require!(arrived == credited, SessionError::TransferFeeMismatch);
+            (credited as i64, -(plan.quote_amount as i64))
         } else {
             // The vault is long stock it no longer needs: the filler buys it a
             // little below the mark.
@@ -810,6 +867,18 @@ pub mod session {
             require!(bps <= v.max_carry_delta_bps as u128, SessionError::ResidueTooLarge);
         }
 
+        // Whatever the halt was for, the issuer's powers are re-read: a
+        // vault does not resume into a hook, a pause, a freeze or a seizure.
+        require!(
+            issuer_condition(
+                v.owned_underlying,
+                &ctx.accounts.underlying_mint.to_account_info(),
+                &ctx.accounts.underlying_vault,
+            )?
+            .is_none(),
+            SessionError::IssuerAction
+        );
+
         let v = &mut ctx.accounts.vault;
         v.halted = false;
         v.halt_reason = HaltReason::None;
@@ -1011,6 +1080,19 @@ fn supplies_after(
         Class::Night => (apply(night.supply)?, day.supply),
         Class::Day => (night.supply, apply(day.supply)?),
     })
+}
+
+/// The first issuer condition holding against this vault's underlying, if any.
+fn issuer_condition(
+    owned: u64,
+    mint: &AccountInfo,
+    vault_ata: &InterfaceAccount<TokenAccount>,
+) -> Result<Option<issuer::Condition>> {
+    let data = mint.try_borrow_data()?;
+    let s = issuer::inspect_mint(&data, mint.owner, Clock::get()?.epoch)
+        .map_err(|_| error!(SessionError::NotAMint))?;
+    let frozen = vault_ata.state == AccountState::Frozen;
+    Ok(issuer::condition(&s, frozen, vault_ata.amount, owned))
 }
 
 fn halt_and_succeed(
@@ -1272,6 +1354,12 @@ pub struct SettleBoundary<'info> {
     /// Real-equity feed. Publishes only while the market is open, so its
     /// silence is what tells the vault the market has shut.
     pub equity_price_update: UncheckedAccount<'info>,
+    // The issuer's powers are read off the mint, and a seizure or freeze off
+    // the vault's own token account, before any accounting is touched.
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.underlying_vault)]
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 }
 
 #[derive(Accounts)]

@@ -68,6 +68,11 @@ pub enum HaltReason {
     Inconsistent,
     /// Stopped by the authority.
     Operator,
+    /// The issuer of the underlying used a power the vault cannot override:
+    /// set a transfer hook, paused the mint, froze the vault's token account,
+    /// or moved inventory out under a permanent delegate. The halt detail
+    /// says which (`issuer::Condition`). Appended, never inserted.
+    IssuerAction,
 }
 
 /// What a "session" is for this vault. The program is one; the clock differs.

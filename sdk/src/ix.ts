@@ -295,6 +295,9 @@ export interface SettleAccounts {
   dayMint: PublicKey;
   markPriceUpdate: PublicKey;
   equityPriceUpdate: PublicKey;
+  /** The issuer's powers are read off the mint and the vault's own token account. */
+  underlyingMint: PublicKey;
+  underlyingVault: PublicKey;
 }
 
 /** No arguments and no signer: the crank is permissionless by design. */
@@ -307,6 +310,8 @@ export function settleBoundaryIx(a: SettleAccounts): TransactionInstruction {
       meta(a.dayMint),
       meta(a.markPriceUpdate),
       meta(a.equityPriceUpdate),
+      meta(a.underlyingMint),
+      meta(a.underlyingVault),
     ],
     data: discriminator('settle_boundary') as Buffer,
   });

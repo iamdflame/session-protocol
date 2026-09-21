@@ -134,6 +134,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     const settleWith = (markPriceUpdate: PublicKey) => settleBoundaryIx({
       vault: pk(m.vault), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
       markPriceUpdate, equityPriceUpdate: pk(m.equityPriceUpdate),
+      underlyingMint: pk(m.underlyingMint), underlyingVault: pk(m.underlyingVault),
     });
 
     // The print at the bell, if Hermes will give it to us; the sponsored

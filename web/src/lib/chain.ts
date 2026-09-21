@@ -21,6 +21,7 @@ import {
   ata, createAtaIdempotentIx, mintSharesIx, redeemSharesIx, explainProgramError,
 } from '@sdk/ix.ts';
 import { evaluate, type Health, type VaultState } from '@sdk/health.ts';
+import { inspectMint, uiMultiplier, type IssuerState } from '@sdk/issuer.ts';
 import { valueOf, skewWad } from '@sdk/settle.ts';
 import { nextBoundary } from '@sdk/calendar.ts';
 import { load } from './data';
@@ -89,6 +90,13 @@ export interface ChainVault {
   fetchedAt: number;
   /** The connected wallet's balances, when one is connected. */
   me: { quote: bigint; night: bigint; day: bigint } | null;
+  /** The issuer's powers over the underlying, read off the mint. */
+  issuer: IssuerState | null;
+  /** The vault's own underlying token account is frozen. */
+  vaultFrozen: boolean;
+  /** Atoms → the number a person reads, honouring a scaled-UI multiplier. */
+  uiMultiplier: number;
+  epoch: number;
 }
 
 /** SPL token account `amount` is a u64 at offset 64; a mint's `supply` at 36. */
@@ -106,6 +114,7 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     new PublicKey(m.nightMint), new PublicKey(m.dayMint),
     new PublicKey(m.underlyingVault), new PublicKey(m.quoteVault),
     new PublicKey(m.markPriceUpdate), new PublicKey(m.equityPriceUpdate),
+    new PublicKey(m.underlyingMint),
   ];
   const tokenProgram = new PublicKey(m.tokenProgram);
   if (me) {
@@ -116,9 +125,20 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     );
   }
 
-  const { context, value } = await conn.getMultipleAccountsInfoAndContext(keys);
-  const [vAcc, nMint, dMint, uVault, qVault, markAcc, eqAcc, meQ, meN, meD] = value;
+  const [{ context, value }, epochInfo] = await Promise.all([
+    conn.getMultipleAccountsInfoAndContext(keys),
+    conn.getEpochInfo().catch(() => null),
+  ]);
+  const [vAcc, nMint, dMint, uVault, qVault, markAcc, eqAcc, uMint, meQ, meN, meD] = value;
   if (!vAcc) throw new Error(`no vault account at ${m.vault}`);
+  const epoch = epochInfo?.epoch ?? 0;
+
+  // What the issuer can do to this vault, and whether it already has. Read
+  // the way the program reads it, so the card and the halt never disagree.
+  let issuer: IssuerState | null = null;
+  try { if (uMint) issuer = inspectMint(uMint.data, uMint.owner, epoch); } catch { issuer = null; }
+  // SPL token account `state` is the byte at offset 108: 0 uninitialised, 1 initialised, 2 frozen.
+  const vaultFrozen = (uVault?.data[108] ?? 1) === 2;
 
   const vault = decodeVault(vAcc.data);
   const nightSupply = u64At(nMint?.data, 36);
@@ -140,6 +160,7 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     markPublishTs: mark?.publishTime ?? 0, equityPublishTs: equity?.publishTime ?? 0,
     maxStaleSecs: vault.maxStaleSecs, equityQuietSecs: vault.equityQuietSecs,
     maxUnexpectedClosedSecs: vault.maxUnexpectedClosedSecs,
+    issuer: issuer ?? undefined, vaultFrozen,
   };
 
   const valueNight = valueOf(nightSupply, vault.nightNav);
@@ -157,6 +178,9 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     nextBoundaryTs: next, boundaryDue: next !== null && now >= next,
     slot: context.slot, fetchedAt: now,
     me: me ? { quote: u64At(meQ?.data, 64), night: u64At(meN?.data, 64), day: u64At(meD?.data, 64) } : null,
+    issuer, vaultFrozen,
+    uiMultiplier: issuer ? uiMultiplier(issuer, now) : 1,
+    epoch,
   };
 }
 

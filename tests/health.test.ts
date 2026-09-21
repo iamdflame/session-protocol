@@ -1,6 +1,7 @@
 /* Health thresholds decide when somebody gets woken up. They are worth testing
    for the same reason the settlement maths is: getting them wrong is silent. */
 
+import { PublicKey } from '@solana/web3.js';
 import { evaluate, format, Severity, type VaultState } from '../sdk/src/health.ts';
 import { WAD } from '../sdk/src/settle.ts';
 import { daysFromCivil, SEC_PER_DAY } from '../sdk/src/calendar.ts';
@@ -145,6 +146,37 @@ console.log('\nhalted vault');
   const h = evaluate(v, now);
   check('is critical', h.severity === Severity.Critical);
   check('names the reason', h.signals.some(s => s.message.includes('MissedBoundary')));
+}
+
+console.log('\nthe issuer acted');
+{
+  const issuer = {
+    token2022: true, hookProgram: null, hookSlot: true, pausable: true, paused: false,
+    transferFeeBps: 0, transferFeeMax: 0n, permanentDelegate: new PublicKey(new Uint8Array(32).fill(5)),
+    scaledUi: null, defaultFrozen: false, confidentialTransfer: false, metadata: null,
+    decimals: 8, freezeAuthority: null, mintAuthority: null,
+  };
+  const quiet = evaluate({ ...healthy(now), issuer }, now);
+  check('a permanent delegate alone is not a signal', !quiet.signals.some(s => s.id.startsWith('issuer') || s.id === 'seized'));
+
+  const paused = evaluate({ ...healthy(now), issuer: { ...issuer, paused: true } }, now);
+  check('a pause is critical', paused.severity === Severity.Critical && paused.signals.some(s => s.id === 'issuer-paused'));
+
+  const hooked = evaluate({ ...healthy(now), issuer: { ...issuer, hookProgram: new PublicKey(new Uint8Array(32).fill(9)) } }, now);
+  check('a hook is critical and names the program', hooked.signals.some(s => s.id === 'issuer-hook' && /program|hook/.test(s.message)));
+
+  const frozen = evaluate({ ...healthy(now), issuer, vaultFrozen: true }, now);
+  check('a frozen vault account is critical', frozen.signals.some(s => s.id === 'vault-frozen'));
+
+  const v = healthy(now);
+  v.balanceUnderlying = v.ownedUnderlying - 1n;
+  const seized = evaluate({ ...v, issuer }, now);
+  check('a shortfall on a delegated mint reads as a seizure', seized.signals.some(s => s.id === 'seized'));
+  const plain = evaluate(v, now);
+  check('the same shortfall without issuer context is the generic alarm', plain.signals.some(s => s.id === 'balance-shortfall'));
+
+  const fee = evaluate({ ...healthy(now), issuer: { ...issuer, transferFeeBps: 100, transferFeeMax: (1n << 64n) - 1n } }, now);
+  check('a transfer fee is a notice, not an alarm', fee.signals.some(s => s.id === 'transfer-fee' && s.severity === Severity.Notice));
 }
 
 console.log(failed ? `\n${failed} FAILURES` : '\nall health checks passed');

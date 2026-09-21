@@ -14,6 +14,8 @@
 import { sessionAt, nextBoundary, Session } from './calendar.ts';
 import { WAD, valueOf } from './settle.ts';
 
+import type { IssuerState } from './issuer.ts';
+
 export const Severity = {
   /** Working as intended. */
   Ok: 'ok',
@@ -62,6 +64,10 @@ export interface VaultState {
   maxStaleSecs: number;
   equityQuietSecs: number;
   maxUnexpectedClosedSecs: number;
+  /** The issuer's powers over the underlying, when the caller read the mint. */
+  issuer?: IssuerState;
+  /** Whether the vault's own underlying token account is frozen. */
+  vaultFrozen?: boolean;
 }
 
 export interface Health {
@@ -205,14 +211,57 @@ export function evaluate(v: VaultState, now: number): Health {
     });
   }
   // A balance *below* the owned figure means tokens left without the program
-  // knowing, which should be impossible and is worse than a surplus.
+  // knowing. For a Token-2022 underlying there is exactly one way that
+  // happens: the issuer's permanent delegate moved them. The program halts
+  // the vault as IssuerAction at the next settlement; this is the earlier warning.
   if (surplusU < 0n || surplusQ < 0n) {
+    const seized = surplusU < 0n && v.issuer?.permanentDelegate;
     signals.push({
-      id: 'balance-shortfall',
+      id: seized ? 'seized' : 'balance-shortfall',
       severity: Severity.Critical,
-      message: `token balances are below what the vault believes it owns (${surplusU}u, ${surplusQ}q)`,
-      action: 'halt and investigate — this should not be reachable',
+      message: seized
+        ? `${-surplusU} underlying atoms left the vault without the program: the issuer's permanent delegate`
+        : `token balances are below what the vault believes it owns (${surplusU}u, ${surplusQ}q)`,
+      action: seized
+        ? 'the next settlement halts the vault (IssuerAction); nothing on chain can reverse a seizure'
+        : 'halt and investigate — this should not be reachable',
     });
+  }
+
+  /* ── the issuer ───────────────────────────────────────────────────────── */
+  if (v.issuer) {
+    if (v.issuer.hookProgram) {
+      signals.push({
+        id: 'issuer-hook',
+        severity: Severity.Critical,
+        message: `the issuer set a transfer hook (${v.issuer.hookProgram.toBase58()}); the vault cannot move the underlying`,
+        action: 'the next settlement halts the vault (IssuerAction); fills are refused now',
+      });
+    }
+    if (v.issuer.paused) {
+      signals.push({
+        id: 'issuer-paused',
+        severity: Severity.Critical,
+        message: 'the issuer has paused all transfers of the underlying',
+        action: 'the next settlement halts the vault (IssuerAction); nothing to do but wait for the issuer',
+      });
+    }
+    if (v.vaultFrozen) {
+      signals.push({
+        id: 'vault-frozen',
+        severity: Severity.Critical,
+        message: "the vault's underlying token account is frozen by the issuer",
+        action: 'the next settlement halts the vault (IssuerAction)',
+      });
+    }
+    if (v.issuer.transferFeeBps > 0) {
+      signals.push({
+        id: 'transfer-fee',
+        severity: Severity.Notice,
+        message: `the underlying charges ${v.issuer.transferFeeBps} bp per transfer; fills are credited net`,
+        action: 'fillers are paid for what arrives, not what they send — quote accordingly',
+      });
+    }
   }
 
   /* ── paused ───────────────────────────────────────────────────────────── */

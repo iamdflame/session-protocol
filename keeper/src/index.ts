@@ -16,14 +16,14 @@
      node --experimental-strip-types keeper/src/index.ts --health --vault <pubkey>
    ─────────────────────────────────────────────────────────────────────────── */
 
-import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction,
+import { Connection, PublicKey, Keypair, Transaction,
          SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { sessionAt, nextBoundary, Session, civilFromDays, weekdayFromDays,
          isDST, SEC_PER_DAY } from '../../sdk/src/calendar.ts';
-import { decodeVault, decodePythQuote, PROGRAM_ID, type Vault } from '../../sdk/src/vault.ts';
+import { decodeVault, decodePythQuote, type Vault } from '../../sdk/src/vault.ts';
+import { settleBoundaryIx } from '../../sdk/src/ix.ts';
 import { evaluate, format, Severity, type VaultState } from '../../sdk/src/health.ts';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -62,34 +62,6 @@ export function schedule(from: number, n = 10): Boundary[] {
     t = b;
   }
   return out;
-}
-
-/* ── instruction encoding ────────────────────────────────────────────────── */
-
-/** Anchor dispatches on `sha256("global:<name>")[..8]`. */
-const discriminator = (name: string): Buffer =>
-  createHash('sha256').update(`global:${name}`).digest().subarray(0, 8);
-
-/**
- * `settle_boundary` takes no arguments and no signer: the vault, both mints and
- * the two price accounts are all it needs, which is what makes the crank
- * permissionless.
- */
-export function settleBoundaryIx(
-  vault: PublicKey, nightMint: PublicKey, dayMint: PublicKey,
-  markUpdate: PublicKey, equityUpdate: PublicKey,
-): TransactionInstruction {
-  return new TransactionInstruction({
-    programId: PROGRAM_ID,
-    keys: [
-      { pubkey: vault, isSigner: false, isWritable: true },
-      { pubkey: nightMint, isSigner: false, isWritable: false },
-      { pubkey: dayMint, isSigner: false, isWritable: false },
-      { pubkey: markUpdate, isSigner: false, isWritable: false },
-      { pubkey: equityUpdate, isSigner: false, isWritable: false },
-    ],
-    data: discriminator('settle_boundary'),
-  });
 }
 
 /* ── chain reads ─────────────────────────────────────────────────────────── */
@@ -201,9 +173,11 @@ export async function tick(conn: Connection, cfg: KeeperConfig): Promise<void> {
     return;
   }
 
-  const ix = settleBoundaryIx(
-    cfg.vault, vault.nightMint, vault.dayMint, cfg.markUpdate, cfg.equityUpdate,
-  );
+  const ix = settleBoundaryIx({
+    vault: cfg.vault, nightMint: vault.nightMint, dayMint: vault.dayMint,
+    markPriceUpdate: cfg.markUpdate, equityPriceUpdate: cfg.equityUpdate,
+    underlyingMint: vault.underlyingMint, underlyingVault: vault.underlyingVault,
+  });
   try {
     const sig = await sendAndConfirmTransaction(
       conn, new Transaction().add(ix), [cfg.payer], { commitment: 'confirmed' },

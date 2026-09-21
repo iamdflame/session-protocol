@@ -32,6 +32,7 @@ let failed = 0;
 if (!await simulate('settle_boundary reaches the state machine', new Transaction().add(settleBoundaryIx({
   vault: pk(m.vault), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
   markPriceUpdate: pk(m.markPriceUpdate), equityPriceUpdate: pk(m.equityPriceUpdate),
+  underlyingMint: pk(m.underlyingMint), underlyingVault: pk(m.underlyingVault),
 })), /no session boundary has elapsed|NoBoundary/i)) failed++;
 
 // fill_handoff: live check, pause check, mark read + checked → plan_fill → NothingToFill.
@@ -50,6 +51,7 @@ if (!await simulate('fill_handoff reaches plan_fill', new Transaction().add(fill
 const wrong = settleBoundaryIx({
   vault: pk(m.vault), nightMint: pk(m.dayMint), dayMint: pk(m.nightMint),   // swapped
   markPriceUpdate: pk(m.markPriceUpdate), equityPriceUpdate: pk(m.equityPriceUpdate),
+  underlyingMint: pk(m.underlyingMint), underlyingVault: pk(m.underlyingVault),
 });
 if (!await simulate('swapped mints are rejected by an address constraint, not by the machine', new Transaction().add(wrong), /ConstraintAddress|address constraint|An address constraint/i)) failed++;
 

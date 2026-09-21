@@ -17,8 +17,11 @@ export const CLASS = ['night', 'day'] as const;
 export type ClassName = (typeof CLASS)[number];
 
 export const HALT_REASON = [
-  'None', 'MissedBoundary', 'UnfilledHandoff', 'Insolvent', 'BadDebt', 'Inconsistent', 'Operator',
+  'None', 'MissedBoundary', 'UnfilledHandoff', 'Insolvent', 'BadDebt', 'Inconsistent', 'Operator', 'IssuerAction',
 ] as const;
+
+/** `VaultHalted.detail` for an `IssuerAction` halt. */
+export const ISSUER_CONDITION = { 1: 'transfer hook set', 2: 'mint paused', 3: 'vault account frozen', 4: 'inventory seized' } as const;
 
 /** What a session is for a vault: NYSE hours, or the next discrete print. */
 export const SESSION_EQUITY = 0;

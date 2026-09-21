@@ -107,4 +107,10 @@ pub enum SessionError {
     RecapNotApplicable,
     #[msg("handoff residue exceeds the carry limit; fill it before resuming")]
     ResidueTooLarge,
+    #[msg("the underlying's issuer has set a transfer hook, paused the mint, or frozen or emptied the vault's token account")]
+    IssuerAction,
+    #[msg("account is not a mint this program can read")]
+    NotAMint,
+    #[msg("the underlying that arrived does not match the mint's transfer-fee schedule")]
+    TransferFeeMismatch,
 }
