@@ -21,12 +21,16 @@
     "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts",
     "build:program": "./scripts/build-sbf.sh",
     "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts",
-    "devnet:recap": "node --experimental-strip-types keeper/src/recap.ts"
+    "devnet:recap": "node --experimental-strip-types keeper/src/recap.ts",
+    "gate:pool": "node --experimental-strip-types keeper/src/gate-token2022-pool.ts"
   },
   "dependencies": {
+    "@meteora-ag/cp-amm-sdk": "^1.4.9",
     "@pythnetwork/pyth-solana-receiver": "^0.16.0",
     "@solana/spl-token": "^0.4.13",
-    "@solana/web3.js": "1.98.4"
+    "@solana/spl-token-metadata": "^0.1.6",
+    "@solana/web3.js": "1.98.4",
+    "bn.js": "^5.2.5"
   },
   "license": "MIT",
   "overrides": {
