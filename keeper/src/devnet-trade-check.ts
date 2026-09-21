@@ -56,8 +56,15 @@ const quoteIn = 250n * 10n ** 6n;   // $250
   if ('err' in r) console.log(`        program said: ${r.err}`);
 }
 
+/** What the operator held after the mint, carried into the redeem block. */
+let sharesHeld = 0n;
+
 /* ── mint into the parked class ──────────────────────────────────────── */
 {
+  const sharesBefore = await bal(userShares);
+  const ownedBefore = v.ownedQuote;
+  const supBefore = await supply(parkedMint);
+  const mintedBefore = parked === 'day' ? v.totalMintedDay : v.totalMintedNight;
   const tx = new Transaction().add(
     createAtaIdempotentIx(op.publicKey, op.publicKey, pk(parkedMint), sp),
     mintSharesIx({
@@ -72,13 +79,22 @@ const quoteIn = 250n * 10n ** 6n;   // $250
   v = await vault();
   const shares = await bal(userShares);
   const q1 = await bal(userQuote);
-  check('shares received = quote in (NAV 1.0)', shares === quoteIn, `${shares} vs ${quoteIn}`);
+  // Deltas, not absolutes. The operator's balances and the vault's totals are
+  // whatever earlier runs, the pools and the site left them — asserting a
+  // clean slate makes this fail for reasons that have nothing to do with the
+  // program.
+  check('shares received = quote in (NAV 1.0)', shares - sharesBefore === quoteIn, `${shares - sharesBefore} vs ${quoteIn}`);
   check('quote left the user', q0 - q1 === quoteIn, `${q0 - q1}`);
-  check('vault owned_quote rose by the deposit', v.ownedQuote >= quoteIn, v.ownedQuote.toString());
+  check('vault owned_quote rose by the deposit', v.ownedQuote - ownedBefore === quoteIn, `${v.ownedQuote - ownedBefore}`);
   const sup = await supply(parkedMint);
-  check(`${parked} mint supply = ${quoteIn}`, sup === quoteIn, sup.toString());
-  check('claims backed: value_of(supply, nav) == owned_quote', valueOf(sup, parked === 'night' ? v.nightNav : v.dayNav) === v.ownedQuote, `${valueOf(sup, v.dayNav)} vs ${v.ownedQuote}`);
-  check('total_minted counter updated', (parked === 'day' ? v.totalMintedDay : v.totalMintedNight) === quoteIn);
+  check(`${parked} mint supply rose by ${quoteIn}`, sup - supBefore === quoteIn, `${sup - supBefore}`);
+  // The invariant that matters, and it is absolute: every share of every
+  // class is covered by quote the vault owns.
+  const claims = valueOf(await supply(pk(m.nightMint)), v.nightNav) + valueOf(await supply(pk(m.dayMint)), v.dayNav);
+  check('claims backed: night + day value == owned_quote', claims === v.ownedQuote, `${claims} vs ${v.ownedQuote}`);
+  check('total_minted counter rose by the deposit',
+    (parked === 'day' ? v.totalMintedDay : v.totalMintedNight) - mintedBefore === quoteIn);
+  sharesHeld = shares;
 }
 
 /* ── redeem half ─────────────────────────────────────────────────────── */
@@ -91,12 +107,12 @@ const quoteIn = 250n * 10n ** 6n;   // $250
   }, parked, half));
   const r = await send(tx);
   check('redeem_shares confirms', 'sig' in r, JSON.stringify(r));
-  const shares = await bal(userShares);
+  const sharesAfter = await bal(userShares);
   const q2 = await bal(userQuote);
-  check('half the shares burned', shares === half, shares.toString());
+  check('half the shares burned', sharesHeld - sharesAfter === half, `${sharesHeld - sharesAfter} vs ${half}`);
   check('quote came back at NAV 1.0', q2 === q0 - half, `${q2} vs ${q0 - half}`);
-  v = await vault();
-  check('vault owned_quote fell by the redemption', v.ownedQuote === half, v.ownedQuote.toString());
+  const vAfter = await vault();
+  check('vault owned_quote fell by the redemption', v.ownedQuote - vAfter.ownedQuote === half, `${v.ownedQuote - vAfter.ownedQuote}`);
 }
 
 console.log(failed ? `\n${failed} failed` : '\nall on-chain trade checks passed');

@@ -131,4 +131,6 @@ pub enum SessionError {
     AuctionOpen,
     #[msg("this auction belongs to an earlier bell")]
     AuctionStale,
+    #[msg("account already exists")]
+    AlreadyInitialized,
 }

@@ -117,18 +117,44 @@ pub mod session {
 
         let now = Clock::get()?.unix_timestamp;
 
+        // The vault's own two token accounts. Sized from the mint's actual
+        // extensions, created under whichever token program owns each side.
+        create_vault_token_account(
+            &ctx.accounts.underlying_vault,
+            &ctx.accounts.underlying_mint.to_account_info(),
+            &ctx.accounts.vault.to_account_info(),
+            &ctx.accounts.authority,
+            &ctx.accounts.underlying_token_program,
+            &ctx.accounts.system_program,
+            b"underlying",
+            ctx.bumps.underlying_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.quote_vault,
+            &ctx.accounts.quote_mint.to_account_info(),
+            &ctx.accounts.vault.to_account_info(),
+            &ctx.accounts.authority,
+            &ctx.accounts.quote_token_program,
+            &ctx.accounts.system_program,
+            b"quote",
+            ctx.bumps.quote_vault,
+        )?;
+
         // A mint whose issuer has already set a hook or paused it, or whose
         // new accounts start frozen, cannot be custodied. Refuse now rather
         // than mint shares against inventory that can never move.
-        require!(
-            issuer_condition(
-                0,
-                &ctx.accounts.underlying_mint.to_account_info(),
-                &ctx.accounts.underlying_vault,
-            )?
-            .is_none(),
-            SessionError::IssuerAction
-        );
+        // The token account was created a moment ago, so it is neither frozen
+        // nor drained; only the mint's own powers can refuse a vault here.
+        {
+            let mint_ai = ctx.accounts.underlying_mint.to_account_info();
+            let data = mint_ai.try_borrow_data()?;
+            let state = issuer::inspect_mint(&data, mint_ai.owner, Clock::get()?.epoch)
+                .map_err(|_| error!(SessionError::NotAMint))?;
+            require!(
+                issuer::condition(&state, false, 0, 0).is_none(),
+                SessionError::IssuerAction
+            );
+        }
 
         // Both feeds are read at creation, so a vault can never be initialised
         // pointing at an account that does not exist or does not match.
@@ -1702,6 +1728,83 @@ fn fund_metadata_rent<'info>(
     Ok(())
 }
 
+/// Create one of the vault's token accounts, sized for the mint it holds.
+///
+/// Everything here is what `#[account(init, token::…)]` would have done, with
+/// one difference that matters: the length comes from a parser that tolerates
+/// extensions it has never seen, so a mint is not uncustodiable merely
+/// because Token-2022 grew since this program's dependencies were pinned.
+#[allow(clippy::too_many_arguments)]
+fn create_vault_token_account<'info>(
+    account: &UncheckedAccount<'info>,
+    mint: &AccountInfo<'info>,
+    vault: &AccountInfo<'info>,
+    payer: &Signer<'info>,
+    token_program: &Interface<'info, TokenInterface>,
+    system_program: &Program<'info, System>,
+    seed: &[u8],
+    bump: u8,
+) -> Result<()> {
+    use anchor_lang::solana_program::program::{invoke, invoke_signed};
+    use anchor_lang::solana_program::system_instruction;
+
+    require!(account.data_is_empty(), SessionError::AlreadyInitialized);
+
+    // Ask the token program how long the account has to be.
+    //
+    // Working it out here means keeping a table of which mint extension
+    // obliges which account extension, and that table is exactly what goes
+    // stale: the first attempt at this missed `PausableAccount`, because the
+    // pinned crate predates it, and `InitializeAccount3` refused the account
+    // it produced. `GetAccountDataSize` puts the question to the program that
+    // will answer it — the deployed one, which knows every extension there is
+    // — and returns the number through return data.
+    let len = if *token_program.key == issuer::SPL_TOKEN {
+        165
+    } else {
+        invoke(
+            &anchor_spl::token_2022::spl_token_2022::instruction::get_account_data_size(
+                token_program.key,
+                mint.key,
+                &[],
+            )?,
+            &[mint.clone(), token_program.to_account_info()],
+        )?;
+        let (who, bytes) = anchor_lang::solana_program::program::get_return_data()
+            .ok_or(error!(SessionError::NotAMint))?;
+        require_keys_eq!(who, *token_program.key, SessionError::NotAMint);
+        let n: [u8; 8] = bytes.get(..8).ok_or(error!(SessionError::NotAMint))?
+            .try_into().map_err(|_| error!(SessionError::NotAMint))?;
+        u64::from_le_bytes(n) as usize
+    };
+    require!(len >= 165, SessionError::NotAMint);
+
+    let vault_key = vault.key();
+    let seeds: [&[u8]; 3] = [seed, vault_key.as_ref(), std::slice::from_ref(&bump)];
+    invoke_signed(
+        &system_instruction::create_account(
+            payer.key,
+            account.key,
+            Rent::get()?.minimum_balance(len),
+            len as u64,
+            token_program.key,
+        ),
+        &[payer.to_account_info(), account.to_account_info(), system_program.to_account_info()],
+        &[&seeds[..]],
+    )?;
+
+    // `initialize_account3` takes the owner as an argument rather than an
+    // account, so the vault PDA needs no signature here.
+    let ix = anchor_spl::token_2022::spl_token_2022::instruction::initialize_account3(
+        token_program.key,
+        account.key,
+        mint.key,
+        &vault_key,
+    )?;
+    invoke(&ix, &[account.to_account_info(), mint.clone(), token_program.to_account_info()])?;
+    Ok(())
+}
+
 /// The first issuer condition holding against this vault's underlying, if any.
 fn issuer_condition(
     owned: u64,
@@ -1889,19 +1992,22 @@ pub struct InitializeVault<'info> {
     )]
     pub day_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    #[account(
-        init, payer = authority, seeds = [b"underlying", vault.key().as_ref()], bump,
-        token::mint = underlying_mint, token::authority = vault,
-        token::token_program = underlying_token_program,
-    )]
-    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    // Created in the handler rather than by `init`.
+    //
+    // Anchor's `init` sizes a token account by enumerating the mint's
+    // extensions, and enumeration fails outright on an extension the pinned
+    // spl-token-2022 does not know. NVDAx and OPENAI each carry two such
+    // extensions, so Anchor could not create a vault's token account for
+    // either — the protocol's own asset was uncreatable. The length is
+    // computed in `issuer::required_account_len` instead, from a parser that
+    // skips what it does not recognise.
+    #[account(mut, seeds = [b"underlying", vault.key().as_ref()], bump)]
+    /// CHECK: created and initialised below, then only ever read as a token account.
+    pub underlying_vault: UncheckedAccount<'info>,
 
-    #[account(
-        init, payer = authority, seeds = [b"quote", vault.key().as_ref()], bump,
-        token::mint = quote_mint, token::authority = vault,
-        token::token_program = quote_token_program,
-    )]
-    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"quote", vault.key().as_ref()], bump)]
+    /// CHECK: created and initialised below, then only ever read as a token account.
+    pub quote_vault: UncheckedAccount<'info>,
 
     /// CHECK: owner, layout and feed id are all verified in `read_quote`.
     pub mark_price_update: UncheckedAccount<'info>,
