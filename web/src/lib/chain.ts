@@ -17,12 +17,14 @@ import { Connection, PublicKey, Transaction, type TransactionInstruction } from 
 import bs58 from 'bs58';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import {
-  decodeSchedule, decodeDetector, premiumBps, SESSION_EVENT,
-  type EventSchedule, type DetectorReading, type ScheduledEvent,
+  decodeSchedule, decodeDetector, decodeAuction, decodeBid, auctionPda, bidPda,
+  premiumBps, SESSION_EVENT,
+  type EventSchedule, type DetectorReading, type ScheduledEvent, type Auction, type Bid,
 } from '@sdk/vault.ts';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
 import {
   ata, createAtaIdempotentIx, mintSharesIx, redeemSharesIx, explainProgramError,
+  auctionBidIx, claimAuctionIx,
 } from '@sdk/ix.ts';
 import { eventsFromLogs, type VaultEvent } from '@sdk/events.ts';
 import { evaluate, type Health, type VaultState } from '@sdk/health.ts';
@@ -131,6 +133,17 @@ export interface ChainVault {
   /** Atoms → the number a person reads, honouring a scaled-UI multiplier. */
   uiMultiplier: number;
   epoch: number;
+  /** The call auction for this bell's residual, when one is open. */
+  auction: {
+    address: PublicKey;
+    state: Auction;
+    /** Seconds until bids close; negative once the window has passed. */
+    closesIn: number;
+    /** The connected wallet's bid, if it has one. */
+    mine: Bid | null;
+  } | null;
+  /** What a fill pays right now, in bp — the ramp, mirrored from the program. */
+  incentiveBps: number;
   /** An event vault's own clocks. Null for an equity vault. */
   event: {
     schedule: EventSchedule | null;
@@ -257,6 +270,26 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     };
   }
 
+  /* ── the auction for this bell ───────────────────────────────────────── */
+  let auctionState: ChainVault['auction'] = null;
+  if (vault.auctionSecs > 0) {
+    const [addr] = auctionPda(address, vault.lastBoundaryTs);
+    const want = me ? [addr, bidPda(addr, me)[0]] : [addr];
+    const got = await conn.getMultipleAccountsInfo(want).catch(() => null);
+    const aAcc = got?.[0];
+    if (aAcc) {
+      const state = safe(() => decodeAuction(aAcc.data));
+      if (state) {
+        auctionState = {
+          address: addr,
+          state,
+          closesIn: state.closesAt - now,
+          mine: got?.[1] ? safe(() => decodeBid(got[1]!.data)) : null,
+        };
+      }
+    }
+  }
+
   return {
     vault, address, nightSupply, daySupply, balanceUnderlying, balanceQuote,
     mark, equity,
@@ -271,6 +304,16 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     issuer, vaultFrozen,
     uiMultiplier: issuer ? uiMultiplier(issuer, now) : 1,
     epoch,
+    auction: auctionState,
+    // The ramp, mirrored from `Vault::incentive_at`: a residual nobody took at
+    // the first tier is offered at the next, because the vault would rather
+    // pay for the fill than halt at the following bell for carrying it.
+    incentiveBps: (() => {
+      const since = now - vault.lastBoundaryTs;
+      const w = vault.auctionSecs;
+      if (w <= 0 || since < w) return vault.incentiveRamp[0];
+      return since < 2 * w ? vault.incentiveRamp[1] : vault.incentiveRamp[2];
+    })(),
     event,
   };
 }
@@ -396,6 +439,49 @@ export function buildRedeem(m: Devnet, user: PublicKey, cls: ShareClass, shareAt
     redeemSharesIx(accounts, cls, shareAtoms),
   ];
 }
+
+/** Bid into the open auction, escrowing whatever the side demands. */
+export function buildAuctionBid(
+  m: Devnet, d: ChainVault, user: PublicKey, underlyingAtoms: bigint,
+): TransactionInstruction[] {
+  if (!d.auction) throw new Error('no auction is open');
+  const uProg = new PublicKey(m.underlyingTokenProgram);
+  const qProg = new PublicKey(m.tokenProgram);
+  const accounts = auctionAccounts(m, d, user, uProg, qProg);
+  return [
+    // The escrow leaves one of these and the award arrives in the other, so
+    // both have to exist before the instruction runs.
+    createAtaIdempotentIx(user, user, new PublicKey(m.underlyingMint), uProg),
+    createAtaIdempotentIx(user, user, new PublicKey(m.quoteMint), qProg),
+    auctionBidIx(accounts, bidPda(d.auction.address, user)[0], underlyingAtoms),
+  ];
+}
+
+/** Take what a bid won, and whatever it escrowed beyond that. */
+export function buildAuctionClaim(m: Devnet, d: ChainVault, user: PublicKey): TransactionInstruction[] {
+  if (!d.auction) throw new Error('no auction to claim from');
+  const uProg = new PublicKey(m.underlyingTokenProgram);
+  const qProg = new PublicKey(m.tokenProgram);
+  return [claimAuctionIx(
+    auctionAccounts(m, d, user, uProg, qProg),
+    bidPda(d.auction.address, user)[0],
+    new PublicKey(m.nightMint), new PublicKey(m.dayMint),
+  )];
+}
+
+const auctionAccounts = (m: Devnet, d: ChainVault, user: PublicKey, uProg: PublicKey, qProg: PublicKey) => ({
+  vault: new PublicKey(m.vault),
+  auction: d.auction!.address,
+  underlyingVault: new PublicKey(m.underlyingVault),
+  quoteVault: new PublicKey(m.quoteVault),
+  bidderUnderlying: ata(user, new PublicKey(m.underlyingMint), uProg),
+  bidderQuote: ata(user, new PublicKey(m.quoteMint), qProg),
+  bidder: user,
+  underlyingMint: new PublicKey(m.underlyingMint),
+  quoteMint: new PublicKey(m.quoteMint),
+  underlyingTokenProgram: uProg,
+  quoteTokenProgram: qProg,
+});
 
 /* ── the ledger ──────────────────────────────────────────────────────────── */
 

@@ -21,7 +21,8 @@ import {
   Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault } from '../../sdk/src/vault.ts';
-import { settleBoundaryIx, fillHandoffIx, createAtaIdempotentIx, ata, explainProgramError } from '../../sdk/src/ix.ts';
+import { settleBoundaryIx, fillHandoffIx, openAuctionIx, createAtaIdempotentIx, ata, explainProgramError } from '../../sdk/src/ix.ts';
+import { auctionPda } from '../../sdk/src/vault.ts';
 import { nextBoundary, sessionAt, Session } from '../../sdk/src/calendar.ts';
 import { WAD, mulDivFloor } from '../../sdk/src/settle.ts';
 import { bytesToHex } from '../../sdk/src/ix.ts';
@@ -76,6 +77,8 @@ export interface CrankReport {
   pendingAfter: string;
   fills: { signature: string; underlying: string; buying: boolean }[];
   fillError?: string;
+  /** The call auction opened for this bell's residual, when one was. */
+  auction?: { signature: string; address: string; closesAt: number } | { skipped: string };
   markAgeSecs: number | null;
   nightNav: string;
   dayNav: string;
@@ -178,8 +181,39 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     report.pendingBefore = v.pendingDelta.toString();
   }
 
+  /* ── auction ─────────────────────────────────────────────────────────── */
+  //
+  // Opened immediately after the settlement that created the residual, not on
+  // a later tick. The window runs from the bell, so a crank that settles at
+  // bell+5m and leaves the auction for the next run finds it already closed —
+  // which is how a feature ships and never once executes.
+  if (!v.halted && v.pendingDelta !== 0n && v.auctionSecs > 0 && 'signature' in report.settled) {
+    const closesAt = v.lastBoundaryTs + v.auctionSecs;
+    if (now < closesAt) {
+      const [auction] = auctionPda(pk(m.vault), v.lastBoundaryTs);
+      const exists = await conn.getAccountInfo(auction);
+      if (exists) {
+        report.auction = { skipped: 'already open for this bell' };
+      } else {
+        const r = await tryTx(conn, new Transaction().add(
+          openAuctionIx(pk(m.vault), auction, operator.publicKey),
+        ), [operator]);
+        report.auction = 'signature' in r
+          ? { signature: r.signature, address: auction.toBase58(), closesAt }
+          : { skipped: r.failed };
+      }
+    } else {
+      report.auction = { skipped: `window closed ${now - closesAt}s ago` };
+    }
+  }
+
   /* ── fill ────────────────────────────────────────────────────────────── */
-  if (!v.halted && v.pendingDelta !== 0n && markQ) {
+  //
+  // Only once the auction has had its window. Filling continuously while an
+  // auction is collecting bids would take the residual at one arbitrageur's
+  // price, which is the thing the auction exists to prevent.
+  const auctionOpen = report.auction && 'closesAt' in report.auction && now < report.auction.closesAt;
+  if (!v.halted && v.pendingDelta !== 0n && markQ && !auctionOpen) {
     const mark = normalizeMark(markQ, v.underlyingDecimals, v.quoteDecimals);
     const quoteTokenProgram = pk(m.tokenProgram);
     const underlyingTokenProgram = pk(m.underlyingTokenProgram);

@@ -36,7 +36,7 @@
     "maxPostedSlotAge": 4500,
     "maxBellLeadSecs": 300,
     "maxPremiumBps": 1000,
-    "auctionSecs": 120,
+    "auctionSecs": 900,
     "incentiveRamp": [
       10,
       25,

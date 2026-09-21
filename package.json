@@ -27,7 +27,9 @@
     "wallet": "node --experimental-strip-types keeper/src/wallet.ts",
     "devnet:event": "node --experimental-strip-types keeper/src/devnet-event.ts",
     "bell": "node --experimental-strip-types agent/launch.ts",
-    "bell:verify": "node --experimental-strip-types agent/verify.ts"
+    "bell:verify": "node --experimental-strip-types agent/verify.ts",
+    "auction": "node --experimental-strip-types keeper/src/auction.ts",
+    "retune": "node --experimental-strip-types keeper/src/retune.ts"
   },
   "dependencies": {
     "@meteora-ag/cp-amm-sdk": "^1.4.9",

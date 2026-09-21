@@ -408,6 +408,19 @@ export function haltIx(a: AdminAccounts): TransactionInstruction {
   });
 }
 
+/**
+ * Retune a vault. Identity, mints and feeds are immutable by design — the
+ * program refuses a change to those — so this is bounds, windows and the
+ * incentive ramp only.
+ */
+export function setParamsIx(a: AdminAccounts, p: VaultParams): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(a.vault, true), meta(a.authority, false, true)],
+    data: concat(discriminator('set_params'), encodeVaultParams(p)) as Buffer,
+  });
+}
+
 export function setFlagsIx(a: AdminAccounts, flags: number): TransactionInstruction {
   return new TransactionInstruction({
     programId: PROGRAM_ID,

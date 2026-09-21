@@ -5,6 +5,7 @@ import { SessionClock } from './SessionClock';
 import { ChainTrade } from './ChainTrade';
 import { Instrument } from './Instrument';
 import { EventSession } from './EventSession';
+import { Auction } from './Auction';
 import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
@@ -194,6 +195,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
         </div>
 
         <div className={s.side}>
+          <Auction m={m} d={d} onDone={chain.refresh} />
           <ChainTrade m={m} chain={d} onDone={chain.refresh} />
           <ChainHealth d={d} />
           <Instrument m={m} d={d} />

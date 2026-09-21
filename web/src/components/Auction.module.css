@@ -1,0 +1,89 @@
+.card {
+  padding: clamp(20px, 2.6vw, 26px);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  border-color: color-mix(in srgb, var(--day) 30%, var(--line));
+}
+.card[data-open='true'] { border-color: color-mix(in srgb, var(--day) 55%, var(--line)); }
+
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.title { font-size: var(--t-body); font-weight: 550; letter-spacing: -0.005em; }
+.sub { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-3); margin-top: 4px; }
+
+.state {
+  flex: none;
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong); color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.state[data-phase='open'] { color: var(--day-ink); border-color: color-mix(in srgb, var(--day) 50%, var(--line)); }
+.state[data-phase='due'] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.state[data-phase='cleared'] { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+
+/* ── the book ────────────────────────────────────────────────────────────── */
+.book { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
+.bookRow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.label { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.big { font-size: var(--t-sm); color: var(--ink); font-weight: 450; }
+.big[data-over='true'] { color: var(--day-ink); }
+
+.gauge { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 9%, transparent); overflow: hidden; }
+.gaugeFill { height: 100%; background: var(--day); transition: width var(--t-state) var(--ease); }
+.gaugeFill[data-full='true'] { background: var(--good); }
+.coverage { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2); }
+
+.cleared {
+  font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2);
+  padding: var(--sp-3); border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--good) 8%, transparent);
+  border-left: 2px solid var(--good);
+}
+
+.mine {
+  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
+  padding-block: var(--sp-3); border-block: 1px solid var(--line);
+  font-size: var(--t-sm); color: var(--ink);
+}
+.mineAward { font-size: var(--t-xs); color: var(--ink-3); }
+
+/* ── act ─────────────────────────────────────────────────────────────────── */
+.form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.field { position: relative; display: flex; align-items: center; }
+.input {
+  width: 100%; padding: 11px 76px 11px 13px;
+  font: inherit; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: var(--surface-2, transparent);
+  border: 1px solid var(--line-strong); border-radius: var(--r-1);
+  transition: border-color var(--t-hover) var(--ease);
+}
+.input:focus-visible { outline: none; border-color: var(--day); }
+.input:disabled { color: var(--ink-3); }
+.max {
+  position: absolute; right: 6px;
+  font-size: var(--t-micro); letter-spacing: 0.04em;
+  padding: 5px 9px; border-radius: var(--r-1);
+  color: var(--ink-3); border: 1px solid var(--line);
+}
+.max:hover:not(:disabled) { color: var(--ink); border-color: var(--line-strong); }
+
+.submit {
+  padding: 11px 16px; border-radius: var(--r-1);
+  font-size: var(--t-sm); font-weight: 500;
+  background: var(--day); color: #fff;
+  transition: opacity var(--t-hover) var(--ease);
+}
+.submit:disabled { opacity: 0.45; }
+.submit:hover:not(:disabled) { opacity: 0.9; }
+
+.escrowNote, .note { font-size: var(--t-micro); line-height: 1.55; color: var(--ink-3); }
+.note { border-left: 2px solid var(--line-strong); padding-left: var(--sp-3); }
+
+.ok, .err { font-size: var(--t-xs); line-height: 1.5; }
+.ok { color: var(--good); }
+.err { color: var(--crit-ink); }
+.sig { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); }
+.sig:hover { color: var(--ink); }
+
+.foot { font-size: var(--t-micro); line-height: 1.55; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+
+@media (max-width: 520px) { .book { grid-template-columns: 1fr 1fr; } }
