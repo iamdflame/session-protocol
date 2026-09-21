@@ -491,6 +491,13 @@ export interface LedgerRow {
   failed: boolean;
   /** What the program said happened. Empty when the transaction emitted nothing. */
   events: VaultEvent[];
+  /**
+   * Whether this row's transaction has actually been read yet. A row that has
+   * not is indistinguishable from one that emitted nothing, and anything
+   * summing across the history — a statement, a P&L — is wrong until every
+   * row is decoded. `events: []` cannot carry that distinction, so this does.
+   */
+  decoded: boolean;
 }
 
 /**
@@ -504,13 +511,61 @@ export interface LedgerRow {
 /* A confirmed transaction never changes, so its events are worth keeping.
    Module-level rather than per-component: the ledger unmounts when a reader
    switches vaults and comes back, and re-fetching what has not changed is
-   what gets a public RPC to start refusing. */
-const eventCache = new Map<string, VaultEvent[]>();
+   what gets a public RPC to start refusing.
+
+   It also survives a reload, in localStorage. Reading a vault's whole history
+   costs one `getParsedTransactions` per three signatures, and the endpoint is
+   the same one somebody's mint is queued on — paying that again on every
+   visit is a cost taken from them. Only the decoded events are stored, not
+   the transactions, and they are re-derivable from the chain, so a cleared or
+   unavailable store costs a refetch and nothing else. */
+const CACHE_KEY = 'session.events.v1';
+const CACHE_MAX = 400;
+
+/* JSON cannot carry a bigint or a PublicKey, and an event is made of both.
+   Tagging them on the way out is what makes the round trip lossless — a
+   revived event has to be indistinguishable from a freshly decoded one, or
+   the cache quietly changes what the ledger says. */
+/* The replacer has to read the *holder*, not its argument: `JSON.stringify`
+   calls `toJSON()` before the replacer sees a value, and `PublicKey.toJSON()`
+   already flattens it to a bare base58 string — indistinguishable from any
+   other string by the time it arrives. */
+function enc(this: Record<string, unknown>, key: string, value: unknown) {
+  const raw = this?.[key];
+  if (raw instanceof PublicKey) return `k:${raw.toBase58()}`;
+  return typeof value === 'bigint' ? `n:${value}` : value;
+}
+const dec = (_: string, v: unknown) => {
+  if (typeof v !== 'string') return v;
+  if (v.startsWith('n:')) return BigInt(v.slice(2));
+  if (v.startsWith('k:')) return new PublicKey(v.slice(2));
+  return v;
+};
+
+const loadCache = (): Map<string, VaultEvent[]> => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? new Map(JSON.parse(raw, dec)) : new Map();
+  } catch { return new Map(); }
+};
+
+const eventCache = typeof localStorage === 'undefined' ? new Map<string, VaultEvent[]>() : loadCache();
+
+const saveCache = () => {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify([...eventCache.entries()].slice(-CACHE_MAX), enc));
+  } catch { /* private window, or full: the cache is an optimisation */ }
+};
 
 export function useLedger(vault: string | null, limit = 20) {
   const { connection } = useConnection();
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  /* 'reading' until every signature in the window has been decoded; 'partial'
+     when the endpoint stopped answering and some never will be, until the
+     next poll. Anything that sums across the history has to know which. */
+  const [history, setHistory] = useState<'reading' | 'complete' | 'partial'>('reading');
+  const refetch = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!vault) return;
@@ -529,9 +584,11 @@ export function useLedger(vault: string | null, limit = 20) {
           at: x.blockTime ?? null,
           failed: !!x.err,
           events: eventCache.get(x.signature) ?? [],
+          decoded: eventCache.has(x.signature),
         }));
         setRows(build());
         setError(null);
+        setHistory(sigs.every(x => eventCache.has(x.signature)) ? 'complete' : 'reading');
 
         // Then fill in the ones never seen, slowly. This is the lowest-value
         // request the page makes and it shares one rate-limited endpoint with
@@ -539,23 +596,39 @@ export function useLedger(vault: string | null, limit = 20) {
         // small batches, and stops entirely the moment it is throttled, so a
         // reader's transaction is never queued behind a history nobody asked
         // to refresh.
+        const nap = (ms: number) => new Promise(r => setTimeout(r, ms));
         const missing = sigs.map(x => x.signature).filter(sg => !eventCache.has(sg));
-        if (missing.length) await new Promise(r => setTimeout(r, 2_500));
-        for (let i = 0; i < missing.length && live; i += 3) {
-          const chunk = missing.slice(i, i + 3);
-          const txs = await connection.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0 })
-            .catch(() => null);
-          if (!txs) break;              // throttled: keep what we have
+        if (missing.length) await nap(2_500);
+        const STEP = 5;
+        for (let i = 0; i < missing.length && live; i += STEP) {
+          const chunk = missing.slice(i, i + STEP);
+          // A throttled endpoint is the common case here, not an error. Back
+          // off and ask again rather than abandoning the history on the first
+          // 429 — anything summing across it is useless until it is whole.
+          let txs = null;
+          for (let attempt = 0; attempt < 3 && live && !txs; attempt++) {
+            if (attempt) await nap(1_500 * 2 ** (attempt - 1));
+            txs = await connection.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0 })
+              .catch(() => null);
+          }
+          if (!txs) { if (live) setHistory('partial'); break; }
           txs.forEach((t, j) => eventCache.set(chunk[j], eventsFromLogs(t?.meta?.logMessages)));
-          if (live) setRows(build());
-          if (i + 3 < missing.length) await new Promise(r => setTimeout(r, 800));
+          saveCache();
+          if (live) {
+            setRows(build());
+            if (i + STEP >= missing.length) setHistory('complete');
+          }
+          if (i + STEP < missing.length) await nap(800);
         }
       } catch (e) {
-        if (live && rows === null) setError(e instanceof Error ? e : new Error(String(e)));
+        if (!live) return;
+        setHistory('partial');
+        if (rows === null) setError(e instanceof Error ? e : new Error(String(e)));
       }
     };
 
     go();
+    refetch.current = go;
     const id = setInterval(go, 45_000);
     return () => { live = false; clearInterval(id); };
     // `rows` is read only to decide whether an error should replace a
@@ -563,7 +636,11 @@ export function useLedger(vault: string | null, limit = 20) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection, vault, limit]);
 
-  return { rows, error };
+  // A reader who just minted should not wait out the poll to see it. The
+  // trade panel calls this the moment a signature confirms.
+  const refresh = useCallback(() => { refetch.current?.(); }, []);
+
+  return { rows, error, history, refresh };
 }
 
 /* ── the serverless pair ─────────────────────────────────────────────────── */

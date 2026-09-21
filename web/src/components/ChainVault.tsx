@@ -7,11 +7,12 @@ import { Instrument } from './Instrument';
 import { EventSession } from './EventSession';
 import { Auction } from './Auction';
 import { FundingRate } from './FundingRate';
+import { Statement } from './Statement';
 import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
   useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
-  useLedger,
+  useLedger, type LedgerRow,
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
 import { describe, kindOf } from '@sdk/events.ts';
@@ -37,6 +38,13 @@ const fromAtoms = (v: bigint, d: number) => Number(v) / 10 ** d;
  */
 export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
   const chain = useChainVault(m);
+  /* One history, two readers. The ledger shows the last twenty; the statement
+     needs further back to price a position opened before them, and fetching
+     the same signatures twice is how a public RPC starts refusing. */
+  const ledger = useLedger(m.vault, 60);
+  // A trade that lands should show up in both the history and the statement
+  // immediately, not on the next poll.
+  const settled = useCallback(() => { chain.refresh(); ledger.refresh(); }, [chain.refresh, ledger.refresh]);
   const curve = useCurve(asset.symbol);
   const clockSize = useClockSize(196, 72);
 
@@ -191,13 +199,14 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
                 : <div className="skeleton" style={{ width: '100%', height: 300 }} />}
           </div>
 
-          <Crank d={d} onDone={chain.refresh} />
-          <Ledger vault={m.vault} dec={qd} label={label} />
+          <Crank d={d} onDone={settled} />
+          <Statement rows={ledger.rows} history={ledger.history} d={d} symbol={asset.symbol} label={label} />
+          <Ledger {...ledger} dec={qd} label={label} />
         </div>
 
         <div className={s.side}>
-          <Auction m={m} d={d} onDone={chain.refresh} />
-          <ChainTrade m={m} chain={d} onDone={chain.refresh} />
+          <Auction m={m} d={d} onDone={settled} />
+          <ChainTrade m={m} chain={d} onDone={settled} />
           <ChainHealth d={d} />
           <Instrument m={m} d={d} />
         </div>
@@ -376,9 +385,12 @@ function ChainHealth({ d }: { d: ChainState }) {
 }
 
 /** The vault's own transaction history, from the chain. */
-function Ledger({ vault, dec, label }: { vault: string; dec: number; label: (c: ShareClass) => string }) {
-  const { rows, error } = useLedger(vault, 20);
-
+function Ledger({ rows, error, dec, label }: {
+  rows: LedgerRow[] | null;
+  error: Error | null;
+  dec: number;
+  label: (c: ShareClass) => string;
+}) {
   return (
     <section className={c.ledger}>
       <h2 className={s.cardTitle}>On-chain ledger</h2>
@@ -395,7 +407,7 @@ function Ledger({ vault, dec, label }: { vault: string; dec: number; label: (c: 
         <p className={c.ledgerNote}>No transactions yet.</p>
       ) : (
         <ol className={s.events}>
-          {rows.map(r => {
+          {rows.slice(0, 20).map(r => {
             // A transaction may emit several events — a settle that also
             // halted, a fill that paid an incentive. Each gets its own line;
             // one with none at all is still shown, because a transaction that

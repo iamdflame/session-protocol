@@ -31,6 +31,8 @@ import { fetchAsOf, hermesConfigured, postUpdateAndConsume, HermesUnavailable } 
 export interface Manifest {
   rpc: string;
   vault: string;
+  /** The asset's ticker, as the site lists it: `NVDAx`, `OPENAI`. */
+  symbol: string;
   underlyingMint: string;
   quoteMint: string;
   nightMint: string;

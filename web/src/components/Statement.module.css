@@ -1,0 +1,52 @@
+.card { padding: clamp(20px, 2.6vw, 26px); display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.title { font-size: var(--t-body); font-weight: 550; letter-spacing: -0.005em; }
+.sub { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-3); margin-top: 4px; max-width: 46ch; }
+
+.save {
+  flex: none;
+  font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 6px 12px; border-radius: var(--r-1);
+  color: var(--ink-2); border: 1px solid var(--line-strong);
+  transition: color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.save:hover { color: var(--ink); border-color: var(--ink); }
+
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 9px 0; font-size: var(--t-sm); }
+.table thead th {
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 450; border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.right { text-align: right; }
+.name { font-weight: 450; color: var(--ink); text-align: left; }
+.muted { color: var(--ink-3); }
+.table tbody tr { border-bottom: 1px solid var(--line); }
+.table tbody tr:last-child { border-bottom: none; }
+
+/* The benchmark is a different kind of row: it is what did *not* happen. */
+.table tbody tr[data-bench='true'] .name { color: var(--ink-2); font-style: italic; }
+.table tbody tr[data-bench='true'] td { color: var(--ink-2); }
+
+[data-sign='up'] { color: var(--good); }
+[data-sign='down'] { color: var(--crit-ink); }
+
+.verdict {
+  font-size: var(--t-sm); line-height: 1.6; color: var(--ink);
+  padding: var(--sp-3); border-radius: var(--r-1);
+  border-left: 2px solid var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+.verdict[data-sign='up'] { border-left-color: var(--good); }
+.verdict[data-sign='down'] { border-left-color: var(--crit-ink); }
+
+.foot { font-size: var(--t-micro); line-height: 1.6; color: var(--ink-3); }
+
+@media (max-width: 640px) {
+  /* Four money columns do not fit a phone; the two totals are recoverable
+     from the CSV, and P&L is the one a reader came for. */
+  .table th:nth-child(3), .table td:nth-child(3),
+  .table th:nth-child(4), .table td:nth-child(4) { display: none; }
+}

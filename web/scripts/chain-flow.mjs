@@ -40,11 +40,15 @@ const conn = new Connection(manifest.rpc, 'confirmed');
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
 const PORT = 9650 + (process.pid % 300);
 
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, skipped = 0;
 const check = (name, ok, detail = '') => {
   if (ok) { passed++; console.log(`  ok    ${name}`); }
   else { failed++; console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
 };
+/* Not every red line is a bug. A public endpoint that refuses to serve a
+   history is an environment condition, and reporting it as a product failure
+   trains the reader to ignore the output. Named, counted, and never silent. */
+const skip = (name, why) => { skipped++; console.log(`  SKIP  ${name} — ${why}`); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 /* ── fund the test wallet from the operator ─────────────────────────────── */
@@ -229,6 +233,10 @@ else console.log(`fresh wallet ${wallet.publicKey.toBase58()}  (0 SOL, 0 quote �
 
 const chrome = spawn(CHROME, [
   '--headless=new', `--remote-debugging-port=${PORT}`, '--no-sandbox', '--disable-gpu', '--hide-scrollbars',
+  /* Per run, always. A persisted profile would let the page's own event cache
+     carry over — which is what the cache is for — but wallet-adapter also
+     remembers the selected wallet there and autoconnects, so the connect flow
+     under test would never run. */
   '--user-data-dir=/tmp/session-chainflow-' + process.pid, 'about:blank',
 ], { stdio: 'ignore' });
 
@@ -308,6 +316,47 @@ try {
     check('faucet dripped SOL for fees to the empty wallet', sol > 0, String(sol));
   }
 
+  /* A statement row, as numbers. `$1,234.56` and `1,234` are what a reader
+     sees; comparing one run against the last needs them back as quantities. */
+  const readStatement = () => ev(`(() => {
+    const sec = document.querySelector('section[aria-label="Your statement"]');
+    if (!sec) return null;
+    const n = t => Number(t.replace(/[$,+\\s\u2212]/g, '')) * (t.includes('\u2212') ? -1 : 1);
+    return {
+      rows: [...sec.querySelectorAll('tbody tr')].map(r => {
+        const c = [...r.querySelectorAll('td')].map(x => x.textContent.trim());
+        return { name: r.querySelector('th').textContent.trim(), shares: n(c[0]), in: n(c[1]), out: n(c[2]), pnl: n(c[3]), bench: r.dataset.bench === 'true' };
+      }),
+      verdict: (sec.querySelector('[data-role="verdict"]')?.textContent ?? '').trim(),
+      trades: Number((sec.textContent.match(/(\\d+) trades?,/) ?? [0, 0])[1]),
+    };
+  })()`);
+  /* Wait for the ledger to have decoded what it is going to decode, so the
+     baseline is this wallet's real history and not a half-filled one — a
+     short read here would show up later as a delta that is too large. A
+     wallet that has never traded has no statement at all, which is a zero
+     baseline rather than a failure. */
+  const statementState = () => ev(`(() => {
+    const sec = document.querySelector('section[aria-label="Your statement"]');
+    if (!sec) return 'absent';
+    return sec.dataset.loading === 'true' ? 'reading' : 'ready';
+  })()`);
+  const settled = async () => (await statementState()) === 'ready';
+
+  /* Sampled the instant the wallet connects, before the ledger has read the
+     history back. A statement that is already 'ready' here would be summing
+     rows it has not decoded — which is precisely the wrong total this gate
+     exists to prevent. */
+  check('the statement waits rather than showing a partial total',
+    (await statementState()) !== 'ready');
+  /* A statement summed from part of a history would be wrong, so the panel
+     refuses to render one until the whole window is decoded. On a public
+     endpoint that is already throttling this address that read can simply not
+     finish, and there is nothing to compare against. */
+  const baseline = (await until(settled, 90000, 1000)) ? await readStatement() : null;
+  const before = baseline ?? { rows: [], verdict: '', trades: 0 };
+  const ZERO_ROW = { shares: 0, in: 0, out: 0, pnl: 0 };
+
   /* ── 3. mint into the parked class ───────────────────────────────────── */
   const parked = await ev(`document.querySelector('label[data-open="true"]')?.dataset.class`);
   check('a parked class is offered', parked === 'day' || parked === 'night', String(parked));
@@ -334,7 +383,18 @@ try {
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
   check('mint confirmed on chain with a signature link', minted && /view transaction/.test(flash), flash.slice(0, 160));
   const sig1 = await ev(`document.querySelector('form p[role="status"] a[href*="explorer.solana.com/tx/"]')?.href.match(/tx\\/([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null`);
-  check('signature is a real devnet transaction', !!sig1 && !!(await conn.getTransaction(sig1, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 })), String(sig1));
+  /* The page is backfilling its ledger over the same public endpoint, so this
+     one competes for the per-IP budget. A 429 here says nothing about the
+     product; failing on it would be a flaky test reporting a bug that is not
+     there. Back off and ask again. */
+  const fetchTx = async sg => {
+    for (let i = 0; i < 6; i++) {
+      try { return await conn.getTransaction(sg, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }); }
+      catch (e) { if (!/429|Too Many/.test(String(e))) throw e; await wait(1500 * (i + 1)); }
+    }
+    return null;
+  };
+  check('signature is a real devnet transaction', !!sig1 && !!(await fetchTx(sig1)), String(sig1));
 
   const heldUpdated = await until(() => ev(`(() => { const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)}); return [...card.querySelectorAll('dl dd')][2].textContent.trim() !== ${JSON.stringify(beforeHeld)}; })()`), 30000, 700);
   check('"You hold" re-read from chain after the mint', heldUpdated);
@@ -358,7 +418,58 @@ try {
   const redeemed = await until(() => ev(`/Redeemed for \\$40\\.00/.test(document.body.innerText)`), 60000, 600);
   check('redeem confirmed on chain at NAV 1.0', redeemed, (await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`)).slice(0, 160));
 
-  /* ── 6. disconnect ───────────────────────────────────────────────────── */
+  /* ── 6. the statement, and the thing it is measured against ──────────── */
+  /* The test wallet is reused between runs, so its statement carries every
+     earlier run too. Asserting "$100.00 in" would pass exactly once and then
+     report a bug that is not there — the figures below are the *delta* this
+     run added, which is what this run is responsible for. */
+  /* The ledger re-reads after a trade, so the panel shows the previous
+     history for a moment. Wait for this run's two trades to be in it before
+     asking what it says — the count is an independent signal from the
+     amounts asserted below, so waiting on it does not make them vacuous. */
+  const stmt = baseline && await until(
+    async () => ((await readStatement())?.trades ?? 0) >= before.trades + 2, 90000, 1000);
+  if (!baseline) skip('the statement panel', 'the devnet endpoint would not serve the vault history');
+  else check('the statement picks up this run\'s two trades', stmt, `was ${before.trades}`);
+  if (stmt) {
+    const after = await readStatement();
+    check('three lines: both classes and the undivided token', after.rows.length === 3, JSON.stringify(after.rows.map(r => r.name)));
+    check('the third is the benchmark, not a position', after.rows[2]?.bench === true);
+    const pick = st => st.rows.find(r => r.name.toLowerCase().endsWith(parked)) ?? ZERO_ROW;
+    const a = pick(after), b = pick(before);
+    check('this run added 60 shares to the traded class', a.shares - b.shares === 60, `${b.shares} -> ${a.shares}`);
+    check('and $100.00 of quote in', Math.round((a.in - b.in) * 100) === 10000, `${b.in} -> ${a.in}`);
+    check('and $40.00 out', Math.round((a.out - b.out) * 100) === 4000, `${b.out} -> ${a.out}`);
+    check('the undivided line carries the same cash flows as both classes together',
+      Math.round(after.rows[2].in * 100) === Math.round((after.rows[0].in + after.rows[1].in) * 100)
+      && Math.round(after.rows[2].out * 100) === Math.round((after.rows[0].out + after.rows[1].out) * 100),
+      JSON.stringify(after.rows.map(r => [r.in, r.out])));
+    check('and the panel says what the split was worth against holding it whole',
+      /undivided|whole|neither helped/i.test(after.verdict), after.verdict.slice(0, 140));
+  }
+
+  /* The decoded history is kept in localStorage so a return visit does not
+     re-read the whole vault over a rate-limited endpoint. Its encoder is the
+     fragile half: `JSON.stringify` calls `toJSON()` before the replacer sees
+     a value, so a PublicKey arrives already flattened to a bare string and is
+     indistinguishable from any other. If the tags below stop appearing, the
+     cache has started returning strings where the ledger expects keys. */
+  const cache = await ev(`(() => {
+    const raw = localStorage.getItem('session.events.v1');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const fields = parsed.flatMap(([, evs]) => evs.map(e => e.fields));
+    return {
+      entries: parsed.length,
+      keys: fields.filter(f => Object.values(f).some(v => typeof v === 'string' && v.startsWith('k:'))).length,
+      bigints: fields.filter(f => Object.values(f).some(v => typeof v === 'string' && v.startsWith('n:'))).length,
+    };
+  })()`);
+  check('the decoded history is cached for the next visit', !!cache && cache.entries > 0, JSON.stringify(cache));
+  check('public keys survive the round trip as keys, not as bare strings', (cache?.keys ?? 0) > 0, JSON.stringify(cache));
+  check('and u64 fields survive as bigints', (cache?.bigints ?? 0) > 0, JSON.stringify(cache));
+
+  /* ── 7. disconnect ───────────────────────────────────────────────────── */
   check('open the account menu', await clickText('header button[aria-haspopup="menu"]', wallet.publicKey.toBase58().slice(0, 4)));
   await wait(150);
   check('disconnect', await clickText('[role="menu"] button', 'Disconnect'));
@@ -366,7 +477,7 @@ try {
   check('nav returns to "Connect wallet"', gone);
 
   if (logs.length) { console.log('\nconsole errors:'); for (const l of [...new Set(logs)].slice(0, 6)) console.log('  ' + l.slice(0, 200)); }
-  console.log(`\n${passed} passed, ${failed} failed`);
+  console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
   process.exitCode = failed ? 1 : 0;
 } finally {
   chrome.kill();
