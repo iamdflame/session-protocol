@@ -487,13 +487,25 @@ function Ledger({ rows, error, dec, label }: {
       ) : (
         <ol className={s.events}>
           {rows.slice(0, 20).map(r => {
-            // A transaction may emit several events — a settle that also
-            // halted, a fill that paid an incentive. Each gets its own line;
-            // one with none at all is still shown, because a transaction that
-            // touched the vault and said nothing is itself worth seeing.
+            /* A transaction may emit several events — a settle that also
+               halted, a fill that paid an incentive. Each gets its own line;
+               one with none at all is still shown, because a transaction that
+               touched the vault and said nothing is itself worth seeing.
+
+               But only once it has actually been read. `events: []` is the
+               same empty array whether the program emitted nothing or the
+               endpoint never answered, and `r.decoded` is the only thing that
+               tells them apart. Reporting the second as the first made a
+               throttled read look like a page of transactions that did
+               nothing — on a ledger whose entire claim is that it reports the
+               chain rather than this site's guess about it. */
             const lines = r.events.length
               ? r.events.map(ev => ({ kind: kindOf(ev.name), text: describe(ev, dec, cl => label(cl as ShareClass)) }))
-              : [{ kind: r.failed ? 'halt' : 'admin', text: r.failed ? 'Reverted — nothing was written' : 'Touched the vault without emitting an event' }];
+              : [r.failed
+                  ? { kind: 'halt', text: 'Reverted — nothing was written' }
+                  : r.decoded
+                    ? { kind: 'admin', text: 'Touched the vault without emitting an event' }
+                    : { kind: 'pending', text: 'Not read yet — the endpoint has not served this transaction' }];
             return lines.map((l, i) => (
               <li key={`${r.signature}-${i}`} className={s.event} data-kind={l.kind}>
                 <span className={s.eventKind}>{l.kind}</span>

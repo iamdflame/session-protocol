@@ -256,3 +256,8 @@
 @media (max-width: 640px) {
   .event { grid-template-columns: 1fr; gap: var(--sp-1); padding: var(--sp-4) var(--sp-4); }
 }
+
+/* Not "nothing happened" — "not read". Kept dim rather than coloured, so an
+   unread row never competes with a real event for attention. */
+.event[data-kind='pending'] .eventKind { color: var(--ink-3); }
+.event[data-kind='pending'] .eventDetail { color: var(--ink-3); font-style: italic; }

@@ -829,11 +829,39 @@ export function useLedger(vault: string | null, limit = 20) {
               .catch(() => null);
           }
           if (!txs) { if (live) setHistory('partial'); break; }
-          txs.forEach((t, j) => eventCache.set(chunk[j], eventsFromLogs(t?.meta?.logMessages)));
+
+          /* Key each result by the signature the transaction itself carries,
+             never by its position in the batch.
+             
+             This block used to do `eventCache.set(chunk[j], …)`, which is
+             correct only while the endpoint returns a batch in the order it
+             was asked for. When it does not, every event in the chunk is
+             filed under a neighbour's signature — and the ledger, whose whole
+             claim is that it is the chain's account and not the site's, shows
+             a mint described as a redeem. It was visibly wrong on devnet:
+             two loads of the same page attributed the same four transactions
+             differently.
+             
+             A result with no signature, or none at all, is left *undecoded*
+             rather than cached as empty. `events: []` means "the program
+             emitted nothing", which is a real and different thing from "this
+             was never read" — and caching the second as the first is how
+             fifteen unread transactions came to read as fifteen that touched
+             the vault and said nothing. */
+          for (const t of txs) {
+            const sig = t?.transaction?.signatures?.[0];
+            if (!sig) continue;
+            eventCache.set(sig, eventsFromLogs(t.meta?.logMessages));
+          }
           saveCache();
           if (live) {
             setRows(build());
-            if (i + STEP >= missing.length) setHistory('complete');
+            // Ask the cache, not the loop counter: a batch that came back
+            // short leaves signatures undecoded, and the loop finishing is
+            // not the same as the history being whole.
+            const whole = sigs.every(x => eventCache.has(x.signature));
+            if (whole) setHistory('complete');
+            else if (i + STEP >= missing.length) setHistory('partial');
           }
           if (i + STEP < missing.length) await nap(800);
         }
