@@ -342,9 +342,15 @@ export default function Landing() {
                     <h3 className={s.chartTitle}>SPYx, decomposed</h3>
                     <p className={s.chartSub}>
                       One asset, split into the two sessions and compounded separately.
+                      SPYx is the deepest pool in the set, so it is the least noisy
+                      illustration — it has no vault. The one you can open is NVDAx.
                     </p>
                   </div>
-                  <Link to="/markets/SPYx" className={s.chartLink}>Open vault</Link>
+                  {/* The chart is the clearest decomposition; the link is the only
+                      vault on this page anyone can actually open. Labelling the
+                      SPYx page "Open vault" was a button promising a thing that is
+                      not there — that page runs the settlement locally and says so. */}
+                  <Link to="/markets/NVDAx" className={s.chartLink}>Open the live vault</Link>
                 </header>
                 {hero.status === 'ready' ? (
                   <CurveChart points={hero.data.points} height={268} />

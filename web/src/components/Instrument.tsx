@@ -23,6 +23,16 @@ export function Instrument({ m, d }: { m: Devnet; d: ChainState }) {
   const powers = issuer ? issuerPowers(issuer) : [];
   const inventoryUi = toUi(v.ownedUnderlying, ud, d.uiMultiplier);
   const balanceUi = toUi(d.balanceUnderlying, ud, d.uiMultiplier);
+  /* The program can catch a calendar that disagrees with the market, by
+     noticing the equity feed has gone quiet the way a feed does when its
+     exchange shuts. That needs a feed with an exchange. Devnet sponsors none,
+     so this vault points at a crypto feed, which trades through the night and
+     can therefore never be silent — the check is compiled in and tested, and
+     on this instance it can only ever pass.
+
+     Read from the manifest rather than hardcoded: repoint the vault at a real
+     equity feed and every sentence below corrects itself. */
+  const bellFeedSleeps = !/^Crypto\./i.test(m.equityFeed);
   const nextMult = issuer?.scaledUi && issuer.scaledUi.newMultiplierEffectiveTs > d.fetchedAt ? issuer.scaledUi : null;
 
   return (
@@ -35,7 +45,9 @@ export function Instrument({ m, d }: { m: Devnet; d: ChainState }) {
       <p className={s.lede}>
         {isEvent
           ? <>An <strong>event session</strong>: the classes are NOW and THEN, the boundary is the next print or a premium divergence, and the detector is posted by the operator — there is no Pyth feed for a PreStock.</>
-          : <>An <strong>equity session</strong>: NYSE hours from the calendar, cross-checked against Pyth&rsquo;s US-equity feed going quiet at the bell.</>}
+          : bellFeedSleeps
+            ? <>An <strong>equity session</strong>: NYSE hours from the calendar, cross-checked against Pyth&rsquo;s US-equity feed going quiet at the bell.</>
+            : <>An <strong>equity session</strong>: NYSE hours from the calendar. <strong>On this instance the calendar is the only clock</strong> — the cross-check below needs a feed that sleeps, and this one does not.</>}
       </p>
 
       <dl className={s.rows}>
@@ -73,7 +85,11 @@ export function Instrument({ m, d }: { m: Devnet; d: ChainState }) {
           <dd>
             {isEvent
               ? <><span className="mono">operator-posted</span><span className={s.sub}>premium vs mark, flips THEN at {(v.maxPremiumBps / 100).toFixed(1)}%</span></>
-              : <><span className="mono">{m.equityFeed}</span><span className={s.sub}>quiet for {Math.round(v.equityQuietSecs / 60)} min = closed</span></>}
+              : <><span className="mono">{m.equityFeed}</span><span className={s.sub} data-standin={!bellFeedSleeps || undefined}>
+                  {bellFeedSleeps
+                    ? <>quiet for {Math.round(v.equityQuietSecs / 60)} min = closed</>
+                    : <>a crypto feed never goes quiet, so this check can only pass — {Math.round(v.equityQuietSecs / 60)} min of silence would mean closed, and there is never silence</>}
+                </span></>}
           </dd>
         </div>
         <div>

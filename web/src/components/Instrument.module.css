@@ -48,3 +48,7 @@
 @media (max-width: 480px) {
   .rows > div { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* A sub-line describing something that stands in, rather than something that
+   runs. Same treatment as the cluster chip, so the two read as one claim. */
+.sub[data-standin] { color: var(--warn-ink, var(--ink-3)); }

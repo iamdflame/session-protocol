@@ -191,8 +191,9 @@ export default function HowItWorks() {
             The program is deployed on Solana devnet as{' '}
             <a className={s.statusLink} href="https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet" target="_blank" rel="noreferrer">
               <span className="mono">8gWC37…KqKZ</span> ↗
-            </a>, with one initialised vault. Two things stand in on devnet and
-            both are about what devnet does not have. Here is the line.
+            </a>, and one token is live on <strong>mainnet</strong>. What stands in
+            on devnet is about what devnet does not have — and one thing below has
+            simply never been exercised. Here is the line.
           </p>
         </Reveal>
 
@@ -205,8 +206,38 @@ export default function HowItWorks() {
               </h3>
               <ul>
                 <li>The program itself, on devnet — every instruction, every check</li>
-                <li>One vault: mint and redeem from your wallet, settlement at every bell, funding, the handoff, a halt on bad debt</li>
+                <li>
+                  <strong>Two vaults.</strong>{' '}
+                  <a className={s.statusLink} href="/markets/NVDAx">NVDAx</a> settles on
+                  NYSE hours;{' '}
+                  <a className={s.statusLink} href="/markets/OPENAI">OPENAI</a> has no
+                  exchange session at all and settles on the next print or a premium that
+                  runs. Mint and redeem from your wallet, funding, the handoff, a halt on
+                  bad debt — the same program for both.
+                </li>
+                <li>
+                  <strong>A bell that actually settled.</strong> Exposure flipped, and the
+                  handoff was filled by an arbitrageur paid 25 bp for bringing the stock —
+                  which took DAY&rsquo;s NAV down by exactly that.
+                </li>
+                <li>
+                  <strong>Anyone can open one.</strong>{' '}
+                  <code className="mono">initialize_vault</code> takes no permission, and{' '}
+                  <a className={s.statusLink} href="/list">/list</a> is that instruction from
+                  your own wallet. The catalog finds new vaults by scanning the program.
+                </li>
+                <li>
+                  <strong><code className="mono">$BELL</code>, on mainnet</strong> — the
+                  keeper&rsquo;s token, quoted in real NVDAx rather than SOL.{' '}
+                  <a className={s.statusLink} href="/bell">What it cannot do</a> is the half
+                  worth reading.
+                </li>
+                <li>
+                  A <strong>Meteora DAMM v2 pool</strong> for <code className="mono">NVDA.DAY</code>{' '}
+                  against the quote, on devnet — so a class has somewhere to trade.
+                </li>
                 <li>The mark it settles on: a Pyth price account, owner-checked and staleness-checked on chain</li>
+                <li>The OPENAI reading: the live mark and executable price from prestocks.com, posted on chain every fifteen minutes and settled against</li>
                 <li>The session calendar, shared with the program</li>
                 <li>Live marks from Jupiter for the other assets, polled every 20 seconds</li>
                 <li>
@@ -233,24 +264,48 @@ export default function HowItWorks() {
               </h3>
               <ul>
                 <li>
-                  The devnet vault&rsquo;s underlying and quote are test mints — devnet has
-                  no xStocks and no USDC — and its mark is Pyth&rsquo;s{' '}
+                  The devnet vaults&rsquo; underlying and quote are test mints — devnet has
+                  no xStocks and no USDC — and the mark is Pyth&rsquo;s{' '}
                   <code className="mono">SOL/USD</code>, because the NVDAX feed is not
                   sponsored there. On mainnet the feed is{' '}
-                  <code className="mono">Crypto.NVDAX/USD</code> and nothing else changes.
+                  <code className="mono">Crypto.NVDAX/USD</code>.
+                </li>
+                <li>
+                  <strong>The closing-bell cross-check does not run on this instance.</strong>{' '}
+                  The program can catch a calendar that disagrees with the market, by
+                  noticing that the equity feed has gone quiet the way a feed does when its
+                  exchange shuts. Devnet sponsors no equity feed, so this vault&rsquo;s is{' '}
+                  <code className="mono">Crypto.BTC/USD</code> — which never sleeps, and
+                  therefore never goes quiet. The check is compiled in and tested; here it
+                  can only ever pass. <strong>On this instance the calendar is the only
+                  clock.</strong>
+                </li>
+                <li>
+                  <strong>The auction has never run.</strong> The residual can be offered at
+                  one price to everyone for a window after the bell instead of going to
+                  whoever arrives first — the code is there, the window is set, and no
+                  auction account exists on this program. Nothing has needed one yet.
+                </li>
+                <li>
+                  <strong>Recap is not required here.</strong>{' '}
+                  <code className="mono">require_verified_recap</code> is off on both
+                  vaults, so replaying missed boundaries does not have to carry a Pyth
+                  update per boundary. On mainnet it is on, and the operator posts the
+                  print for each bell being replayed.
                 </li>
                 <li>
                   The devnet market maker: an operator key fills handoffs from its own
                   inventory. On mainnet that is anyone who wants the incentive.
                 </li>
                 <li>
-                  The other 25 assets have no vault on chain yet. Their pages run the same
+                  The other 25 assets have no vault on chain. Their pages run the same
                   settlement code locally, with balances in your browser, and say so.
                 </li>
               </ul>
               <p className={s.statusNote}>
                 Mainnet needs a Hermes key to post the xStock feeds, a funded authority,
-                and the local-validator initialisation run described in the runbook.
+                and the local-validator initialisation run described in the runbook. The
+                program account alone is 5.95 SOL settled, 11.9 at the peak of an upgrade.
               </p>
             </div>
           </Reveal>

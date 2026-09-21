@@ -41,17 +41,29 @@ const solscan = (kind: 'tx' | 'token' | 'account', id: string) => `https://solsc
 export default function Bell() {
   const [rec, setRec] = useState<BellRecord | null | undefined>(undefined);
   const devnets = useDevnets();
-  const vault = devnets?.[0] ?? null;
-  const { rows } = useLedger(vault?.vault ?? null, 12);
+  /* Both vaults, because the keeper keeps both and they are kept differently:
+     the equity one is cranked against a calendar, the event one is a reading
+     posted and then settled against. Reading only the first manifest made the
+     card promise "detector postings" from a vault that has no detector. */
+  const equity = devnets?.[0] ?? null;
+  const event = devnets?.[1] ?? null;
+  const eqLedger = useLedger(equity?.vault ?? null, 12);
+  const evLedger = useLedger(event?.vault ?? null, 12);
 
   useEffect(() => {
     fetch('/bell.json').then(r => (r.ok ? r.json() : null)).then(setRec).catch(() => setRec(null));
   }, []);
 
+  const rows = eqLedger.rows === null && evLedger.rows === null
+    ? null
+    : [...(eqLedger.rows ?? []), ...(evLedger.rows ?? [])];
+
   // What the keeper has actually done, as opposed to what it says it does.
-  const keeperRows = (rows ?? []).filter(r =>
-    r.events.some(e => ['BoundarySettled', 'JumpSettled', 'HandoffFilled', 'AuctionCleared', 'DetectorPosted'].includes(e.name)),
-  );
+  const KEEPER_EVENTS = ['BoundarySettled', 'JumpSettled', 'HandoffFilled', 'AuctionCleared', 'DetectorPosted'];
+  const keeperRows = (rows ?? [])
+    .filter(r => r.events.some(e => KEEPER_EVENTS.includes(e.name)))
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+    .slice(0, 14);
 
   return (
     <div className={s.page}>
@@ -161,16 +173,34 @@ export default function Bell() {
           <section className={`card ${s.card}`} aria-label="What the keeper has done">
             <h2 className={s.cardTitle}>What it has actually done</h2>
             <p className={s.cardSub}>
-              Settlements, fills, auctions and detector postings on{' '}
-              {vault ? <a className={s.addr} href={explorerAddr(vault.vault)} target="_blank" rel="noreferrer">{short(vault.vault, 4)} ↗</a> : 'the live vault'}.
+              Settlements, fills, auctions and detector postings across both vaults —{' '}
+              {equity ? <a className={s.addr} href={explorerAddr(equity.vault)} target="_blank" rel="noreferrer">{short(equity.vault, 4)} ↗</a> : 'the equity vault'}
+              {' '}and{' '}
+              {event ? <a className={s.addr} href={explorerAddr(event.vault)} target="_blank" rel="noreferrer">{short(event.vault, 4)} ↗</a> : 'the event vault'}.
               Read from the chain, not from a log this site keeps.
             </p>
+            {/* The wallet named above is the token's identity on mainnet. The key
+                that signs these transactions is the devnet operator, and saying
+                so is the difference between a ledger and a claim: every act here
+                is attributable, and it is not attributable to $BELL's wallet. */}
+            {equity && (
+              <p className={s.note}>
+                Signed on devnet by the operator key{' '}
+                <a className={`mono ${s.addr}`} href={explorerAddr(equity.operator)} target="_blank" rel="noreferrer">
+                  {short(equity.operator, 4)} ↗
+                </a>, not by the mainnet wallet above — <code className="mono">$BELL</code> is the
+                token, and this is the cluster its vaults are on. Settlement takes no signer at
+                all, so any of these could have been sent by anyone; the fills could not, because
+                a fill spends the filler&rsquo;s own inventory.
+              </p>
+            )}
             {rows === null ? (
               <div className={s.skel}>{Array.from({ length: 3 }, (_, i) => <div key={i} className="skeleton" style={{ height: 30 }} />)}</div>
             ) : keeperRows.length === 0 ? (
               <p className={s.note}>
-                Nothing yet. The next bell is the first thing it will do — the vault was opened
-                recently and no boundary has elapsed since.
+                Nothing yet on either vault in the last few transactions. Settlement is
+                permissionless, so an empty list here means nothing has been due — not that
+                nobody could have.
               </p>
             ) : (
               <ol className={s.acts}>
@@ -181,7 +211,7 @@ export default function Bell() {
                       {r.at ? <><span className="num">{etClock(r.at)}</span> <span className={s.sub}>{etDate(r.at)}</span></> : 'pending'}
                     </span>
                     <span className={s.actText}>
-                      {describe(e, vault ? 6 : 6)}
+                      {describe(e, 6)}
                       <a className={`mono ${s.sig}`} href={explorer(r.signature)} target="_blank" rel="noreferrer"> {short(r.signature, 4)} ↗</a>
                     </span>
                   </li>

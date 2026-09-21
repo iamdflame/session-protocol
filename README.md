@@ -249,12 +249,23 @@ parked" on it comes from the same calendar module the program settles on.
 
 - **Landing** — a live 24-hour session clock, the split, an interactive handoff
   you can drag, the finding told honestly, and what it costs us.
-- **Markets** — all 26 assets, live Jupiter prices, both class returns.
+- **Markets** — all 26 assets, live Jupiter prices, both class returns, and
+  above them the vaults that exist, found by scanning the program rather than
+  by a list this repository keeps. Curated ones show by default; the rest are
+  one click away and settle identically.
 - **Vault** — for NVDAx, the real thing on devnet: connect a wallet, get test
-  quote from the faucet, mint into the parked class, watch the health panel
-  run the SDK's `evaluate()` on chain state. For the other 25, the same
+  quote from the faucet, mint into the parked class, watch the health panel run
+  the SDK's `evaluate()` on chain state, and read your statement against what
+  the same money would have made held undivided. For OPENAI, the same program
+  on an asset with no exchange session at all. For the other 25, the same
   settlement code running locally, and it says so.
-- **Research** — the study as a research house would present it.
+- **List** — open a vault yourself. `initialize_vault` takes no permission; the
+  page is that instruction from your own wallet.
+- **Keeper** — `$BELL` on mainnet, quoted in real NVDAx, and the ledger of what
+  it has actually done on both vaults. The half worth reading is what it cannot
+  do.
+- **Research** — the study as a research house would present it, including the
+  40-seeded-year adversarial simulation and the halt rate it produced.
 - **How it works** — the cycle, a six-week calendar drawn from the real holiday
   rules, the status line between real and simulated, the failure modes.
 

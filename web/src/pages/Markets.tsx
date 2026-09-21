@@ -28,12 +28,24 @@ const FILTERS: { key: Filter; label: string; hint: string }[] = [
  * time. At the page root it re-rendered twenty-six rows and twenty-six
  * sparklines once a second to move a countdown.
  */
-function LiveLead() {
+/**
+ * Two corrections live in this paragraph, and both were the same mistake:
+ * saying "every vault" about a table that is mostly not vaults.
+ *
+ * Of the assets below, two have a vault on chain. The rest have real history
+ * and real prices and no vault at all — their pages run the same settlement
+ * in the browser and say so. And of the two that exist, only the equity one
+ * has a bell: OPENAI is a private company, its boundary is the next print or
+ * a premium that runs, and "every vault hands over at once" was never true of
+ * it. The countdown is an NYSE countdown, so it is described as one.
+ */
+function LiveLead({ listed }: { listed: number }) {
   const sess = useSession();
+  const onTheBell = Math.max(0, listed - 1);   // the event vault keeps its own time
   if (!sess) {
     return (
       <p className={`lead ${s.lead}`}>
-        Both classes of every vault, priced live, with the session each one is earning.
+        Both classes of every asset, priced live, with the session each one is earning.
       </p>
     );
   }
@@ -42,9 +54,13 @@ function LiveLead() {
       <strong className={s.holderInline} data-holder={sess.holder.toLowerCase()}>
         {sess.holder}
       </strong>{' '}
-      is carrying the exposure across all of these right now.
-      In {countdown(sess.until)} every vault hands over at once — the
-      boundary is the same bell for all of them.
+      is carrying the exposure across every asset on this exchange&rsquo;s clock right now.
+      In {countdown(sess.until)} it hands over —{' '}
+      {onTheBell === 1
+        ? <>one bell, and the one vault on chain that settles on it.</>
+        : <>one bell, and all {onTheBell} vaults on chain that settle on it at once.</>}{' '}
+      <Link className={s.leadLink} to="/markets/OPENAI">OPENAI keeps its own time</Link>, because
+      it has no exchange to keep.
     </p>
   );
 }
@@ -108,7 +124,7 @@ export default function Markets() {
         <div className={s.headCopy}>
           <p className="eyebrow">Markets</p>
           <h1 className={`display ${s.title}`}>Every vault, and who holds it.</h1>
-          <LiveLead />
+          <LiveLead listed={listed.size} />
         </div>
         <SessionClock size={clockSize} compact />
       </header>

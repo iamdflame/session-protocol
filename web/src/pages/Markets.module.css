@@ -245,3 +245,8 @@ td.pool { color: var(--ink-3); }
   border: 1px solid var(--line);
   color: var(--ink-3);
 }
+
+/* The one qualifier in the lead that has to be clickable: the vault that is
+   not on this clock. */
+.leadLink { color: inherit; border-bottom: 1px solid var(--line-strong); }
+.leadLink:hover { border-bottom-color: currentColor; }
