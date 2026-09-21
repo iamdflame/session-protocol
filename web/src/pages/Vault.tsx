@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CurveChart } from '@/components/charts/CurveChart';
 import { SessionClock } from '@/components/SessionClock';
-import { PreLaunch } from '@/components/PreLaunch';
+import { NotListed } from '@/components/NotListed';
 import { Trade } from '@/components/Trade';
 import { HealthPanel } from '@/components/HealthPanel';
 import { ChainVault } from '@/components/ChainVault';
-import { useDevnetVaultFor } from '@/lib/chain';
+import { useDevnetVaultFor, useDevnets } from '@/lib/chain';
 import { useSession, useClockSize, countdown, etClock, etDate, Session } from '@/lib/session';
 import { sessionAt } from '@sdk/calendar.ts';
 import { useCurve, useMarkets, useQuotes, fmtUsd, fmtPct, type Asset } from '@/lib/data';
@@ -69,6 +69,7 @@ export default function Vault() {
   const clockSize = useClockSize(196, 72);
   // undefined while the manifest loads; null when this symbol has no vault on chain.
   const devnet = useDevnetVaultFor(symbol);
+  const allVaults = useDevnets();
 
   // Restore or open the vault, then run every boundary it slept through. A
   // browser that was closed over a weekend comes back to three settlements,
@@ -196,7 +197,8 @@ export default function Vault() {
         </div>
       </header>
 
-      <PreLaunch />
+      <NotListed symbol={asset.symbol} liveSymbols={(allVaults ?? []).map(v => v.symbol)} />
+
 
       {/* ── the two classes ─────────────────────────────────────────────── */}
       <section className={`shell ${s.classes}`} aria-label="Share classes">

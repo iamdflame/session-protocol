@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useDevnets } from '@/lib/chain';
 import s from './PreLaunch.module.css';
 
 const KEY = 'session.devnet-notice.dismissed';
@@ -13,6 +14,10 @@ const KEY = 'session.devnet-notice.dismissed';
  * Said once, plainly, and dismissable — nobody needs to read it twice.
  */
 export function PreLaunch() {
+  // Counted, not asserted: this line was written when there was one vault and
+  // went stale the day there were two.
+  const vaults = useDevnets();
+  const live = vaults === undefined ? null : vaults.length;
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -35,11 +40,12 @@ export function PreLaunch() {
       <div className={s.bar} role="note">
         <span className={s.dot} aria-hidden="true" />
         <p className={s.text}>
-          <strong>Devnet.</strong> The program is live on Solana devnet with one vault —
-          the row marked <em>devnet</em> mints and redeems on chain from your wallet. The
-          other assets have no vault yet; their pages run the same{' '}
-          <code className="mono">settle()</code> locally. Prices, the calendar and every
-          historical figure are real throughout.{' '}
+          <strong>Devnet.</strong> The program is live on Solana devnet with{' '}
+          {live === null ? 'a vault' : live === 1 ? 'one vault' : `${live} vaults`} — the rows
+          marked <em>devnet</em> mint and redeem on chain from your wallet. The other assets
+          have no vault; their pages say so and run the same{' '}
+          <code className="mono">settle()</code> in the browser. Prices, the calendar and
+          every historical figure are real throughout.{' '}
           <Link to="/how-it-works#status" className={s.link}>What is and is not live</Link>
         </p>
         <button className={s.close} onClick={dismiss} aria-label="Dismiss this notice">
