@@ -117,4 +117,12 @@ pub enum SessionError {
     FillsPaused,
     #[msg("token program does not match the one this vault's accounts live under")]
     WrongTokenProgram,
+    #[msg("this vault is not an event session")]
+    NotEventSession,
+    #[msg("the detector reading is too old to act on")]
+    DetectorStale,
+    #[msg("an event session needs its schedule and detector accounts")]
+    MissingEventAccounts,
+    #[msg("account belongs to a different vault")]
+    WrongVault,
 }

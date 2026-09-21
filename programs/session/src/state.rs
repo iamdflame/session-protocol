@@ -208,6 +208,91 @@ pub struct Vault {
     /// The program that owns the share mints. Recorded so a client never has
     /// to guess which ATA derivation applies.
     pub share_token_program: Pubkey,
+
+    // ── the registry ─────────────────────────────────────────────────────
+    /// Whoever paid to list this vault. Anyone may; the authority reaches
+    /// this vault's tunables and nothing else.
+    pub creator: Pubkey,
+    pub created_at: i64,
+    /// Whether the desk shows it by default. The chain is permissionless and
+    /// the shelf is curated — both are true at once, the way a token mint is
+    /// permissionless and a wallet's verified list is not.
+    pub curated: bool,
+}
+
+/// The one account the protocol has, and all it holds is who curates.
+#[account]
+#[derive(Debug, InitSpace)]
+pub struct Protocol {
+    pub version: u8,
+    pub bump: u8,
+    /// The key that may flip `Vault::curated`. It cannot halt a vault, move
+    /// a token, or change a parameter.
+    pub curator: Pubkey,
+    pub vault_count: u64,
+}
+
+impl Protocol {
+    pub const SEED: &'static [u8] = b"protocol";
+    pub const SIZE: usize = 8 + Self::INIT_SPACE + 32;
+}
+
+/// The prints an event vault is watching. Absent for an equity vault.
+#[account]
+#[derive(Debug, InitSpace)]
+pub struct EventSchedule {
+    pub version: u8,
+    pub bump: u8,
+    pub vault: Pubkey,
+    /// Fixed slots rather than a growing vector: an account that cannot be
+    /// resized cannot be resized *wrongly* mid-life, and eight prints is more
+    /// than any name has scheduled at once.
+    pub events: [ScheduledEvent; 8],
+    pub updated_at: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, InitSpace)]
+pub struct ScheduledEvent {
+    /// Zero means the slot is empty.
+    pub ts: i64,
+    pub window_secs: u32,
+    /// 0 tender, 1 round, 2 valuation, 3 other. For the UI; never acted on.
+    pub kind: u8,
+}
+
+impl EventSchedule {
+    pub const SEED: &'static [u8] = b"schedule";
+    pub const SIZE: usize = 8 + Self::INIT_SPACE + 32;
+}
+
+/// The last reading the detector authority posted for an event vault: the
+/// issuer's mark and what the token actually executes at.
+///
+/// This is the honest weak point of an event session. An equity vault reads
+/// Pyth, whose price anybody can verify against the same account; here there
+/// is no feed for a pre-IPO token, so an operator posts what it sees. The
+/// program bounds how stale that may be and records who posted it, and the
+/// vault page says so in the first viewport rather than in a footnote.
+#[account]
+#[derive(Debug, InitSpace)]
+pub struct Detector {
+    pub version: u8,
+    pub bump: u8,
+    pub vault: Pubkey,
+    pub poster: Pubkey,
+    /// The issuer's mark, WAD-scaled.
+    pub mark: u128,
+    /// What the token executes at, same scale.
+    pub executable: u128,
+    pub ts: i64,
+    /// How many readings have been posted. A counter an observer can watch
+    /// for a poster who stops.
+    pub posts: u64,
+}
+
+impl Detector {
+    pub const SEED: &'static [u8] = b"detector";
+    pub const SIZE: usize = 8 + Self::INIT_SPACE + 32;
 }
 
 impl Vault {
@@ -411,6 +496,32 @@ pub struct VaultResumed {
 /// A settlement whose move exceeded `max_move_bps`. It was booked — that is
 /// the product — and continuous fills are paused while the market absorbs it.
 #[event]
+pub struct VaultCurated {
+    pub vault: Pubkey,
+    pub curator: Pubkey,
+    pub curated: bool,
+    pub ts: i64,
+}
+
+#[event]
+pub struct ScheduleSet {
+    pub vault: Pubkey,
+    pub authority: Pubkey,
+    pub events: u8,
+    pub ts: i64,
+}
+
+#[event]
+pub struct DetectorPosted {
+    pub vault: Pubkey,
+    pub poster: Pubkey,
+    pub mark: u128,
+    pub executable: u128,
+    pub premium_bps: u32,
+    pub ts: i64,
+}
+
+#[event]
 pub struct JumpSettled {
     pub vault: Pubkey,
     pub ts: i64,
@@ -522,6 +633,9 @@ mod layout {
             recap_count: 3,
             detector_authority: Pubkey::new_from_array([11u8; 32]),
             share_token_program: Pubkey::new_from_array([12u8; 32]),
+            creator: Pubkey::new_from_array([13u8; 32]),
+            created_at: 1_774_000_000,
+            curated: true,
         };
 
         let mut body = Vec::new();

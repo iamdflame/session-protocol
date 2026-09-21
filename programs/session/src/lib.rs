@@ -46,6 +46,7 @@ use anchor_spl::token_2022_extensions::token_metadata::{
 
 pub mod calendar;
 pub mod errors;
+pub mod event;
 pub mod fixed;
 pub mod funding;
 pub mod issuer;
@@ -179,6 +180,12 @@ pub mod session {
         // Until a detector key is set, the authority is it.
         v.detector_authority = ctx.accounts.authority.key();
         v.share_token_program = ctx.accounts.share_token_program.key();
+        v.creator = ctx.accounts.authority.key();
+        v.created_at = now;
+        // Listing is permissionless; being *shown* is not. A new vault is
+        // uncurated until a curator says otherwise, and the chain does not
+        // care either way.
+        v.curated = false;
 
         v.last_mark = oracle::check_mark(
             &mark_q,
@@ -416,32 +423,65 @@ pub mod session {
             return halt_and_succeed(&mut ctx.accounts.vault, HaltReason::IssuerAction, now, c as i64);
         }
 
-        // The calendar proposes; the equity feed disposes. A feed that has gone
-        // quiet during a nominal session means an unencoded holiday or a halt.
-        let equity_feed = ctx.accounts.vault.equity_feed_id;
-        // No posted-slot bound on the equity feed: it is *expected* to sit
-        // unwritten for seventeen hours a day. Its age is the signal.
-        let equity_q = read_quote(&ctx.accounts.equity_price_update, &equity_feed)?.quote;
         let guards = ctx.accounts.vault.guards();
-        let calendar = session_at(now);
-        let effective = effective_session(calendar, equity_q.publish_time, now, &guards);
 
-        // A silent equity-feed outage would otherwise let NIGHT earn through
-        // what should be DAY sessions, indefinitely and invisibly.
-        if calendar == Session::Open && effective == Session::Closed {
-            let quiet = now.saturating_sub(equity_q.publish_time);
-            if quiet > ctx.accounts.vault.max_unexpected_closed_secs as i64 {
-                return halt_and_succeed(
-                    &mut ctx.accounts.vault, HaltReason::Inconsistent, now, quiet,
-                );
+        // Two clocks, one program. An equity session reads the calendar and
+        // cross-checks it against Pyth's US-equity feed going quiet; an event
+        // session has neither, and reads a schedule of prints and a posted
+        // divergence instead. Everything after this point is identical.
+        let (effective, decision) = if ctx.accounts.vault.is_event() {
+            let (Some(schedule), Some(detector)) =
+                (ctx.accounts.schedule.as_ref(), ctx.accounts.detector.as_ref())
+            else {
+                return Err(SessionError::MissingEventAccounts.into());
+            };
+            require_keys_eq!(schedule.vault, ctx.accounts.vault.key(), SessionError::WrongVault);
+            require_keys_eq!(detector.vault, ctx.accounts.vault.key(), SessionError::WrongVault);
+
+            let events: Vec<event::Event> = schedule
+                .events
+                .iter()
+                .map(|e| event::Event { ts: e.ts, window_secs: e.window_secs, kind: e.kind })
+                .collect();
+            let d = event::Detector { mark: detector.mark, executable: detector.executable, ts: detector.ts };
+            let v = &ctx.accounts.vault;
+            let eff = event::session_for(&events, &d, now, v.max_premium_bps).map_err(map_event)?;
+            let dec = event::decide_event(
+                &events, &d, v.last_session(), v.last_boundary_ts, now,
+                v.max_premium_bps, v.equity_quiet_secs,
+            )
+            .map_err(map_event)?;
+            (eff, dec)
+        } else {
+            // The calendar proposes; the equity feed disposes. A feed that has
+            // gone quiet during a nominal session means an unencoded holiday
+            // or a halt.
+            let equity_feed = ctx.accounts.vault.equity_feed_id;
+            // No posted-slot bound on the equity feed: it is *expected* to sit
+            // unwritten for seventeen hours a day. Its age is the signal.
+            let equity_q = read_quote(&ctx.accounts.equity_price_update, &equity_feed)?.quote;
+            let calendar = session_at(now);
+            let eff = effective_session(calendar, equity_q.publish_time, now, &guards);
+
+            // A silent equity-feed outage would otherwise let NIGHT earn
+            // through what should be DAY sessions, indefinitely and invisibly.
+            if calendar == Session::Open && eff == Session::Closed {
+                let quiet = now.saturating_sub(equity_q.publish_time);
+                if quiet > ctx.accounts.vault.max_unexpected_closed_secs as i64 {
+                    return halt_and_succeed(
+                        &mut ctx.accounts.vault, HaltReason::Inconsistent, now, quiet,
+                    );
+                }
             }
-        }
+            let dec = machine::decide(
+                ctx.accounts.vault.last_session(),
+                ctx.accounts.vault.last_boundary_ts,
+                now,
+            );
+            (eff, dec)
+        };
 
-        let boundary_ts = match machine::decide(
-            ctx.accounts.vault.last_session(),
-            ctx.accounts.vault.last_boundary_ts,
-            now,
-        ) {
+        let boundary_ts = match decision {
             Decision::UpToDate => return Err(SessionError::NoBoundary.into()),
             Decision::Stale { missed } => {
                 return halt_and_succeed(
@@ -801,6 +841,118 @@ pub mod session {
             )?;
         }
         emit!(SurplusSkimmed { vault: v.key(), underlying: u_surplus, quote: q_surplus });
+        Ok(())
+    }
+
+    /// Create the protocol account. Once, by whoever runs the desk.
+    pub fn init_protocol(ctx: Context<InitProtocol>) -> Result<()> {
+        let p = &mut ctx.accounts.protocol;
+        p.version = VAULT_VERSION;
+        p.bump = ctx.bumps.protocol;
+        p.curator = ctx.accounts.curator.key();
+        p.vault_count = 0;
+        Ok(())
+    }
+
+    /// Show a vault on the desk, or stop showing it.
+    ///
+    /// This is the only thing the curator can do. It moves no tokens, changes
+    /// no parameter and cannot halt anything: a vault the desk refuses to
+    /// list still settles, still mints and still redeems for anyone who has
+    /// its address. The shelf is curated; the chain is not.
+    pub fn curate(ctx: Context<Curate>, on: bool) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let was = ctx.accounts.vault.curated;
+        ctx.accounts.vault.curated = on;
+        if on && !was {
+            ctx.accounts.protocol.vault_count = ctx.accounts.protocol.vault_count.saturating_add(1);
+        } else if !on && was {
+            ctx.accounts.protocol.vault_count = ctx.accounts.protocol.vault_count.saturating_sub(1);
+        }
+        emit!(VaultCurated {
+            vault: ctx.accounts.vault.key(),
+            curator: ctx.accounts.curator.key(),
+            curated: on,
+            ts: now,
+        });
+        Ok(())
+    }
+
+    /// Post the prints an event vault is watching.
+    ///
+    /// Timestamps must be in the future and in order, so a schedule cannot be
+    /// backdated to manufacture a boundary that already paid someone.
+    pub fn set_schedule(ctx: Context<SetSchedule>, events: Vec<ScheduledEvent>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.vault.is_event(), SessionError::NotEventSession);
+        require!(events.len() <= 8, SessionError::BadParameter);
+
+        let mut last = 0i64;
+        for e in &events {
+            require!(e.ts > now, SessionError::BadParameter);
+            require!(e.ts > last, SessionError::BadParameter);
+            require!((60..=30 * 86_400).contains(&e.window_secs), SessionError::BadParameter);
+            last = e.ts;
+        }
+
+        let sched = &mut ctx.accounts.schedule;
+        sched.version = VAULT_VERSION;
+        sched.bump = ctx.bumps.schedule;
+        sched.vault = ctx.accounts.vault.key();
+        sched.events = [ScheduledEvent::default(); 8];
+        for (i, e) in events.iter().enumerate() {
+            sched.events[i] = *e;
+        }
+        sched.updated_at = now;
+
+        emit!(ScheduleSet {
+            vault: sched.vault,
+            authority: ctx.accounts.authority.key(),
+            events: events.len() as u8,
+            ts: now,
+        });
+        Ok(())
+    }
+
+    /// Post a detector reading: the issuer's mark, and what the token
+    /// actually executes at.
+    ///
+    /// Only the vault's detector authority may. There is no Pyth feed for a
+    /// pre-IPO token, so this is the one number in the protocol that rests on
+    /// somebody's word — bounded by staleness, attributed to its poster, and
+    /// said out loud on the vault page.
+    pub fn post_detector(ctx: Context<PostDetector>, mark: u128, executable: u128) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(ctx.accounts.vault.is_event(), SessionError::NotEventSession);
+        require!(mark > 0 && executable > 0, SessionError::BadOraclePrice);
+
+        let d = &mut ctx.accounts.detector;
+        d.version = VAULT_VERSION;
+        d.bump = ctx.bumps.detector;
+        d.vault = ctx.accounts.vault.key();
+        d.poster = ctx.accounts.detector_authority.key();
+        d.mark = mark;
+        d.executable = executable;
+        d.ts = now;
+        d.posts = d.posts.saturating_add(1);
+
+        let premium = event::premium_bps(&event::Detector { mark, executable, ts: now })
+            .map_err(map_event)?;
+        emit!(DetectorPosted {
+            vault: d.vault,
+            poster: d.poster,
+            mark,
+            executable,
+            premium_bps: premium.min(u32::MAX as u128) as u32,
+            ts: now,
+        });
+        Ok(())
+    }
+
+    /// Hand the detector to another key.
+    pub fn set_detector_authority(ctx: Context<Admin>, next: Pubkey) -> Result<()> {
+        require_keys_neq!(next, Pubkey::default(), SessionError::BadParameter);
+        ctx.accounts.vault.detector_authority = next;
         Ok(())
     }
 
@@ -1304,6 +1456,13 @@ fn map_op(e: OpError) -> Error {
     }
 }
 
+fn map_event(e: event::EventError) -> Error {
+    match e {
+        event::EventError::DetectorStale => error!(SessionError::DetectorStale),
+        event::EventError::Overflow => error!(SessionError::MathOverflow),
+    }
+}
+
 fn map_recap(e: recap::RecapError) -> Error {
     use recap::RecapError as R;
     match e {
@@ -1505,6 +1664,12 @@ pub struct SettleBoundary<'info> {
     pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = vault.underlying_vault)]
     pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    // An event session's two clocks. Absent for an equity vault, required
+    // for an event one — the handler refuses rather than guessing.
+    #[account(seeds = [EventSchedule::SEED, vault.key().as_ref()], bump = schedule.bump)]
+    pub schedule: Option<Box<Account<'info, EventSchedule>>>,
+    #[account(seeds = [Detector::SEED, vault.key().as_ref()], bump = detector.bump)]
+    pub detector: Option<Box<Account<'info, Detector>>>,
 }
 
 #[derive(Accounts)]
@@ -1568,6 +1733,64 @@ pub struct SkimSurplus<'info> {
     // Both, because this instruction moves both assets.
     pub underlying_token_program: Interface<'info, TokenInterface>,
     pub quote_token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct InitProtocol<'info> {
+    #[account(init, payer = curator, space = Protocol::SIZE, seeds = [Protocol::SEED], bump)]
+    pub protocol: Box<Account<'info, Protocol>>,
+    #[account(mut)]
+    pub curator: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Curate<'info> {
+    #[account(mut, seeds = [Protocol::SEED], bump = protocol.bump,
+              has_one = curator @ SessionError::Unauthorized)]
+    pub protocol: Box<Account<'info, Protocol>>,
+    pub curator: Signer<'info>,
+    #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+}
+
+// `init_if_needed` on the two accounts below, and why it is safe here.
+//
+// Anchor warns about it because the usual danger is an attacker initialising
+// an account before its owner and choosing its contents, or an owner's second
+// call silently resetting state that mattered. Neither applies:
+//
+//   * both are PDAs seeded by the vault, so there is exactly one address and
+//     nobody can occupy a different one;
+//   * both handlers check the signer against a key stored on the vault before
+//     touching anything, so only the authorised caller reaches them at all;
+//   * both rewrite every field they own on every call, so there is no stale
+//     half-state to inherit — except `Detector::posts`, which is incremented
+//     rather than assigned precisely so a reset would be visible.
+#[derive(Accounts)]
+pub struct SetSchedule<'info> {
+    #[account(has_one = authority @ SessionError::Unauthorized,
+              seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(init_if_needed, payer = authority, space = EventSchedule::SIZE,
+              seeds = [EventSchedule::SEED, vault.key().as_ref()], bump)]
+    pub schedule: Box<Account<'info, EventSchedule>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct PostDetector<'info> {
+    #[account(seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump,
+              constraint = vault.detector_authority == detector_authority.key() @ SessionError::Unauthorized)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut)]
+    pub detector_authority: Signer<'info>,
+    #[account(init_if_needed, payer = detector_authority, space = Detector::SIZE,
+              seeds = [Detector::SEED, vault.key().as_ref()], bump)]
+    pub detector: Box<Account<'info, Detector>>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

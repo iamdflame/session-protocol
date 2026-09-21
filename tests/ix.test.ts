@@ -6,9 +6,9 @@ import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 import {
   DISCRIMINATOR, encodeVaultParams, classByte, hexToBytes, bytesToHex, initializeVaultIx, VAULT_PARAMS_SIZE,
-  recapIx, resolveHaltIx, haltReasonByte,
+  recapIx, resolveHaltIx, haltReasonByte, settleBoundaryIx, setScheduleIx, postDetectorIx, curateIx,
 } from '../sdk/src/ix.ts';
-import { SESSION_EVENT } from '../sdk/src/vault.ts';
+import { SESSION_EVENT, PROGRAM_ID, premiumBps } from '../sdk/src/vault.ts';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -82,6 +82,43 @@ check('a partial set of Pyth updates is refused', bad);
 check('HaltReason encodes by declaration order', haltReasonByte('None') === 0 && haltReasonByte('BadDebt') === 4 && haltReasonByte('Operator') === 6);
 const rh = resolveHaltIx({ vault: k, authority: k, nightMint: k, dayMint: k, underlyingMint: k, underlyingVault: k }, 'MissedBoundary');
 check('resolve_halt carries the acknowledged reason', rh.data.length === 9 && rh.data[8] === 1 && rh.keys.length === 6);
+
+// An absent Option<Account> is the program id: Anchor's own resolver pops it
+// and yields None. Passing nothing at all would make the account list short
+// and error out instead.
+const settleEquity = settleBoundaryIx({
+  vault: k, nightMint: k, dayMint: k, markPriceUpdate: k, equityPriceUpdate: k,
+  underlyingMint: k, underlyingVault: k,
+});
+check('an equity settle passes the program id for both event clocks',
+  settleEquity.keys.length === 9
+  && settleEquity.keys[7].pubkey.equals(PROGRAM_ID)
+  && settleEquity.keys[8].pubkey.equals(PROGRAM_ID));
+const other = new PublicKey(new Uint8Array(32).fill(3));
+const settleEvent = settleBoundaryIx({
+  vault: k, nightMint: k, dayMint: k, markPriceUpdate: k, equityPriceUpdate: k,
+  underlyingMint: k, underlyingVault: k, schedule: other, detector: other,
+});
+check('an event settle passes them', settleEvent.keys[7].pubkey.equals(other));
+
+// set_schedule: Vec<ScheduledEvent> is a u32 count then (i64, u32, u8)
+const sched = setScheduleIx(k, k, k, [
+  { ts: 1_800_000_000, windowSecs: 7_200, kind: 0 },
+  { ts: 1_800_100_000, windowSecs: 3_600, kind: 1 },
+]);
+check('schedule data = 8 + 4 + 2×13 bytes', sched.data.length === 8 + 4 + 26, String(sched.data.length));
+check('the count is a u32', sched.data[8] === 2 && sched.data[9] === 0);
+let unordered = false;
+try { setScheduleIx(k, k, k, [{ ts: 2, windowSecs: 60, kind: 0 }, { ts: 1, windowSecs: 60, kind: 0 }]); } catch { unordered = true; }
+check('out-of-order prints are refused before the chain sees them', unordered);
+
+const det = postDetectorIx(k, k, k, 99_588n, 112_109n);
+check('detector data = 8 + 16 + 16 bytes', det.data.length === 40, String(det.data.length));
+check('premiumBps mirrors the program on the real OPENAI reading',
+  premiumBps({ mark: 99_588n, executable: 112_109n }) === 1_257);
+check('a discount diverges as much as a premium',
+  premiumBps({ mark: 15_330n, executable: 11_968n }) === 2_193);
+check('curate is a single flag', curateIx(k, k, k, true).data.length === 9 && curateIx(k, k, k, false).data[8] === 0);
 
 console.log(failed ? `\n${failed} failed` : '\nall instruction checks passed');
 process.exit(failed ? 1 : 0);

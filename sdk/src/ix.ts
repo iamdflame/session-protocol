@@ -43,6 +43,11 @@ export const DISCRIMINATOR: Record<string, number[]> = {
   transfer_authority: [48, 169, 76, 72, 229, 180, 55, 161],
   accept_authority:   [107, 86, 198, 91, 33, 12, 107, 160],
   recap:              [204, 15, 215, 235, 79, 60, 231, 134],
+  init_protocol:      [3, 188, 141, 237, 225, 226, 232, 210],
+  curate:             [205, 42, 126, 17, 220, 248, 115, 14],
+  set_schedule:       [224, 44, 153, 248, 237, 182, 26, 154],
+  post_detector:      [175, 84, 98, 1, 134, 112, 55, 70],
+  set_detector_authority: [206, 217, 171, 59, 3, 198, 136, 182],
 };
 
 export function discriminator(name: string): Uint8Array {
@@ -308,6 +313,9 @@ export interface SettleAccounts {
   /** The issuer's powers are read off the mint and the vault's own token account. */
   underlyingMint: PublicKey;
   underlyingVault: PublicKey;
+  /** An event session's two clocks. Omitted for an equity vault. */
+  schedule?: PublicKey;
+  detector?: PublicKey;
 }
 
 /** No arguments and no signer: the crank is permissionless by design. */
@@ -322,6 +330,9 @@ export function settleBoundaryIx(a: SettleAccounts): TransactionInstruction {
       meta(a.equityPriceUpdate),
       meta(a.underlyingMint),
       meta(a.underlyingVault),
+      // Anchor encodes an absent Option<Account> as the program id itself.
+      meta(a.schedule ?? PROGRAM_ID),
+      meta(a.detector ?? PROGRAM_ID),
     ],
     data: discriminator('settle_boundary') as Buffer,
   });
@@ -462,6 +473,84 @@ export function resolveHaltIx(a: ResolveHaltAccounts, ack: HaltReasonName): Tran
       meta(a.underlyingVault),
     ],
     data: concat(discriminator('resolve_halt'), u8(haltReasonByte(ack))) as Buffer,
+  });
+}
+
+/* ── the registry and the event clocks ───────────────────────────────────── */
+
+export function initProtocolIx(protocol: PublicKey, curator: PublicKey): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(protocol, true), meta(curator, true, true), meta(SystemProgram.programId)],
+    data: discriminator('init_protocol') as Buffer,
+  });
+}
+
+/**
+ * Show a vault on the desk, or stop. The only thing a curator can do: it
+ * moves no tokens and cannot halt anything, and an uncurated vault still
+ * settles and trades for anyone holding its address.
+ */
+export function curateIx(
+  protocol: PublicKey, curator: PublicKey, vault: PublicKey, on: boolean,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(protocol, true), meta(curator, false, true), meta(vault, true)],
+    data: concat(discriminator('curate'), u8(on ? 1 : 0)) as Buffer,
+  });
+}
+
+export interface ScheduledEventArg {
+  ts: number;
+  windowSecs: number;
+  /** 0 tender, 1 round, 2 valuation, 3 other. */
+  kind: number;
+}
+
+/** The prints an event vault watches. Future, in order, at most eight. */
+export function setScheduleIx(
+  vault: PublicKey, authority: PublicKey, schedule: PublicKey, events: ScheduledEventArg[],
+): TransactionInstruction {
+  if (events.length > 8) throw new Error('at most eight scheduled prints');
+  for (let i = 1; i < events.length; i++) {
+    if (events[i].ts <= events[i - 1].ts) throw new Error('prints must be in ascending order');
+  }
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(vault), meta(authority, true, true), meta(schedule, true), meta(SystemProgram.programId),
+    ],
+    data: concat(
+      discriminator('set_schedule'),
+      u32(events.length),
+      ...events.map(e => concat(i64(BigInt(e.ts)), u32(e.windowSecs), u8(e.kind))),
+    ) as Buffer,
+  });
+}
+
+/**
+ * Post the issuer's mark and what the token executes at, both WAD-scaled.
+ * The one number in the protocol that rests on somebody's word.
+ */
+export function postDetectorIx(
+  vault: PublicKey, detectorAuthority: PublicKey, detector: PublicKey,
+  mark: bigint, executable: bigint,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(vault), meta(detectorAuthority, true, true), meta(detector, true), meta(SystemProgram.programId),
+    ],
+    data: concat(discriminator('post_detector'), u128(mark), u128(executable)) as Buffer,
+  });
+}
+
+export function setDetectorAuthorityIx(a: AdminAccounts, next: PublicKey): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(a.vault, true), meta(a.authority, false, true)],
+    data: concat(discriminator('set_detector_authority'), next.toBytes()) as Buffer,
   });
 }
 

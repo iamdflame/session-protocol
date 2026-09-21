@@ -52,6 +52,11 @@ export const vaultPda = (underlyingMint: PublicKey, quoteMint: PublicKey): [Publ
 const child = (seed: string, vault: PublicKey) =>
   PublicKey.findProgramAddressSync([Buffer.from(seed), vault.toBuffer()], PROGRAM_ID);
 
+export const protocolPda = (): [PublicKey, number] =>
+  PublicKey.findProgramAddressSync([Buffer.from('protocol')], PROGRAM_ID);
+export const schedulePda = (v: PublicKey) => child('schedule', v);
+export const detectorPda = (v: PublicKey) => child('detector', v);
+
 export const nightMintPda = (v: PublicKey) => child('night', v);
 export const dayMintPda = (v: PublicKey) => child('day', v);
 export const underlyingVaultPda = (v: PublicKey) => child('underlying', v);
@@ -151,6 +156,10 @@ export interface Vault {
   recapCount: number;
   detectorAuthority: PublicKey;
   shareTokenProgram: PublicKey;
+  creator: PublicKey;
+  createdAt: number;
+  /** Whether the desk shows it. The chain is permissionless either way. */
+  curated: boolean;
 }
 
 export const VAULT_VERSION = 2;
@@ -228,6 +237,9 @@ export function decodeVault(data: Uint8Array): Vault {
     recapCount: c.u32(),
     detectorAuthority: c.key(),
     shareTokenProgram: c.key(),
+    creator: c.key(),
+    createdAt: Number(c.i64()),
+    curated: c.bool(),
   };
 
   // An account written by a different program version must not be read as if
@@ -236,6 +248,74 @@ export function decodeVault(data: Uint8Array): Vault {
     throw new Error(`vault version ${v.version}, expected ${VAULT_VERSION}; refusing to decode`);
   }
   return v;
+}
+
+/* ── the registry and the event clocks ───────────────────────────────────── */
+
+export interface Protocol {
+  version: number;
+  bump: number;
+  curator: PublicKey;
+  vaultCount: bigint;
+}
+
+export function decodeProtocol(data: Uint8Array): Protocol {
+  const c = new Cursor(data, 8);
+  return { version: c.u8(), bump: c.u8(), curator: c.key(), vaultCount: c.u64() };
+}
+
+export interface ScheduledEvent {
+  ts: number;
+  windowSecs: number;
+  kind: number;
+}
+
+export const EVENT_KIND = ['tender', 'round', 'valuation', 'other'] as const;
+
+export interface EventSchedule {
+  version: number;
+  bump: number;
+  vault: PublicKey;
+  /** Only the slots actually set; empty ones are dropped. */
+  events: ScheduledEvent[];
+  updatedAt: number;
+}
+
+export function decodeSchedule(data: Uint8Array): EventSchedule {
+  const c = new Cursor(data, 8);
+  const version = c.u8(), bump = c.u8(), vault = c.key();
+  const events: ScheduledEvent[] = [];
+  for (let i = 0; i < 8; i++) {
+    const ts = Number(c.i64()), windowSecs = c.u32(), kind = c.u8();
+    if (ts > 0) events.push({ ts, windowSecs, kind });
+  }
+  return { version, bump, vault, events, updatedAt: Number(c.i64()) };
+}
+
+export interface DetectorReading {
+  version: number;
+  bump: number;
+  vault: PublicKey;
+  poster: PublicKey;
+  mark: bigint;
+  executable: bigint;
+  ts: number;
+  posts: bigint;
+}
+
+export function decodeDetector(data: Uint8Array): DetectorReading {
+  const c = new Cursor(data, 8);
+  return {
+    version: c.u8(), bump: c.u8(), vault: c.key(), poster: c.key(),
+    mark: c.u128(), executable: c.u128(), ts: Number(c.i64()), posts: c.u64(),
+  };
+}
+
+/** How far `executable` sits from `mark`, in bp. Mirrors `event::premium_bps`. */
+export function premiumBps(d: { mark: bigint; executable: bigint }): number {
+  if (d.mark === 0n || d.executable === 0n) return 0;
+  const diff = d.executable > d.mark ? d.executable - d.mark : d.mark - d.executable;
+  return Number((diff * 10_000n) / d.mark);
 }
 
 /* ── Pyth price update ───────────────────────────────────────────────────── */

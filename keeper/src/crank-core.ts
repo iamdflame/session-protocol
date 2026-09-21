@@ -45,6 +45,11 @@ export interface Manifest {
   tokenProgram: string;
   /** The program owning the share classes — Token-2022, for their metadata. */
   shareTokenProgram: string;
+  /** 0 equity (NYSE hours), 1 event (the next print). Absent means equity. */
+  sessionKind?: number;
+  /** An event vault's two clocks. */
+  schedule?: string;
+  detector?: string;
 }
 
 export interface CrankReport {
@@ -133,10 +138,15 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
   if (v.halted) {
     report.settled = { skipped: `halted: ${v.haltReason}` };
   } else if (due && next !== null) {
+    // An event vault reads a schedule of prints and a posted divergence
+    // instead of the calendar; the program refuses rather than guessing if
+    // they are missing, so they are passed whenever the manifest has them.
     const settleWith = (markPriceUpdate: PublicKey) => settleBoundaryIx({
       vault: pk(m.vault), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
       markPriceUpdate, equityPriceUpdate: pk(m.equityPriceUpdate),
       underlyingMint: pk(m.underlyingMint), underlyingVault: pk(m.underlyingVault),
+      schedule: m.schedule ? pk(m.schedule) : undefined,
+      detector: m.detector ? pk(m.detector) : undefined,
     });
 
     // The print at the bell, if Hermes will give it to us; the sponsored
