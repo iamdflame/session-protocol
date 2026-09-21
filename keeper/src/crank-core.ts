@@ -21,7 +21,11 @@ import {
   ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction,
   sendAndConfirmTransaction, type TransactionInstruction,
 } from '@solana/web3.js';
-import { decodeVault, decodePythQuote, normalizeMark, incentiveAt, type Vault } from '../../sdk/src/vault.ts';
+import {
+  decodeVault, decodePythQuote, normalizeMark, incentiveAt, decodeSchedule, decodeDetector,
+  eventBoundaryDue, SESSION_EVENT,
+  type Vault, type EventSchedule, type DetectorReading,
+} from '../../sdk/src/vault.ts';
 import { settleBoundaryIx, fillHandoffIx, openAuctionIx, createAtaIdempotentIx, ata, explainProgramError } from '../../sdk/src/ix.ts';
 import { auctionPda } from '../../sdk/src/vault.ts';
 import { nextBoundary, sessionAt, Session } from '../../sdk/src/calendar.ts';
@@ -109,8 +113,31 @@ export async function readVault(conn: Connection, m: Manifest): Promise<Vault> {
   return decodeVault(info.data);
 }
 
-/** A boundary is due when the calendar has crossed one since the last settlement. */
-export function boundaryDue(v: Vault, now: number): { due: boolean; next: number | null } {
+/**
+ * Whether there is a boundary to settle, and when the next one is.
+ *
+ * Two vaults, two clocks. An equity vault crosses a boundary when the NYSE
+ * calendar says so. An event vault has no calendar — that is the whole
+ * argument for it — and asking one anyway is what this function used to do
+ * for both: it cranked the OPENAI vault whenever the exchange happened to
+ * agree, and the program's correct refusal came back as
+ * `settled: { failed: "no session boundary has elapsed" }`, which reads like
+ * a broken keeper rather than a vault that is up to date.
+ *
+ * `reason` carries why, so a report says "THEN already holds it" instead of
+ * reporting a refusal as a failure.
+ */
+export function boundaryDue(
+  v: Vault,
+  now: number,
+  ev?: { schedule: EventSchedule | null; detector: DetectorReading | null },
+): { due: boolean; next: number | null; reason?: string } {
+  if (v.sessionKind === SESSION_EVENT) {
+    if (!ev) return { due: false, next: null, reason: 'the schedule and the reading were not read' };
+    const { due, why } = eventBoundaryDue(v, ev.schedule, ev.detector, now);
+    const nextPrint = ev.schedule?.events.find(e => e.ts + e.windowSecs > now) ?? null;
+    return { due, next: nextPrint ? nextPrint.ts : null, reason: why };
+  }
   const next = nextBoundary(v.lastBoundaryTs, 20);
   return { due: next !== null && now >= next, next };
 }
@@ -151,13 +178,25 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
   report.markAgeSecs = markQ ? now - markQ.publishTime : null;
 
   /* ── settle ──────────────────────────────────────────────────────────── */
-  const { due, next } = boundaryDue(v, now);
+  // An event vault's clocks live in two accounts of its own.
+  let ev: { schedule: EventSchedule | null; detector: DetectorReading | null } | undefined;
+  if (v.sessionKind === SESSION_EVENT && m.schedule && m.detector) {
+    const [sAcc, dAcc] = await conn.getMultipleAccountsInfo([pk(m.schedule), pk(m.detector)]);
+    ev = {
+      schedule: sAcc ? decodeSchedule(sAcc.data) : null,
+      detector: dAcc ? decodeDetector(dAcc.data) : null,
+    };
+  }
+
+  const { due, next, reason } = boundaryDue(v, now, ev);
   report.nextBoundaryTs = next;
   report.boundaryDue = due;
 
   if (v.halted) {
     report.settled = { skipped: `halted: ${v.haltReason}` };
-  } else if (due && next !== null) {
+  } else if (!due) {
+    report.settled = { skipped: reason ?? 'not due' };
+  } else if (due) {
     // An event vault reads a schedule of prints and a posted divergence
     // instead of the calendar; the program refuses rather than guessing if
     // they are missing, so they are passed whenever the manifest has them.
@@ -172,7 +211,9 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     // The print at the bell, if Hermes will give it to us; the sponsored
     // account otherwise. The program decides whether either is acceptable.
     let posted = false;
-    if (hermesConfigured()) {
+    // The as-of print is the *bell's* tick. An event vault has no bell, so
+    // there is no instant to ask Hermes about.
+    if (hermesConfigured() && next !== null && v.sessionKind !== SESSION_EVENT) {
       try {
         const feed = bytesToHex(v.markFeedId);
         const update = (await fetchAsOf(feed, next)).data;

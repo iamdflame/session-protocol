@@ -18,7 +18,7 @@ import bs58 from 'bs58';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import {
   decodeSchedule, decodeDetector, decodeAuction, decodeBid, auctionPda, bidPda,
-  premiumBps, SESSION_EVENT,
+  premiumBps, eventBoundaryDue, SESSION_EVENT,
   type EventSchedule, type DetectorReading, type ScheduledEvent, type Auction, type Bid,
 } from '@sdk/vault.ts';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
@@ -283,10 +283,10 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
   let eventDue = false;
   let eventNext: number | null = null;
   if (event) {
-    const fresh = event.detectorAgeSecs !== null && event.detectorAgeSecs <= vault.maxStaleSecs;
-    const closed = event.inPrint || event.premiumBps > vault.maxPremiumBps;
-    // `lastSessionOpen` is the side the vault settled to last; Closed ≡ THEN.
-    eventDue = fresh && closed === vault.lastSessionOpen;
+    // One implementation of this rule, shared with the keeper, mirroring
+    // `event::session_for`. Two copies is how the site and the crank end up
+    // disagreeing about whether a vault needs settling.
+    eventDue = eventBoundaryDue(vault, event.schedule, event.detector, now).due;
     eventNext = event.nextPrint ? event.nextPrint.ts : null;
   }
 

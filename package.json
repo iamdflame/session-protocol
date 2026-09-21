@@ -10,7 +10,7 @@
   "scripts": {
     "test": "npm run check:eligibility && npm run test:rust && npm run test:ts",
     "test:rust": "cargo test -p session",
-    "test:ts": "node --experimental-strip-types tests/calendar.check.ts && node --experimental-strip-types tests/layout.test.ts && node --experimental-strip-types tests/health.test.ts && node --experimental-strip-types tests/ix.test.ts && node --experimental-strip-types tests/issuer.test.ts && node --experimental-strip-types tests/events.test.ts && node --experimental-strip-types tests/statement.test.ts",
+    "test:ts": "node --experimental-strip-types tests/calendar.check.ts && node --experimental-strip-types tests/layout.test.ts && node --experimental-strip-types tests/health.test.ts && node --experimental-strip-types tests/ix.test.ts && node --experimental-strip-types tests/issuer.test.ts && node --experimental-strip-types tests/events.test.ts && node --experimental-strip-types tests/event.test.ts && node --experimental-strip-types tests/statement.test.ts",
     "vectors": "node --experimental-strip-types tests/gen-vectors.ts && node --experimental-strip-types tests/gen-settle-vectors.ts && cargo test -p session --lib emit_account_vector",
     "keeper": "node --experimental-strip-types keeper/src/index.ts",
     "data": "node scripts/discover.mjs > data/_raw-universe.json && node scripts/history.mjs && node research/fetch-hourly.mjs",

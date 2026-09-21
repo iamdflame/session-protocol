@@ -466,3 +466,60 @@ export function incentiveAt(
   if (since < 2 * w) return v.incentiveRamp[1];
   return v.incentiveRamp[2];
 }
+
+/* ── the event session, mirrored ─────────────────────────────────────────── */
+
+/**
+ * Which side an event vault is on right now — mirrors `event::session_for`.
+ *
+ * `false` (Closed) means THEN wears the risk: a scheduled print's window is
+ * open, or the executable price has run past the mark by more than the vault
+ * tolerates. `true` (Open) means NOW holds it, as on an ordinary day.
+ *
+ * There is no clock in this. An event vault has no 09:30 and no close, which
+ * is the entire reason it exists, and asking a calendar about one is how both
+ * the keeper and the site ended up deciding a PreStock's boundary by NYSE
+ * hours — settling it when the exchange happened to agree and calling the
+ * program's correct refusal a failure the rest of the time.
+ */
+export function eventSessionOpen(
+  schedule: EventSchedule | null,
+  detector: DetectorReading | null,
+  now: number,
+  maxPremiumBps: number,
+): boolean {
+  if (schedule?.events.some(e => now >= e.ts && now < e.ts + e.windowSecs)) return false;
+  if (detector && premiumBps(detector) > maxPremiumBps) return false;
+  return true;
+}
+
+/**
+ * Whether an event vault has a boundary to settle.
+ *
+ * Only while the reading is fresh enough for the program to accept it at all:
+ * a stale detector is refused with `DetectorStale`, so cranking on one wastes
+ * a fee and reports a failure that is really a missing reading.
+ */
+export function eventBoundaryDue(
+  v: Pick<Vault, 'lastSessionOpen' | 'maxPremiumBps' | 'maxStaleSecs' | 'lastBoundaryTs'>,
+  schedule: EventSchedule | null,
+  detector: DetectorReading | null,
+  now: number,
+): { due: boolean; why: string } {
+  if (!detector) return { due: false, why: 'no reading has been posted' };
+  const age = now - detector.ts;
+  if (age > v.maxStaleSecs) {
+    return { due: false, why: `the reading is ${age}s old against a ${v.maxStaleSecs}s bound` };
+  }
+  if (now < v.lastBoundaryTs) return { due: false, why: 'the clock is behind the last boundary' };
+
+  const open = eventSessionOpen(schedule, detector, now, v.maxPremiumBps);
+  if (open === v.lastSessionOpen) {
+    return { due: false, why: open ? 'no print is landing and the premium is inside tolerance' : 'THEN already holds it' };
+  }
+  return {
+    due: true,
+    why: open ? 'the print window closed and the premium is back inside tolerance'
+      : 'a print is landing, or the premium has run past tolerance',
+  };
+}
