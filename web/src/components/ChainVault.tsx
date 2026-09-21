@@ -5,6 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import { CurveChart } from './charts/CurveChart';
 import { SessionClock } from './SessionClock';
 import { ChainTrade } from './ChainTrade';
+import { Instrument } from './Instrument';
 import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
@@ -171,6 +172,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
         <div className={s.side}>
           <ChainTrade m={m} chain={d} onDone={chain.refresh} />
           <ChainHealth d={d} />
+          <Instrument m={m} d={d} />
         </div>
       </section>
     </div>
