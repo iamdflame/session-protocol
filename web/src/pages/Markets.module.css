@@ -236,3 +236,12 @@ td.pool { color: var(--ink-3); }
      rather than leaving a column half-visible off the right edge. */
   .gap, .open { display: none; }
 }
+
+/* A row with no vault says so. The distinction between a market and a
+   simulation of one should be legible without opening either. */
+.simTag {
+  font-size: var(--t-micro); letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  color: var(--ink-3);
+}

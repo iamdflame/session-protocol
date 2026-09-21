@@ -4,7 +4,7 @@ import { SessionClock } from '@/components/SessionClock';
 import { Spark } from '@/components/charts/Spark';
 import { PreLaunch } from '@/components/PreLaunch';
 import { useSession, useClockSize, countdown } from '@/lib/session';
-import { useDevnet, useChainVault } from '@/lib/chain';
+import { useDevnets } from '@/lib/chain';
 import {
   useMarkets, useQuotes, load, fmtUsd, fmtCompact, fmtPct,
   type Asset, type CurveFile, type CurvePoint,
@@ -16,7 +16,7 @@ type SortKey = 'liquidity' | 'symbol' | 'spread' | 'price';
 
 const FILTERS: { key: Filter; label: string; hint: string }[] = [
   { key: 'all', label: 'All', hint: 'Every asset with enough history to decompose' },
-  { key: 'public', label: 'Listed', hint: 'Tokenized shares of companies trading on a US exchange' },
+  { key: 'public', label: 'Public', hint: 'Tokenized shares of companies trading on a US exchange' },
   { key: 'private', label: 'Pre-IPO', hint: 'Private companies — no NYSE session to arbitrage against' },
 ];
 
@@ -50,8 +50,15 @@ function LiveLead() {
 
 export default function Markets() {
   const markets = useMarkets();
-  const devnet = useDevnet();
-  const chain = useChainVault(devnet ?? null, 20_000);
+  const allVaults = useDevnets();
+  // Which names have a vault at all. The table used to know about one, which
+  // was true until there were two, and a row showing no status is a row a
+  // reader has to guess about.
+  //
+  // This page used to poll the vault account every twenty seconds to fill a
+  // prop no cell ever read. On a rate-limited endpoint that is a request
+  // taken from whoever is trying to mint.
+  const listed = useMemo(() => new Set((allVaults ?? []).map(v => v.symbol)), [allVaults]);
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('liquidity');
   const [curves, setCurves] = useState<Record<string, CurvePoint[]>>({});
@@ -163,8 +170,7 @@ export default function Markets() {
             <button className={s.retry} onClick={() => setFilter('all')}>Show all {assets.length}</button>
           </div>
         ) : (
-          <Table rows={rows} quotes={quotes} curves={curves}
-                 live={devnet && chain.data ? { symbol: devnet.symbol, nightNav: Number(chain.data.vault.nightNav) / 1e18, dayNav: Number(chain.data.vault.dayNav) / 1e18, vault: devnet.vault } : null} />
+          <Table rows={rows} quotes={quotes} curves={curves} listed={listed} />
         )}
       </div>
 
@@ -184,13 +190,13 @@ export default function Markets() {
 /* ── the table ───────────────────────────────────────────────────────────── */
 
 function Table({
-  rows, quotes, curves, live,
+  rows, quotes, curves, listed,
 }: {
   rows: Asset[];
   quotes: Record<string, { price: number; at: number }>;
   curves: Record<string, CurvePoint[]>;
-  /** The one vault that exists on chain: its row shows the chain's NAVs. */
-  live: { symbol: string; nightNav: number; dayNav: number; vault: string } | null;
+  /** Every symbol with a vault on chain. The rest are simulations and say so. */
+  listed: Set<string>;
 }) {
   return (
     <div className={s.tableWrap}>
@@ -216,15 +222,17 @@ function Table({
           {rows.map(a => {
             const q = quotes[a.mint];
             const gap = a.endNight - a.endDay;
-            const isLive = live?.symbol === a.symbol;
+            const onChain = listed.has(a.symbol);
             return (
-              <tr key={a.symbol} data-live={isLive}>
+              <tr key={a.symbol} data-live={onChain}>
                 <th scope="row" className={s.asset}>
                   <Link to={`/markets/${encodeURIComponent(a.symbol)}`} className={s.assetLink}>
                     <span className={s.symbolRow}>
                       <span className={`mono ${s.symbol}`}>{a.symbol}</span>
                       {a.kind === 'private' && <span className={s.tag}>pre-IPO</span>}
-                      {isLive && <span className={s.liveTag}><span className={s.liveTagDot} aria-hidden="true" />devnet</span>}
+                      {onChain
+                        ? <span className={s.liveTag}><span className={s.liveTagDot} aria-hidden="true" />devnet</span>
+                        : <span className={s.simTag} title="No vault. This page runs the settlement code in your browser.">simulated</span>}
                     </span>
                     <span className={s.name}>{a.name}</span>
                   </Link>
