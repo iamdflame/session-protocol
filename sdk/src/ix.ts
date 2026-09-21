@@ -48,6 +48,10 @@ export const DISCRIMINATOR: Record<string, number[]> = {
   set_schedule:       [224, 44, 153, 248, 237, 182, 26, 154],
   post_detector:      [175, 84, 98, 1, 134, 112, 55, 70],
   set_detector_authority: [206, 217, 171, 59, 3, 198, 136, 182],
+  open_auction:       [48, 60, 204, 12, 175, 130, 173, 33],
+  auction_bid:        [83, 236, 86, 75, 173, 170, 235, 201],
+  close_auction:      [225, 129, 91, 48, 215, 73, 203, 172],
+  claim_auction:      [28, 183, 186, 104, 188, 1, 75, 191],
 };
 
 export function discriminator(name: string): Uint8Array {
@@ -551,6 +555,82 @@ export function setDetectorAuthorityIx(a: AdminAccounts, next: PublicKey): Trans
     programId: PROGRAM_ID,
     keys: [meta(a.vault, true), meta(a.authority, false, true)],
     data: concat(discriminator('set_detector_authority'), next.toBytes()) as Buffer,
+  });
+}
+
+/* ── the bell auction ────────────────────────────────────────────────────── */
+
+export interface AuctionAccounts {
+  vault: PublicKey;
+  auction: PublicKey;
+  underlyingVault: PublicKey;
+  quoteVault: PublicKey;
+  bidderUnderlying: PublicKey;
+  bidderQuote: PublicKey;
+  bidder: PublicKey;
+  underlyingMint: PublicKey;
+  quoteMint: PublicKey;
+  underlyingTokenProgram?: PublicKey;
+  quoteTokenProgram?: PublicKey;
+}
+
+/** Permissionless: the terms come entirely from vault state. */
+export function openAuctionIx(
+  vault: PublicKey, auction: PublicKey, opener: PublicKey,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(vault), meta(auction, true), meta(opener, true, true), meta(SystemProgram.programId)],
+    data: discriminator('open_auction') as Buffer,
+  });
+}
+
+/** Bid `underlyingAmount` of the residual, escrowing whatever the side demands. */
+export function auctionBidIx(
+  a: AuctionAccounts, bid: PublicKey, underlyingAmount: bigint,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(a.vault, true), meta(a.auction, true), meta(bid, true), meta(a.bidder, true, true),
+      meta(a.underlyingVault, true), meta(a.quoteVault, true),
+      meta(a.bidderUnderlying, true), meta(a.bidderQuote, true),
+      meta(a.underlyingMint), meta(a.quoteMint),
+      meta(a.underlyingTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(a.quoteTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(SystemProgram.programId),
+    ],
+    data: concat(discriminator('auction_bid'), u64(underlyingAmount)) as Buffer,
+  });
+}
+
+/** Fix the clearing price. Permissionless, once the window has closed. */
+export function closeAuctionIx(
+  vault: PublicKey, auction: PublicKey, markPriceUpdate: PublicKey,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(vault), meta(auction, true), meta(markPriceUpdate)],
+    data: discriminator('close_auction') as Buffer,
+  });
+}
+
+/** Take what a bid won, and whatever it escrowed beyond that. */
+export function claimAuctionIx(
+  a: AuctionAccounts, bid: PublicKey, nightMint: PublicKey, dayMint: PublicKey,
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(a.vault, true), meta(a.auction, true), meta(bid, true), meta(a.bidder, true, true),
+      meta(nightMint), meta(dayMint),
+      meta(a.underlyingVault, true), meta(a.quoteVault, true),
+      meta(a.bidderUnderlying, true), meta(a.bidderQuote, true),
+      meta(a.underlyingMint), meta(a.quoteMint),
+      meta(a.underlyingTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(a.quoteTokenProgram ?? TOKEN_PROGRAM_ID),
+    ],
+    data: discriminator('claim_auction') as Buffer,
   });
 }
 

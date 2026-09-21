@@ -125,4 +125,10 @@ pub enum SessionError {
     MissingEventAccounts,
     #[msg("account belongs to a different vault")]
     WrongVault,
+    #[msg("the auction window has closed")]
+    AuctionClosed,
+    #[msg("the auction window is still open")]
+    AuctionOpen,
+    #[msg("this auction belongs to an earlier bell")]
+    AuctionStale,
 }

@@ -7,8 +7,9 @@ import { PublicKey } from '@solana/web3.js';
 import {
   DISCRIMINATOR, encodeVaultParams, classByte, hexToBytes, bytesToHex, initializeVaultIx, VAULT_PARAMS_SIZE,
   recapIx, resolveHaltIx, haltReasonByte, settleBoundaryIx, setScheduleIx, postDetectorIx, curateIx,
+  openAuctionIx, auctionBidIx, closeAuctionIx, claimAuctionIx,
 } from '../sdk/src/ix.ts';
-import { SESSION_EVENT, PROGRAM_ID, premiumBps } from '../sdk/src/vault.ts';
+import { SESSION_EVENT, PROGRAM_ID, premiumBps, auctionPda, bidPda, award } from '../sdk/src/vault.ts';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -119,6 +120,34 @@ check('premiumBps mirrors the program on the real OPENAI reading',
 check('a discount diverges as much as a premium',
   premiumBps({ mark: 15_330n, executable: 11_968n }) === 2_193);
 check('curate is a single flag', curateIx(k, k, k, true).data.length === 9 && curateIx(k, k, k, false).data[8] === 0);
+
+// the auction: one per bell, so the boundary is in the seed
+const vaultKey = new PublicKey(new Uint8Array(32).fill(4));
+const [aucA] = auctionPda(vaultKey, 1_774_618_200);
+const [aucB] = auctionPda(vaultKey, 1_774_618_201);
+check('each bell gets its own auction address', !aucA.equals(aucB));
+const [bidKey] = bidPda(aucA, k);
+check('a bid is seeded by its auction and bidder', bidPda(aucA, k)[0].equals(bidKey) && !bidPda(aucB, k)[0].equals(bidKey));
+
+const aucAccounts = {
+  vault: vaultKey, auction: aucA, underlyingVault: k, quoteVault: k,
+  bidderUnderlying: k, bidderQuote: k, bidder: k, underlyingMint: k, quoteMint: k,
+};
+check('open_auction takes no arguments', openAuctionIx(vaultKey, aucA, k).data.length === 8);
+check('auction_bid carries a u64', auctionBidIx(aucAccounts, bidKey, 1_000n).data.length === 16);
+check('close_auction takes no arguments', closeAuctionIx(vaultKey, aucA, k).data.length === 8);
+check('claim_auction takes no arguments', claimAuctionIx(aucAccounts, bidKey, k, k).data.length === 8);
+check('the bidder signs a bid and a claim',
+  auctionBidIx(aucAccounts, bidKey, 1n).keys[3].isSigner && claimAuctionIx(aucAccounts, bidKey, k, k).keys[3].isSigner);
+
+// award mirrors the program's arithmetic, including the floor that leaves dust
+const WAD = 10n ** 18n;
+const twoThirds = { fillRatio: (WAD * 2n) / 3n, clearingMark: 2n * WAD, vaultBuys: true };
+const aw = award(twoThirds, 900n, 900n);
+check('award matches the program: 900 at two-thirds is 599', aw.underlying === 599n, String(aw.underlying));
+check('and every atom is filled or returned', aw.underlying + aw.refund === 900n);
+const sell = award({ ...twoThirds, vaultBuys: false }, 900n, 10_000n);
+check('a seller pays the ceil, never less', sell.quote >= aw.quote);
 
 console.log(failed ? `\n${failed} failed` : '\nall instruction checks passed');
 process.exit(failed ? 1 : 0);

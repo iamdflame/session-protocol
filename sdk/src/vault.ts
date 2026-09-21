@@ -55,6 +55,19 @@ const child = (seed: string, vault: PublicKey) =>
 export const protocolPda = (): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from('protocol')], PROGRAM_ID);
 export const schedulePda = (v: PublicKey) => child('schedule', v);
+
+/** One auction per bell: the boundary timestamp is part of the seed. */
+export const auctionPda = (vault: PublicKey, boundaryTs: number): [PublicKey, number] => {
+  const ts = new Uint8Array(8);
+  new DataView(ts.buffer).setBigInt64(0, BigInt(boundaryTs), true);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('auction'), vault.toBuffer(), ts], PROGRAM_ID,
+  );
+};
+export const bidPda = (auction: PublicKey, bidder: PublicKey): [PublicKey, number] =>
+  PublicKey.findProgramAddressSync(
+    [Buffer.from('bid'), auction.toBuffer(), bidder.toBuffer()], PROGRAM_ID,
+  );
 export const detectorPda = (v: PublicKey) => child('detector', v);
 
 export const nightMintPda = (v: PublicKey) => child('night', v);
@@ -158,6 +171,9 @@ export interface Vault {
   shareTokenProgram: PublicKey;
   creator: PublicKey;
   createdAt: number;
+  /** Posted to an open auction: never backing, always reclaimable. */
+  escrowedQuote: bigint;
+  escrowedUnderlying: bigint;
   /** Whether the desk shows it. The chain is permissionless either way. */
   curated: boolean;
 }
@@ -239,6 +255,8 @@ export function decodeVault(data: Uint8Array): Vault {
     shareTokenProgram: c.key(),
     creator: c.key(),
     createdAt: Number(c.i64()),
+    escrowedQuote: c.u64(),
+    escrowedUnderlying: c.u64(),
     curated: c.bool(),
   };
 
@@ -309,6 +327,63 @@ export function decodeDetector(data: Uint8Array): DetectorReading {
     version: c.u8(), bump: c.u8(), vault: c.key(), poster: c.key(),
     mark: c.u128(), executable: c.u128(), ts: Number(c.i64()), posts: c.u64(),
   };
+}
+
+export interface Auction {
+  version: number;
+  bump: number;
+  vault: PublicKey;
+  boundaryTs: number;
+  closesAt: number;
+  vaultBuys: boolean;
+  wantedUnderlying: bigint;
+  bidUnderlying: bigint;
+  bids: number;
+  clearingMark: bigint;
+  fillRatio: bigint;
+  closed: boolean;
+  claimedUnderlying: bigint;
+}
+
+export function decodeAuction(data: Uint8Array): Auction {
+  const c = new Cursor(data, 8);
+  return {
+    version: c.u8(), bump: c.u8(), vault: c.key(),
+    boundaryTs: Number(c.i64()), closesAt: Number(c.i64()), vaultBuys: c.bool(),
+    wantedUnderlying: c.u64(), bidUnderlying: c.u64(), bids: c.u32(),
+    clearingMark: c.u128(), fillRatio: c.u128(), closed: c.bool(), claimedUnderlying: c.u64(),
+  };
+}
+
+export interface Bid {
+  version: number;
+  bump: number;
+  auction: PublicKey;
+  bidder: PublicKey;
+  underlying: bigint;
+  escrowed: bigint;
+  ts: number;
+}
+
+export function decodeBid(data: Uint8Array): Bid {
+  const c = new Cursor(data, 8);
+  return {
+    version: c.u8(), bump: c.u8(), auction: c.key(), bidder: c.key(),
+    underlying: c.u64(), escrowed: c.u64(), ts: Number(c.i64()),
+  };
+}
+
+/** What a bid wins and gets back. Mirrors `auction::award`. */
+export function award(
+  a: Pick<Auction, 'fillRatio' | 'clearingMark' | 'vaultBuys'>, bidUnderlying: bigint, escrowed: bigint,
+): { underlying: bigint; quote: bigint; refund: bigint } {
+  const WAD = 10n ** 18n;
+  const underlying = (bidUnderlying * a.fillRatio) / WAD;
+  const quote = a.vaultBuys
+    ? (underlying * a.clearingMark) / WAD
+    : (underlying * a.clearingMark + WAD - 1n) / WAD;
+  const spent = a.vaultBuys ? underlying : quote;
+  return { underlying, quote, refund: escrowed > spent ? escrowed - spent : 0n };
 }
 
 /** How far `executable` sits from `mark`, in bp. Mirrors `event::premium_bps`. */

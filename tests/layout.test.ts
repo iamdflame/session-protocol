@@ -64,6 +64,8 @@ eq('detectorAuthority', v.detectorAuthority.toBuffer()[0], 11);
 eq('shareTokenProgram', v.shareTokenProgram.toBuffer()[0], 12);
 eq('creator', v.creator.toBuffer()[0], 13);
 eq('createdAt', v.createdAt, 1774000000);
+eq('escrowedQuote', v.escrowedQuote, 4242n);
+eq('escrowedUnderlying', v.escrowedUnderlying, 99n);
 eq('curated', v.curated, true);
 
 // a truncated account must fail loudly rather than return nonsense

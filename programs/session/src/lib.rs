@@ -44,6 +44,7 @@ use anchor_spl::token_2022_extensions::token_metadata::{
     token_metadata_initialize, TokenMetadataInitialize,
 };
 
+pub mod auction;
 pub mod calendar;
 pub mod errors;
 pub mod event;
@@ -60,7 +61,7 @@ pub mod state;
 use calendar::{session_at, Session};
 use anchor_lang::solana_program::hash::hashv;
 use errors::SessionError;
-use fixed::{mul_div_floor, WAD};
+use fixed::{mul_div_ceil, mul_div_floor, WAD};
 use machine::Decision;
 use ops::OpError;
 use oracle::{effective_session, parse_price_update, MarkWindow, PriceUpdate, Verification};
@@ -680,7 +681,10 @@ pub mod session {
         require!(credited > 0, SessionError::AmountTooSmall);
 
         // Sizing, pricing, the fee payer and every bound are decided in `ops`.
-        let plan = ops::plan_fill(&v.view(), mark, credited, night_supply, day_supply)
+        // The incentive is whatever the ramp has reached: a residual nobody
+        // took at 10 bp is offered at 25, then 50, because the vault would
+        // rather pay for the fill than halt at the next bell for carrying it.
+        let plan = ops::plan_fill(&v.view_at(now), mark, credited, night_supply, day_supply)
             .map_err(map_op)?;
         let before = ctx.accounts.underlying_vault.amount;
 
@@ -797,14 +801,350 @@ pub mod session {
         Ok(())
     }
 
+    /// Open the call auction for the residual this bell left.
+    ///
+    /// Permissionless, like the crank: anyone may open it, and the terms come
+    /// entirely from vault state. A residual offered continuously is priced
+    /// by whoever shows up first, in the minutes after a bell when the mark
+    /// is least settled; auctioned, it clears at one price for everyone.
+    pub fn open_auction(ctx: Context<OpenAuction>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let v = &ctx.accounts.vault;
+        v.check_live()?;
+        require!(!v.paused(PAUSE_FILL), SessionError::Paused);
+        require!(v.auction_secs > 0, SessionError::BadParameter);
+
+        let side = auction::Side::of(v.pending_delta).ok_or(SessionError::NothingToFill)?;
+        let wanted = auction::wanted_underlying(v.pending_delta, v.last_mark).map_err(map_auction)?;
+        require!(wanted > 0, SessionError::AmountTooSmall);
+
+        // One auction per bell, and only while the bell is recent: a residual
+        // that has sat for a day belongs to the ramp, not to a fresh auction
+        // at a price from yesterday.
+        let closes_at = v.last_boundary_ts.saturating_add(v.auction_secs as i64);
+        require!(now < closes_at, SessionError::AuctionClosed);
+
+        let a = &mut ctx.accounts.auction;
+        a.version = VAULT_VERSION;
+        a.bump = ctx.bumps.auction;
+        a.vault = ctx.accounts.vault.key();
+        a.boundary_ts = ctx.accounts.vault.last_boundary_ts;
+        a.closes_at = closes_at;
+        a.vault_buys = matches!(side, auction::Side::VaultBuys);
+        a.wanted_underlying = wanted;
+        a.bid_underlying = 0;
+        a.bids = 0;
+        a.clearing_mark = 0;
+        a.fill_ratio = 0;
+        a.closed = false;
+        a.claimed_underlying = 0;
+
+        emit!(AuctionOpened {
+            vault: a.vault, auction: a.key(), boundary_ts: a.boundary_ts,
+            closes_at, vault_buys: a.vault_buys, wanted_underlying: wanted,
+        });
+        Ok(())
+    }
+
+    /// Bid into the open auction, escrowing what the side demands.
+    ///
+    /// The escrow sits in the vault's token accounts and is tracked apart
+    /// from what the vault owns: it is never backing, never spendable, and
+    /// comes back whole if the auction does not clear.
+    pub fn auction_bid(ctx: Context<AuctionBidIx>, underlying_amount: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(underlying_amount > 0, SessionError::ZeroAmount);
+        {
+            let a = &ctx.accounts.auction;
+            require!(!a.closed, SessionError::AuctionClosed);
+            require!(now < a.closes_at, SessionError::AuctionClosed);
+            require_keys_eq!(a.vault, ctx.accounts.vault.key(), SessionError::WrongVault);
+            require!(
+                a.boundary_ts == ctx.accounts.vault.last_boundary_ts,
+                SessionError::AuctionStale
+            );
+        }
+        let v = &ctx.accounts.vault;
+        v.check_live()?;
+
+        // What this bid has to post, at the mark the auction will clear near.
+        // Quote is rounded up so a bidder can never under-escrow.
+        let vault_buys = ctx.accounts.auction.vault_buys;
+        let escrow = if vault_buys {
+            underlying_amount
+        } else {
+            mul_div_ceil(underlying_amount as u128, v.last_mark, WAD)
+                .ok_or(SessionError::MathOverflow)?
+                .min(u64::MAX as u128) as u64
+        };
+        require!(escrow > 0, SessionError::AmountTooSmall);
+
+        if vault_buys {
+            token::transfer_checked(
+                CpiContext::new(
+                    ctx.accounts.underlying_token_program.to_account_info(),
+                    TransferChecked {
+                        from: ctx.accounts.bidder_underlying.to_account_info(),
+                        mint: ctx.accounts.underlying_mint.to_account_info(),
+                        to: ctx.accounts.underlying_vault.to_account_info(),
+                        authority: ctx.accounts.bidder.to_account_info(),
+                    },
+                ),
+                escrow,
+                v.underlying_decimals,
+            )?;
+        } else {
+            token::transfer_checked(
+                CpiContext::new(
+                    ctx.accounts.quote_token_program.to_account_info(),
+                    TransferChecked {
+                        from: ctx.accounts.bidder_quote.to_account_info(),
+                        mint: ctx.accounts.quote_mint.to_account_info(),
+                        to: ctx.accounts.quote_vault.to_account_info(),
+                        authority: ctx.accounts.bidder.to_account_info(),
+                    },
+                ),
+                escrow,
+                v.quote_decimals,
+            )?;
+        }
+
+        // A fee-bearing underlying arrives short, and the bid is what
+        // arrived — never what was sent.
+        let escrowed = if vault_buys {
+            let mint_ai = ctx.accounts.underlying_mint.to_account_info();
+            let data = mint_ai.try_borrow_data()?;
+            let issuer = issuer::inspect_mint(&data, mint_ai.owner, Clock::get()?.epoch)
+                .map_err(|_| error!(SessionError::NotAMint))?;
+            escrow.saturating_sub(issuer::transfer_fee(&issuer, escrow))
+        } else {
+            escrow
+        };
+        require!(escrowed > 0, SessionError::AmountTooSmall);
+        let bid_underlying = if vault_buys { escrowed } else { underlying_amount };
+
+        let b = &mut ctx.accounts.bid;
+        let fresh = b.underlying == 0;
+        b.version = VAULT_VERSION;
+        b.bump = ctx.bumps.bid;
+        b.auction = ctx.accounts.auction.key();
+        b.bidder = ctx.accounts.bidder.key();
+        b.underlying = b.underlying.saturating_add(bid_underlying);
+        b.escrowed = b.escrowed.saturating_add(escrowed);
+        b.ts = now;
+
+        let a = &mut ctx.accounts.auction;
+        a.bid_underlying = a.bid_underlying.saturating_add(bid_underlying);
+        if fresh {
+            a.bids = a.bids.saturating_add(1);
+        }
+
+        let v = &mut ctx.accounts.vault;
+        if vault_buys {
+            v.escrowed_underlying = v.escrowed_underlying.saturating_add(escrowed);
+        } else {
+            v.escrowed_quote = v.escrowed_quote.saturating_add(escrowed);
+        }
+
+        emit!(AuctionBid {
+            vault: v.key(), bidder: ctx.accounts.bidder.key(),
+            underlying: bid_underlying, escrowed,
+            total_bid: a.bid_underlying, bids: a.bids,
+        });
+        Ok(())
+    }
+
+    /// Fix the price the auction clears at. Permissionless, after the window.
+    ///
+    /// The price is the mark from the bell's own window — the same number the
+    /// settlement used — so the auction cannot be closed at a price somebody
+    /// waited for.
+    pub fn close_auction(ctx: Context<CloseAuction>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let v = &ctx.accounts.vault;
+        require!(v.version == VAULT_VERSION, SessionError::VersionMismatch);
+
+        {
+            let a = &ctx.accounts.auction;
+            require!(!a.closed, SessionError::AuctionClosed);
+            require!(now >= a.closes_at, SessionError::AuctionOpen);
+            require_keys_eq!(a.vault, ctx.accounts.vault.key(), SessionError::WrongVault);
+        }
+
+        let mark_u = read_quote(&ctx.accounts.mark_price_update, &v.mark_feed_id)?;
+        require_recent_post(&mark_u, v.max_posted_slot_age)?;
+        let boundary_ts = ctx.accounts.auction.boundary_ts;
+        let mark = oracle::check_mark(
+            &mark_u.quote,
+            MarkWindow::at_bell(boundary_ts, v.max_bell_lead_secs, v.max_stale_secs),
+            0,
+            v.underlying_decimals,
+            v.quote_decimals,
+            &v.guards(),
+        )
+        .map_err(map_oracle)?;
+
+        let a = &mut ctx.accounts.auction;
+        let c = auction::clear(mark, a.wanted_underlying, a.bid_underlying).map_err(map_auction)?;
+        a.clearing_mark = c.mark;
+        a.fill_ratio = c.fill_ratio;
+        a.closed = true;
+
+        emit!(AuctionCleared {
+            vault: a.vault, auction: a.key(), mark: c.mark, fill_ratio: c.fill_ratio,
+            underlying: c.underlying, quote: c.quote, bids: a.bids,
+        });
+        Ok(())
+    }
+
+    /// Take what a bid won and whatever it escrowed beyond that.
+    ///
+    /// One bidder per call, so no instruction has to walk an unbounded list.
+    /// The bid account closes and its rent goes back to the bidder.
+    pub fn claim_auction(ctx: Context<ClaimAuction>) -> Result<()> {
+        let (side, c, award) = {
+            let a = &ctx.accounts.auction;
+            let b = &ctx.accounts.bid;
+            require!(a.closed, SessionError::AuctionOpen);
+            require_keys_eq!(b.auction, a.key(), SessionError::WrongVault);
+            require_keys_eq!(b.bidder, ctx.accounts.bidder.key(), SessionError::Unauthorized);
+
+            let side = if a.vault_buys { auction::Side::VaultBuys } else { auction::Side::VaultSells };
+            let c = auction::Clearing {
+                mark: a.clearing_mark,
+                fill_ratio: a.fill_ratio,
+                underlying: a.wanted_underlying,
+                quote: 0,
+            };
+            let award = auction::award(&c, side, b.underlying, b.escrowed).map_err(map_auction)?;
+            (side, c, award)
+        };
+        let _ = c;
+
+        let night_supply = ctx.accounts.night_mint.supply;
+        let day_supply = ctx.accounts.day_mint.supply;
+        let v = &ctx.accounts.vault;
+        let seeds = vault_seeds(v);
+        let (u_dec, q_dec) = (v.underlying_decimals, v.quote_decimals);
+
+        match side {
+            // The bidder delivered underlying; they are paid quote and get
+            // back whatever was not filled.
+            auction::Side::VaultBuys => {
+                if award.quote > 0 {
+                    token::transfer_checked(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.quote_token_program.to_account_info(),
+                            TransferChecked {
+                                from: ctx.accounts.quote_vault.to_account_info(),
+                                mint: ctx.accounts.quote_mint.to_account_info(),
+                                to: ctx.accounts.bidder_quote.to_account_info(),
+                                authority: ctx.accounts.vault.to_account_info(),
+                            },
+                            &[&seeds[..]],
+                        ),
+                        award.quote,
+                        q_dec,
+                    )?;
+                }
+                if award.refund > 0 {
+                    token::transfer_checked(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.underlying_token_program.to_account_info(),
+                            TransferChecked {
+                                from: ctx.accounts.underlying_vault.to_account_info(),
+                                mint: ctx.accounts.underlying_mint.to_account_info(),
+                                to: ctx.accounts.bidder_underlying.to_account_info(),
+                                authority: ctx.accounts.vault.to_account_info(),
+                            },
+                            &[&seeds[..]],
+                        ),
+                        award.refund,
+                        u_dec,
+                    )?;
+                }
+            }
+            // The bidder delivered quote; they are paid underlying.
+            auction::Side::VaultSells => {
+                if award.underlying > 0 {
+                    token::transfer_checked(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.underlying_token_program.to_account_info(),
+                            TransferChecked {
+                                from: ctx.accounts.underlying_vault.to_account_info(),
+                                mint: ctx.accounts.underlying_mint.to_account_info(),
+                                to: ctx.accounts.bidder_underlying.to_account_info(),
+                                authority: ctx.accounts.vault.to_account_info(),
+                            },
+                            &[&seeds[..]],
+                        ),
+                        award.underlying,
+                        u_dec,
+                    )?;
+                }
+                if award.refund > 0 {
+                    token::transfer_checked(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.quote_token_program.to_account_info(),
+                            TransferChecked {
+                                from: ctx.accounts.quote_vault.to_account_info(),
+                                mint: ctx.accounts.quote_mint.to_account_info(),
+                                to: ctx.accounts.bidder_quote.to_account_info(),
+                                authority: ctx.accounts.vault.to_account_info(),
+                            },
+                            &[&seeds[..]],
+                        ),
+                        award.refund,
+                        q_dec,
+                    )?;
+                }
+            }
+        }
+
+        // The escrow leaves; the traded part becomes the vault's and the
+        // handoff shrinks by exactly what changed hands.
+        let escrowed = ctx.accounts.bid.escrowed;
+        let a_key = ctx.accounts.auction.key();
+        let bidder = ctx.accounts.bidder.key();
+        let v = &mut ctx.accounts.vault;
+        match side {
+            auction::Side::VaultBuys => {
+                v.escrowed_underlying = v.escrowed_underlying.saturating_sub(escrowed);
+                v.owned_underlying = v.owned_underlying.saturating_add(award.underlying);
+                v.owned_quote = v.owned_quote.saturating_sub(award.quote);
+                v.pending_delta = v.pending_delta.saturating_sub(award.quote as i128);
+            }
+            auction::Side::VaultSells => {
+                v.escrowed_quote = v.escrowed_quote.saturating_sub(escrowed);
+                v.owned_underlying = v.owned_underlying.saturating_sub(award.underlying);
+                v.owned_quote = v.owned_quote.saturating_add(award.quote);
+                v.pending_delta = v.pending_delta.saturating_add(award.quote as i128);
+            }
+        }
+
+        assert_solvent(v, night_supply, day_supply)?;
+
+        let a = &mut ctx.accounts.auction;
+        a.claimed_underlying = a.claimed_underlying.saturating_add(award.underlying);
+
+        emit!(AuctionClaimed {
+            vault: ctx.accounts.vault.key(), bidder,
+            underlying: award.underlying, quote: award.quote, refund: award.refund,
+        });
+        let _ = a_key;
+        Ok(())
+    }
+
     /// Sweep tokens transferred in without going through `mint_shares`.
     ///
     /// These are not the vault's to spend and must never count as backing;
     /// skimming keeps owned balances and real balances reconcilable.
     pub fn skim_surplus(ctx: Context<SkimSurplus>) -> Result<()> {
         let v = &ctx.accounts.vault;
-        let u_surplus = ctx.accounts.underlying_vault.amount.saturating_sub(v.owned_underlying);
-        let q_surplus = ctx.accounts.quote_vault.amount.saturating_sub(v.owned_quote);
+        // Surplus is what nobody has a claim on: not what the vault owns, and
+        // not what a bidder posted to an open auction and can still reclaim.
+        let u_surplus = ctx.accounts.underlying_vault.amount.saturating_sub(v.claimed_underlying());
+        let q_surplus = ctx.accounts.quote_vault.amount.saturating_sub(v.claimed_quote());
         require!(u_surplus > 0 || q_surplus > 0, SessionError::NothingToSkim);
 
         let seeds = vault_seeds(v);
@@ -1456,6 +1796,18 @@ fn map_op(e: OpError) -> Error {
     }
 }
 
+fn map_auction(e: auction::AuctionError) -> Error {
+    use auction::AuctionError as A;
+    match e {
+        A::StillOpen => error!(SessionError::AuctionOpen),
+        A::Closed => error!(SessionError::AuctionClosed),
+        A::NothingToFill => error!(SessionError::NothingToFill),
+        A::WrongSide => error!(SessionError::BadParameter),
+        A::ZeroAmount => error!(SessionError::ZeroAmount),
+        A::Overflow => error!(SessionError::MathOverflow),
+    }
+}
+
 fn map_event(e: event::EventError) -> Error {
     match e {
         event::EventError::DetectorStale => error!(SessionError::DetectorStale),
@@ -1704,6 +2056,102 @@ pub struct FillHandoff<'info> {
     #[account(address = vault.quote_mint @ SessionError::WrongMint)]
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     // Both, because this instruction moves both assets.
+    pub underlying_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct OpenAuction<'info> {
+    #[account(seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    /// Seeded by the bell, so each boundary gets exactly one auction and a
+    /// bid can never be claimed against a later clearing.
+    #[account(
+        init, payer = opener, space = Auction::SIZE,
+        seeds = [Auction::SEED, vault.key().as_ref(), &vault.last_boundary_ts.to_le_bytes()], bump,
+    )]
+    pub auction: Box<Account<'info, Auction>>,
+    #[account(mut)]
+    pub opener: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AuctionBidIx<'info> {
+    #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut, seeds = [Auction::SEED, vault.key().as_ref(), &auction.boundary_ts.to_le_bytes()], bump = auction.bump)]
+    pub auction: Box<Account<'info, Auction>>,
+    #[account(
+        init_if_needed, payer = bidder, space = Bid::SIZE,
+        seeds = [Bid::SEED, auction.key().as_ref(), bidder.key().as_ref()], bump,
+    )]
+    pub bid: Box<Account<'info, Bid>>,
+    #[account(mut)]
+    pub bidder: Signer<'info>,
+    #[account(mut, address = vault.underlying_vault)]
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, address = vault.quote_vault)]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut,
+        constraint = bidder_underlying.mint == vault.underlying_mint @ SessionError::WrongMint,
+        constraint = bidder_underlying.owner == bidder.key() @ SessionError::WrongOwner)]
+    pub bidder_underlying: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut,
+        constraint = bidder_quote.mint == vault.quote_mint @ SessionError::WrongMint,
+        constraint = bidder_quote.owner == bidder.key() @ SessionError::WrongOwner)]
+    pub bidder_quote: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub underlying_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseAuction<'info> {
+    #[account(seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut, seeds = [Auction::SEED, vault.key().as_ref(), &auction.boundary_ts.to_le_bytes()], bump = auction.bump)]
+    pub auction: Box<Account<'info, Auction>>,
+    /// CHECK: owner, layout and feed id are all verified in `read_quote`.
+    pub mark_price_update: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimAuction<'info> {
+    #[account(mut, seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut, seeds = [Auction::SEED, vault.key().as_ref(), &auction.boundary_ts.to_le_bytes()], bump = auction.bump)]
+    pub auction: Box<Account<'info, Auction>>,
+    /// Closed on claim: the bid has done its job and the rent goes back.
+    #[account(mut, close = bidder,
+              seeds = [Bid::SEED, auction.key().as_ref(), bidder.key().as_ref()], bump = bid.bump)]
+    pub bid: Box<Account<'info, Bid>>,
+    #[account(mut)]
+    pub bidder: Signer<'info>,
+    #[account(address = vault.night_mint)]
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.day_mint)]
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, address = vault.underlying_vault)]
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, address = vault.quote_vault)]
+    pub quote_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut,
+        constraint = bidder_underlying.mint == vault.underlying_mint @ SessionError::WrongMint,
+        constraint = bidder_underlying.owner == bidder.key() @ SessionError::WrongOwner)]
+    pub bidder_underlying: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut,
+        constraint = bidder_quote.mint == vault.quote_mint @ SessionError::WrongMint,
+        constraint = bidder_quote.owner == bidder.key() @ SessionError::WrongOwner)]
+    pub bidder_quote: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.quote_mint @ SessionError::WrongMint)]
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     pub underlying_token_program: Interface<'info, TokenInterface>,
     pub quote_token_program: Interface<'info, TokenInterface>,
 }

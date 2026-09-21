@@ -214,10 +214,69 @@ pub struct Vault {
     /// this vault's tunables and nothing else.
     pub creator: Pubkey,
     pub created_at: i64,
+    /// Tokens bidders have posted to the open auction. They sit in the
+    /// vault's own token accounts — a token account per bid is rent nobody
+    /// should pay — but they are never backing: solvency reads `owned_*`,
+    /// and the skim subtracts these before calling anything surplus.
+    pub escrowed_quote: u64,
+    pub escrowed_underlying: u64,
     /// Whether the desk shows it by default. The chain is permissionless and
     /// the shelf is curated — both are true at once, the way a token mint is
     /// permissionless and a wallet's verified list is not.
     pub curated: bool,
+}
+
+/// One call auction: the residual from a bell, offered at a single price.
+#[account]
+#[derive(Debug, InitSpace)]
+pub struct Auction {
+    pub version: u8,
+    pub bump: u8,
+    pub vault: Pubkey,
+    /// The bell this auction belongs to. Bids from a previous one cannot be
+    /// claimed against a later clearing.
+    pub boundary_ts: i64,
+    pub closes_at: i64,
+    /// True when the vault is buying stock (`pending_delta > 0`).
+    pub vault_buys: bool,
+    /// The residual in underlying atoms, fixed when the auction opened.
+    pub wanted_underlying: u64,
+    /// Total bid so far, in underlying atoms.
+    pub bid_underlying: u64,
+    pub bids: u32,
+    /// Set by `close_auction`; zero while open.
+    pub clearing_mark: u128,
+    pub fill_ratio: u128,
+    pub closed: bool,
+    /// How much of the clearing has been claimed, so the last claim can be
+    /// checked against the total rather than trusted.
+    pub claimed_underlying: u64,
+}
+
+impl Auction {
+    pub const SEED: &'static [u8] = b"auction";
+    pub const SIZE: usize = 8 + Self::INIT_SPACE + 32;
+}
+
+/// One bidder's stake in an auction.
+#[account]
+#[derive(Debug, InitSpace)]
+pub struct Bid {
+    pub version: u8,
+    pub bump: u8,
+    pub auction: Pubkey,
+    pub bidder: Pubkey,
+    /// What this bid wants to trade, in underlying atoms.
+    pub underlying: u64,
+    /// What the bidder actually posted: underlying when the vault buys,
+    /// quote when it sells.
+    pub escrowed: u64,
+    pub ts: i64,
+}
+
+impl Bid {
+    pub const SEED: &'static [u8] = b"bid";
+    pub const SIZE: usize = 8 + Self::INIT_SPACE + 16;
 }
 
 /// The one account the protocol has, and all it holds is who curates.
@@ -305,6 +364,29 @@ impl Vault {
         FundingParams { k_bps: self.funding_k_bps, max_bps: self.funding_max_bps }
     }
 
+    /// What a fill pays right now.
+    ///
+    /// The residual has to clear, and 10 bp against a measured 21 bp
+    /// round-trip cost is an offer nobody takes — which is how a handoff goes
+    /// unfilled until the next bell halts the vault. So the price of clearing
+    /// it rises with how long it has gone unfilled: the auction window, then
+    /// twice it, then whatever the ramp tops out at. An arbitrageur who waits
+    /// is paid more, and the vault would rather pay 50 bp than halt.
+    ///
+    /// Deterministic in `now` and the last bell, so a client can show the
+    /// current tier and the next one without asking the chain.
+    pub fn incentive_at(&self, now: i64) -> u16 {
+        let since = now.saturating_sub(self.last_boundary_ts);
+        let w = self.auction_secs as i64;
+        if w <= 0 || since < w {
+            self.incentive_ramp[0]
+        } else if since < 2 * w {
+            self.incentive_ramp[1]
+        } else {
+            self.incentive_ramp[2]
+        }
+    }
+
     pub fn guards(&self) -> Guards {
         Guards {
             max_stale_secs: self.max_stale_secs,
@@ -345,6 +427,11 @@ impl Vault {
             pending_delta: self.pending_delta,
             fill_incentive_bps: self.fill_incentive_bps,
         }
+    }
+
+    /// The same view, with the incentive the ramp says applies now.
+    pub fn view_at(&self, now: i64) -> VaultView {
+        VaultView { fill_incentive_bps: self.incentive_at(now), ..self.view() }
     }
 
     pub fn nav_state(&self, night_supply: u64, day_supply: u64) -> NavState {
@@ -403,6 +490,15 @@ impl Vault {
     /// Quote that may actually be paid out.
     pub fn free_quote(&self) -> u64 {
         self.owned_quote.saturating_sub(self.reserved_quote())
+    }
+
+    /// What a token account may hold before any of it counts as surplus:
+    /// what the vault owns, plus what bidders have posted and can reclaim.
+    pub fn claimed_quote(&self) -> u64 {
+        self.owned_quote.saturating_add(self.escrowed_quote)
+    }
+    pub fn claimed_underlying(&self) -> u64 {
+        self.owned_underlying.saturating_add(self.escrowed_underlying)
     }
 }
 
@@ -496,6 +592,47 @@ pub struct VaultResumed {
 /// A settlement whose move exceeded `max_move_bps`. It was booked — that is
 /// the product — and continuous fills are paused while the market absorbs it.
 #[event]
+pub struct AuctionOpened {
+    pub vault: Pubkey,
+    pub auction: Pubkey,
+    pub boundary_ts: i64,
+    pub closes_at: i64,
+    pub vault_buys: bool,
+    pub wanted_underlying: u64,
+}
+
+#[event]
+pub struct AuctionBid {
+    pub vault: Pubkey,
+    pub bidder: Pubkey,
+    pub underlying: u64,
+    pub escrowed: u64,
+    pub total_bid: u64,
+    pub bids: u32,
+}
+
+#[event]
+pub struct AuctionCleared {
+    pub vault: Pubkey,
+    pub auction: Pubkey,
+    /// One price for everyone, from the bell's own window.
+    pub mark: u128,
+    pub fill_ratio: u128,
+    pub underlying: u64,
+    pub quote: u64,
+    pub bids: u32,
+}
+
+#[event]
+pub struct AuctionClaimed {
+    pub vault: Pubkey,
+    pub bidder: Pubkey,
+    pub underlying: u64,
+    pub quote: u64,
+    pub refund: u64,
+}
+
+#[event]
 pub struct VaultCurated {
     pub vault: Pubkey,
     pub curator: Pubkey,
@@ -567,6 +704,60 @@ pub struct SurplusSkimmed {
 }
 
 #[cfg(test)]
+mod ramp {
+    use super::*;
+
+    fn vault_with(ramp: [u16; 3], auction_secs: u32, last: i64) -> Vault {
+        let mut v = super::layout::sample();
+        v.incentive_ramp = ramp;
+        v.auction_secs = auction_secs;
+        v.last_boundary_ts = last;
+        v
+    }
+
+    /// 10 bp against a measured 21 bp round-trip is an offer nobody takes.
+    /// The ramp is what stops an unfilled residual becoming a halt.
+    #[test]
+    fn the_price_of_clearing_rises_with_how_long_it_has_gone_unfilled() {
+        let v = vault_with([10, 25, 50], 120, 1_000);
+        assert_eq!(v.incentive_at(1_000), 10, "at the bell");
+        assert_eq!(v.incentive_at(1_119), 10, "inside the auction window");
+        assert_eq!(v.incentive_at(1_120), 25, "one window later");
+        assert_eq!(v.incentive_at(1_239), 25);
+        assert_eq!(v.incentive_at(1_240), 50, "two windows later, and it stops there");
+        assert_eq!(v.incentive_at(9_999_999), 50);
+    }
+
+    #[test]
+    fn a_crank_before_the_bell_pays_the_first_tier_not_the_last() {
+        let v = vault_with([10, 25, 50], 120, 1_000);
+        assert_eq!(v.incentive_at(900), 10, "a clock skewed backwards must not pay 50 bp");
+    }
+
+    #[test]
+    fn a_flat_ramp_is_the_old_fixed_incentive() {
+        let v = vault_with([10, 10, 10], 120, 1_000);
+        for t in [1_000, 1_200, 100_000] {
+            assert_eq!(v.incentive_at(t), 10);
+        }
+    }
+
+    #[test]
+    fn a_zero_window_never_ramps() {
+        let v = vault_with([10, 25, 50], 0, 1_000);
+        assert_eq!(v.incentive_at(999_999), 10, "a vault with no auction window stays at the first tier");
+    }
+
+    #[test]
+    fn the_view_carries_the_ramped_rate() {
+        let v = vault_with([10, 25, 50], 120, 1_000);
+        assert_eq!(v.view_at(1_000).fill_incentive_bps, 10);
+        assert_eq!(v.view_at(1_300).fill_incentive_bps, 50);
+        assert_eq!(v.view().fill_incentive_bps, v.fill_incentive_bps, "the plain view is unchanged");
+    }
+}
+
+#[cfg(test)]
 mod layout {
     use super::*;
     use anchor_lang::AnchorSerialize;
@@ -577,9 +768,10 @@ mod layout {
     /// bug: the client reads a field at the wrong offset, reports a number that
     /// looks plausible, and an operator acts on it. Pinning the bytes makes the
     /// drift a failing test instead.
-    #[test]
-    fn emit_account_vector() {
-        let v = Vault {
+    /// One fully-populated vault, used by the vector and by other tests that
+    /// need a realistic account rather than a hand-built one.
+    pub(super) fn sample() -> Vault {
+        Vault {
             version: VAULT_VERSION,
             bump: 253,
             authority: Pubkey::new_from_array([1u8; 32]),
@@ -635,8 +827,15 @@ mod layout {
             share_token_program: Pubkey::new_from_array([12u8; 32]),
             creator: Pubkey::new_from_array([13u8; 32]),
             created_at: 1_774_000_000,
+            escrowed_quote: 4_242,
+            escrowed_underlying: 99,
             curated: true,
-        };
+        }
+    }
+
+    #[test]
+    fn emit_account_vector() {
+        let v = sample();
 
         let mut body = Vec::new();
         v.serialize(&mut body).unwrap();
