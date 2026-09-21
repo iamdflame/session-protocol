@@ -52,7 +52,9 @@ The controls behave exactly as the mechanism predicts: GLDx, which trades
 2. **`/markets/NVDAx`** — a real vault on devnet. Connect a wallet, take the
    faucet, mint the parked class. Every figure is read from the chain; the
    ledger at the bottom decodes the program's own events, so it says what
-   happened rather than listing hashes.
+   happened rather than listing hashes. Your statement appears once you have
+   traded, with the line the whole thesis rests on: what the same money would
+   have made **held as the undivided token** over the same moments.
 3. **`/markets/OPENAI`** — the same program on a name with **no exchange
    session**. No NYSE clock anywhere on that page, because OPENAI has no
    09:30. The boundary is the next print, or the moment the token's executable
@@ -60,7 +62,12 @@ The controls behave exactly as the mechanism predicts: GLDx, which trades
    on chain.
 4. **`/bell`** — the keeper, launched on mainnet with its curve denominated in
    **real NVDAx**. The half worth reading is the list of things it *cannot* do.
-5. **`/research`** — the measurement, including what it fails to find.
+5. **`/list`** — open a vault yourself. `initialize_vault` takes no
+   permission: the signer becomes the authority, the address is derived from
+   the mint pair, and whoever gets there first opens it. The catalog finds it
+   by scanning the program's accounts, and shows it under "Show all" because
+   it is not curated — which decides where it appears and nothing else.
+6. **`/research`** — the measurement, including what it fails to find.
 
 ## What is real, and what is not
 
@@ -76,7 +83,12 @@ the thing this project is arguing against.
   9.92 quote out.
 - `$BELL` on **mainnet**, quoted in **real NVDAx**.
 - The detector on the OPENAI vault: the live mark and executable price from
-  prestocks.com.
+  prestocks.com, re-posted every fifteen minutes and settled against.
+- A first bell, end to end: settled, exposure flipped, the handoff filled by
+  an arbitrageur who was paid 25 bp for bringing the stock, and DAY's NAV down
+  by exactly that.
+- Vaults opened from a browser by a wallet that is nobody in particular, found
+  by scanning the program rather than by a list this repository keeps.
 
 **Not real yet, and why**
 - **The vaults hold stand-ins.** Devnet has no xStocks, no USDC and no pre-IPO

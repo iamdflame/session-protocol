@@ -22,6 +22,8 @@ Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 | Event vault — no exchange session | [`FtpWQU…SGDDC`](https://explorer.solana.com/address/FtpWQUy4ZAoyBDS4zbwsLLc92qppciEgcCgCavVSGDDC?cluster=devnet) · [`/markets/OPENAI`](https://session-roan.vercel.app/markets/OPENAI) |
 | `NVDA.DAY/quote` pool, Meteora DAMM v2 | [`8Vm6ei…XiybN`](https://explorer.solana.com/address/8Vm6ei7cgBacHdxbsLYEoXdZo5zCPzqBN1YgpVKXiybN?cluster=devnet) |
 | `$BELL`, **mainnet**, quoted in real NVDAx | [`7z9y4P…PdQTe`](https://solscan.io/token/7z9y4P3yatZki2AHHtzjPxEhjVTP1d362BQH1kDPdQTe) · [`/bell`](https://session-roan.vercel.app/bell) |
+| Protocol account — the curator, and nothing else | [`8Ax4HJ…6RbC`](https://explorer.solana.com/address/8Ax4HJxoh3VWVb7fp4zVkXtSfY4bueXqYxjJWuEY6RbC?cluster=devnet) · [`/markets`](https://session-roan.vercel.app/markets) |
+| Open one yourself — no permission required | [`/list`](https://session-roan.vercel.app/list) |
 
 Ninety seconds, in the order that lets you check it: **[docs/JUDGE.md](docs/JUDGE.md)**.
 What we entered and what we refused: **[docs/BOUNTIES.md](docs/BOUNTIES.md)**.
@@ -224,7 +226,7 @@ The accounting decides who gets paid, so it is written twice and pinned together
 
 ```bash
 npm install       # once, at the root — a workspace; it installs the site too
-npm test          # 103 Rust tests + 4 TypeScript suites
+npm test          # eligibility, 156 Rust tests, 8 TypeScript suites
 npm run vectors   # regenerate the cross-language vectors
 ```
 
