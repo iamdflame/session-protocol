@@ -12,6 +12,7 @@ const Markets = lazy(() => import('@/pages/Markets'));
 const Vault = lazy(() => import('@/pages/Vault'));
 const Research = lazy(() => import('@/pages/Research'));
 const HowItWorks = lazy(() => import('@/pages/HowItWorks'));
+const Bell = lazy(() => import('@/pages/Bell'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
 /**
@@ -85,6 +86,7 @@ export function App() {
               <Route path="/markets/:symbol" element={<Vault />} />
               <Route path="/research" element={<Research />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/bell" element={<Bell />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

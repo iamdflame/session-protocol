@@ -1,0 +1,24 @@
+{
+  "note": "Launched through Clawpump on Solana mainnet, with the bonding curve denominated in NVDAx rather than SOL. The agent is the keeper: it rings the session boundary, settles it, and clears the residual.",
+  "mint": "7z9y4P3yatZki2AHHtzjPxEhjVTP1d362BQH1kDPdQTe",
+  "symbol": "BELL",
+  "name": "SESSION Bell",
+  "cluster": "mainnet-beta",
+  "quote": {
+    "mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+    "symbol": "NVDA",
+    "decimals": 8,
+    "creatorFeeBps": 100
+  },
+  "agent": {
+    "id": "66240919-415a-4a4f-99b4-88cb1682bf76",
+    "name": "Bell",
+    "wallet": "4mBCWGhAMg9ePpGoVpQq4YsT4zHUvd52RG52zkmHnK14"
+  },
+  "launchTx": "4qCr3szZzQC25v2qp1rmuwFYDr9Ew2JViQF3XdLCxcBMkiQ4BE2DwAAwfcS2xLXNLJMNhe1FNLeQXH3cQu6twQp",
+  "paymentTx": "4rqHrWRkJJqtueVVkKff48cMDNrCLaAzmCpcAq2UYBbZPdc3krb54HU8xgqEarYpfAa9uhePQLhmKYffPaLLrCRH",
+  "paidSol": 0.009218,
+  "pumpUrl": "https://pump.fun/coin/7z9y4P3yatZki2AHHtzjPxEhjVTP1d362BQH1kDPdQTe",
+  "feeShare": "75%",
+  "launchedAt": "2026-09-21T05:51:22.040Z"
+}

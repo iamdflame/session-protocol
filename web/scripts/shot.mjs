@@ -40,6 +40,8 @@ const PAGES = [
   ['/markets', 'markets'],
   ['/markets/SPYx', 'vault'],
   ['/markets/NVDAx', 'vault-chain'],
+  ['/markets/OPENAI', 'vault-event'],
+  ['/bell', 'keeper'],
   ['/research', 'research'],
   ['/how-it-works', 'how'],
   ['/no-such-page', '404'],

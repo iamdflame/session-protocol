@@ -1,0 +1,79 @@
+.page { padding-bottom: clamp(48px, 8vw, 96px); }
+
+.head { padding-block: clamp(40px, 7vw, 84px) clamp(24px, 3vw, 36px); }
+.title { max-width: 16ch; margin-top: var(--sp-3); }
+.lead { max-width: 62ch; margin-top: var(--sp-4); }
+.lead strong { color: var(--ink); font-weight: 550; }
+
+.body { display: flex; flex-direction: column; gap: clamp(16px, 2.2vw, 24px); }
+.card { padding: clamp(20px, 2.8vw, 28px); display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.cardHead { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+.tokenId { display: flex; align-items: center; gap: var(--sp-3); }
+.tokenImg { border-radius: 12px; flex: none; }
+.cardTitle { font-size: var(--t-body); font-weight: 550; letter-spacing: -0.005em; }
+.cardSub { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-3); max-width: 62ch; }
+
+.mainnet {
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--good) 45%, var(--line));
+  color: var(--good);
+}
+
+.pairing { font-size: var(--t-sm); line-height: 1.65; color: var(--ink-2); max-width: 64ch; }
+.pairing strong { color: var(--ink); font-weight: 550; }
+
+.rows { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
+.rows > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rows dt { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.rows dd { margin: 0; font-size: var(--t-sm); color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.sub { font-size: var(--t-micro); line-height: 1.5; color: var(--ink-3); }
+.addr { color: var(--ink); border-bottom: 1px solid var(--line-strong); align-self: flex-start; transition: border-color var(--t-hover) var(--ease); }
+.addr:hover { border-color: var(--ink); }
+
+/* ── what it can and cannot do ───────────────────────────────────────────── */
+.powers { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.powers li {
+  font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2);
+  padding-left: 22px; position: relative;
+}
+.powers li strong { color: var(--ink); font-weight: 550; }
+.powers li::before {
+  position: absolute; left: 0; top: 0;
+  font-size: 13px; line-height: 1.5;
+}
+.powers li[data-can='true']::before { content: '✓'; color: var(--good); }
+.powers li[data-can='false']::before { content: '✕'; color: var(--ink-3); }
+.powers li[data-can='false'] { color: var(--ink-3); }
+.powers li[data-can='false'] strong { color: var(--ink-2); }
+
+.note { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-3); border-left: 2px solid var(--line-strong); padding-left: var(--sp-3); }
+
+/* ── what it has done ────────────────────────────────────────────────────── */
+.skel { display: flex; flex-direction: column; gap: 8px; }
+.acts { list-style: none; display: flex; flex-direction: column; }
+.act {
+  display: grid; grid-template-columns: 76px 128px 1fr; gap: var(--sp-3);
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+  font-size: var(--t-xs); line-height: 1.5;
+  --kind: var(--ink-3);
+}
+.act:last-child { border-bottom: 0; }
+.act[data-kind='settle'] { --kind: var(--night-ink); }
+.act[data-kind='fill'] { --kind: var(--day-ink); }
+.act[data-kind='auction'] { --kind: var(--ink-2); }
+.actKind { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--kind); }
+.actWhen { color: var(--ink-3); }
+.actText { color: var(--ink-2); min-width: 0; }
+.sig { color: var(--ink-3); font-size: var(--t-micro); }
+.sig:hover { color: var(--ink); }
+
+.empty { font-size: var(--t-sm); color: var(--ink-3); }
+.foot { font-size: var(--t-micro); line-height: 1.6; color: var(--ink-3); margin-top: var(--sp-4); max-width: 64ch; }
+.foot a { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); }
+
+@media (max-width: 640px) {
+  .act { grid-template-columns: 1fr; gap: 2px; }
+  .actWhen { font-size: var(--t-micro); }
+}

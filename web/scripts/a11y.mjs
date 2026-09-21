@@ -22,7 +22,8 @@ const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i
 const BASE = arg('base', 'http://localhost:3100');
 const GROUND = arg('ground', null);
 
-const PAGES = ['/', '/markets', '/markets/SPYx', '/markets/NVDAx', '/research', '/how-it-works', '/nope'];
+const PAGES = ['/', '/markets', '/markets/SPYx', '/markets/NVDAx', '/markets/OPENAI', '/research',
+  '/how-it-works', '/bell', '/nope'];
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
 const PORT = 9400 + (process.pid % 300);
 
