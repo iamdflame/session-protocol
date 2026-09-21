@@ -1,0 +1,141 @@
+# The machine this protocol was written on has no AVX2, so
+# `solana-test-validator` aborts at startup and the one test that proves the
+# program can custody a real xStock has never run there. That is why this file
+# exists: CI is the validator.
+#
+# It also runs the assertions that are *meant* to fail one day. NVDAx's issuer
+# can set a transfer hook, pause the mint or move the fee schedule at any time,
+# and the repository should find that out here rather than on somebody's
+# settlement.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The issuer can change the asset without touching this repository, so the
+  # live assertions run on a schedule too.
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  SOLANA_VERSION: 2.3.13
+
+jobs:
+  rust:
+    name: program
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ hashFiles('Cargo.lock') }}
+      - run: cargo test -p session --all-targets
+      - name: simulation halt rate
+        run: |
+          cargo test -p session --test simulation a_year_of_random_activity -- --nocapture
+          cat data/sim-report.json
+
+  build:
+    name: sbf artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.local/share/solana
+          key: sbf-${{ env.SOLANA_VERSION }}-${{ hashFiles('Cargo.lock') }}
+      - name: install solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      # The guard is the point: cargo build-sbf prints a stack overrun as an
+      # Error, exits 0, and writes the .so anyway. The script deletes it.
+      - run: npm run build:program
+      - name: the artifact exists and the guard did not delete it
+        run: test -s target/deploy/session.so && ls -l target/deploy/session.so
+
+  ts:
+    name: sdk and clients
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:ts
+      - name: site typecheck
+        run: |
+          cd web
+          npx tsc --noEmit
+          npx tsc --noEmit -p api-src/tsconfig.json
+
+  validator:
+    name: against the real mainnet accounts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.local/share/solana
+            target
+          key: validator-${{ env.SOLANA_VERSION }}-${{ hashFiles('Cargo.lock') }}
+      - name: install solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - run: npm ci
+      - run: npm run build:program
+      # Clones NVDAx, OPENAI, USDC and the Pyth receiver from mainnet, then
+      # initialises a vault over the real pair and mints against it. A public
+      # RPC rate-limits the clone step, so a key is used when one is set.
+      - name: validator test
+        env:
+          MAINNET_RPC: ${{ secrets.MAINNET_RPC || 'https://api.mainnet-beta.solana.com' }}
+        run: npm run test:validator
+
+  hygiene:
+    name: what must not be here
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # PreStocks disqualifies any submission carrying a competing pre-IPO
+      # mint. This is not a style rule — it is the eligibility condition, so
+      # it fails the build rather than sitting in a document nobody reads.
+      # Tracked files only: what is in the repository is what counts, and a
+      # working-tree scan would trip over anybody's local notes.
+      - name: no competing pre-IPO mints
+        run: |
+          if git ls-files | grep -v '^\.github/workflows/ci\.yml$' \
+             | xargs -r grep -lniE 'tessera|t-kalshi|t-openai|stonkfun|tspacex' ; then
+            echo "::error::a competing pre-IPO mint is referenced; PreStocks eligibility is lost"
+            exit 1
+          fi
+      - name: no secrets
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env|.*keypair\.json|operator\.json|manifest\.json)$'; then
+            echo "::error::a key or a private manifest is tracked"
+            exit 1
+          fi

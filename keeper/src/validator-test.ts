@@ -23,7 +23,7 @@
    says so rather than looking like a broken test.
    ─────────────────────────────────────────────────────────────────────────── */
 
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,10 +40,13 @@ import {
   TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, type VaultParams,
 } from '../../sdk/src/ix.ts';
 import { valueOf } from '../../sdk/src/settle.ts';
+import { inspectMint, transferFee, uiMultiplier } from '../../sdk/src/issuer.ts';
 
 /* The real ones, cloned from mainnet. */
 const NVDAX = new PublicKey('Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh');   // Token-2022
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');   // classic SPL
+/** A real PreStock: Token-2022, and it charges a transfer fee. */
+const OPENAI = new PublicKey('PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF');
 const PYTH_RECEIVER = new PublicKey('rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ');
 const SOL_USD = 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d';
 const BTC_USD = 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43';
@@ -63,6 +66,32 @@ writeFileSync(join(ledger, 'payer.json'), JSON.stringify([...payer.secretKey]));
 const markAccount = pythFeedAccount(hexToBytes(SOL_USD));
 const equityAccount = pythFeedAccount(hexToBytes(BTC_USD));
 
+/* The payer needs real USDC and its mint authority is Circle's, so the
+   account is handed to the validator at startup instead. `--account` takes
+   the same JSON `solana account --output json` emits, which is how a fork
+   test seeds a balance it cannot mint. Nothing about the program's path
+   changes: it sees an ordinary USDC token account. */
+const USDC_AMOUNT = 5_000n * 10n ** 6n;
+const userQuote = ata(payer.publicKey, USDC, TOKEN_PROGRAM_ID);
+{
+  const d = Buffer.alloc(165);
+  USDC.toBuffer().copy(d, 0);
+  payer.publicKey.toBuffer().copy(d, 32);
+  d.writeBigUInt64LE(USDC_AMOUNT, 64);
+  d[108] = 1; // AccountState::Initialized
+  writeFileSync(join(ledger, 'usdc-ata.json'), JSON.stringify({
+    pubkey: userQuote.toBase58(),
+    account: {
+      lamports: 2_039_280,
+      data: [d.toString('base64'), 'base64'],
+      owner: TOKEN_PROGRAM_ID.toBase58(),
+      executable: false,
+      rentEpoch: 0,
+      space: 165,
+    },
+  }));
+}
+
 console.log('starting a validator with the real mainnet accounts cloned in…');
 const validator = spawn('solana-test-validator', [
   '--ledger', join(ledger, 'ledger'),
@@ -73,8 +102,10 @@ const validator = spawn('solana-test-validator', [
   '--clone', NVDAX.toBase58(),
   '--clone', USDC.toBase58(),
   '--clone-upgradeable-program', PYTH_RECEIVER.toBase58(),
+  '--clone', OPENAI.toBase58(),
   '--clone', markAccount.toBase58(),
   '--clone', equityAccount.toBase58(),
+  '--account', userQuote.toBase58(), join(ledger, 'usdc-ata.json'),
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let stderr = '';
 validator.stderr.on('data', d => { stderr += d.toString(); });
@@ -118,6 +149,32 @@ try {
   const mk = await conn.getAccountInfo(markAccount);
   check('a Pyth price account is present and owned by the receiver',
     !!mk && mk.owner.equals(PYTH_RECEIVER), mk ? mk.owner.toBase58() : 'missing');
+
+  /* ── the assertions that exist to fail ──────────────────────────────────
+     These read the *live* mainnet mints. If NVDAx's issuer sets a transfer
+     hook, or pauses it, or OPENAI's fee schedule moves again, this is where
+     the repository finds out — in CI, loudly, rather than on a user's
+     settlement. That is the whole reason the real accounts are cloned. */
+  const epoch = (await conn.getEpochInfo()).epoch;
+  const nvIssuer = inspectMint(nv!.data, nv!.owner, epoch);
+  check('NVDAx still has no transfer hook program set',
+    nvIssuer.hookProgram === null,
+    nvIssuer.hookProgram ? `hook ${nvIssuer.hookProgram.toBase58()} — the vault cannot move this asset` : '');
+  check('NVDAx is not paused by its issuer', !nvIssuer.paused);
+  check('NVDAx charges no transfer fee', nvIssuer.transferFeeBps === 0, `${nvIssuer.transferFeeBps} bp`);
+  check('NVDAx still carries a permanent delegate, and the runbook still says so',
+    nvIssuer.permanentDelegate !== null);
+  check('NVDAx scaled-UI multiplier is read, not assumed',
+    nvIssuer.scaledUi !== null && uiMultiplier(nvIssuer, Math.floor(Date.now() / 1000)) >= 1,
+    String(nvIssuer.scaledUi?.multiplier));
+
+  const oa = await conn.getAccountInfo(OPENAI);
+  const oaIssuer = oa ? inspectMint(oa.data, oa.owner, epoch) : null;
+  check('OPENAI is cloned and its transfer fee is read from the schedule in force',
+    !!oaIssuer && oaIssuer.transferFeeBps > 0, oaIssuer ? `${oaIssuer.transferFeeBps} bp` : 'missing');
+  check('a fill into a fee-bearing mint would be credited net',
+    !!oaIssuer && transferFee(oaIssuer, 1_000_000_000n) > 0n,
+    oaIssuer ? `${transferFee(oaIssuer, 1_000_000_000n)} atoms on 1e9` : '');
 
   /* ── 2. initialise a vault over the real pair ─────────────────────────── */
   const [vault] = vaultPda(NVDAX, USDC);
@@ -186,36 +243,9 @@ try {
     !!nm && nm.owner.equals(TOKEN_2022_PROGRAM_ID), nm ? nm.owner.toBase58() : 'missing');
 
   /* ── 4. mint and redeem with real USDC ────────────────────────────────── */
-  // The cloned USDC mint's authority is not ours, so quote is moved into the
-  // payer's account by writing the account directly — the same trick a fork
-  // test uses, and it changes nothing about the program's path.
-  const userQuote = ata(payer.publicKey, USDC, TOKEN_PROGRAM_ID);
-  await send(new Transaction().add(
-    createAtaIdempotentIx(payer.publicKey, payer.publicKey, USDC, TOKEN_PROGRAM_ID),
-  ));
-  const AMOUNT = 5_000n * 10n ** 6n;
-  const acc = (await conn.getAccountInfo(userQuote))!;
-  const data = Buffer.from(acc.data);
-  data.writeBigUInt64LE(AMOUNT, 64);
-  execFileSync('solana', [
-    'account', userQuote.toBase58(), '--url', 'http://127.0.0.1:8899', '--output', 'json',
-  ], { stdio: 'ignore' });
-  // write it through the validator's account-set RPC
-  await fetch('http://127.0.0.1:8899', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0', id: 1, method: 'setAccount',
-      params: [userQuote.toBase58(), {
-        lamports: acc.lamports, data: [data.toString('base64'), 'base64'],
-        owner: TOKEN_PROGRAM_ID.toBase58(), executable: false, rentEpoch: 0,
-      }],
-    }),
-  }).catch(() => null);
-
   const funded = await conn.getTokenAccountBalance(userQuote).then(r => BigInt(r.value.amount)).catch(() => 0n);
-  if (funded < AMOUNT) {
-    console.log(`  skip  mint/redeem — could not place USDC in the test account (validator has no setAccount RPC)`);
-  } else {
+  check('the payer holds real USDC, handed to the validator at startup', funded === USDC_AMOUNT, funded.toString());
+  {
     const parked = v.exposed === 'night' ? 'day' : 'night';
     const classMint = parked === 'night' ? nightMint : dayMint;
     const userShares = ata(payer.publicKey, classMint, TOKEN_2022_PROGRAM_ID);
