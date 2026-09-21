@@ -27,6 +27,7 @@
     "pools": "node --experimental-strip-types keeper/src/pools.ts",
     "wallet": "node --experimental-strip-types keeper/src/wallet.ts",
     "devnet:event": "node --experimental-strip-types keeper/src/devnet-event.ts",
+    "devnet:detector": "node --experimental-strip-types keeper/src/devnet-detector.ts",
     "bell": "node --experimental-strip-types agent/launch.ts",
     "bell:verify": "node --experimental-strip-types agent/verify.ts",
     "mcp": "node --experimental-strip-types agent/mcp.ts",

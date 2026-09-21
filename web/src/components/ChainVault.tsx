@@ -13,7 +13,7 @@ import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/sess
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
   useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
-  useLedger, useWalletTrades, type LedgerRow,
+  useLedger, useWalletTrades, pingDetector, type LedgerRow,
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
 import { describe, kindOf } from '@sdk/events.ts';
@@ -193,10 +193,25 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
           <div className={`card ${s.chartCard}`}>
             <header className={s.cardHead}>
               <div>
-                <h2 className={s.cardTitle}>Decomposed since inception</h2>
+                <h2 className={s.cardTitle}>
+                  {isEvent ? 'The same split, on an asset with no session' : 'Decomposed since inception'}
+                </h2>
                 <p className={s.cardSub}>
-                  {asset.symbol}&rsquo;s real pool history, split by session. The vault above
-                  applies the same rule to whatever the mark does from here.
+                  {isEvent ? (
+                    /* This curve is cut by NYSE hours, and OPENAI does not have
+                       any — so it is a control, not this vault's rule. Labelling
+                       it "decomposed since inception" beside a vault that splits
+                       on prints and premium would claim the chart shows what the
+                       vault does, and it does not. */
+                    <>{asset.symbol}&rsquo;s real pool history cut by <strong>NYSE hours</strong>,
+                      which it does not have — the same control the study runs on GLDx. It is here
+                      because the question is fair and the answer should be visible, not because
+                      this vault uses it. <strong>This vault splits on the next print and on the
+                      premium above</strong>, which is a different boundary entirely.</>
+                  ) : (
+                    <>{asset.symbol}&rsquo;s real pool history, split by session. The vault above
+                      applies the same rule to whatever the mark does from here.</>
+                  )}
                 </p>
               </div>
             </header>
@@ -282,9 +297,39 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<{ at: number; text: string; sig?: string; ok: boolean } | null>(null);
   const auto = useRef(0);
+  /* An event vault has no calendar to crank against. Its tick is the reading:
+     post the issuer's mark and the executable price, then settle against them
+     if the premium has run. Same button, different endpoint, because from the
+     reader's side it is the same act — bring the vault up to date. */
+  const isEvent = d.vault.sessionKind === SESSION_EVENT;
 
   const run = useCallback(async (why: 'auto' | 'manual') => {
     setBusy(true);
+    if (isEvent) {
+      const r = await pingDetector();
+      setBusy(false);
+      const at = Math.floor(Date.now() / 1000);
+      if ('error' in r) { setLast({ at, text: r.error, ok: false }); return; }
+      const rep = r.report;
+      const settled = rep.cranked && 'settled' in rep.cranked ? rep.cranked.settled : null;
+      const premium = `premium ${(rep.premiumBps / 100).toFixed(2)}%`;
+      if (settled && 'signature' in settled) {
+        setLast({ at, ok: true, sig: settled.signature, text: `Boundary settled at ${premium}` });
+        onDone();
+      } else if ('signature' in rep.posted) {
+        setLast({
+          at, ok: true, sig: rep.posted.signature,
+          text: `Reading posted — mark $${rep.mark.toFixed(2)}, executable $${rep.executable.toFixed(2)}, ${premium}`
+            + (rep.overToleranceBps !== null ? ` — past tolerance by ${(rep.overToleranceBps / 100).toFixed(2)}%` : ''),
+        });
+        onDone();
+      } else if ('failed' in rep.posted) {
+        setLast({ at, ok: false, text: `Could not post the reading: ${rep.posted.failed}` });
+      } else {
+        setLast({ at, ok: true, text: `Reading is current — ${premium}` });
+      }
+      return;
+    }
     const r = await pingCrank();
     setBusy(false);
     const at = Math.floor(Date.now() / 1000);
@@ -304,7 +349,7 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
     } else {
       setLast({ at, ok: true, text: why === 'manual' ? 'Nothing due — the vault is current' : 'Checked; nothing due' });
     }
-  }, [onDone]);
+  }, [onDone, isEvent]);
 
   // Ping once when a boundary is due, and not again for five minutes so a
   // page left open does not hammer the endpoint while a stale mark blocks it.
@@ -320,10 +365,10 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
     <div className={`card ${c.crank}`}>
       <div className={c.crankRow}>
         <div>
-          <p className={c.crankTitle}>Settlement</p>
+          <p className={c.crankTitle}>{isEvent ? 'The reading, and settlement' : 'Settlement'}</p>
           <p className={c.crankSub}>
             Last settled <span className="num">{etClock(d.vault.lastBoundaryTs)}</span> {etDate(d.vault.lastBoundaryTs)} ET
-            {d.nextBoundaryTs !== null && (
+            {!isEvent && d.nextBoundaryTs !== null && (
               <> · next bell <span className="num">{etClock(d.nextBoundaryTs)}</span> {etDate(d.nextBoundaryTs)}</>
             )}
             {d.vault.pendingDelta !== 0n && (
@@ -332,7 +377,7 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
           </p>
         </div>
         <button className={c.crankBtn} onClick={() => run('manual')} disabled={busy} data-due={d.boundaryDue}>
-          {busy ? 'Running…' : d.boundaryDue ? 'Settle now' : 'Check'}
+          {busy ? 'Running…' : d.boundaryDue ? 'Settle now' : isEvent ? 'Refresh the reading' : 'Check'}
         </button>
       </div>
       {last && (
@@ -342,9 +387,17 @@ function Crank({ d, onDone }: { d: ChainState; onDone: () => void }) {
         </p>
       )}
       <p className={c.crankNote}>
-        Anyone can settle: the program&rsquo;s <span className="mono">settle_boundary</span> takes no
-        signer. This page pings the crank when its calendar says a bell has passed; the
-        operator&rsquo;s inventory fills the handoff, which on mainnet is a market maker&rsquo;s job.
+        {isEvent ? (
+          <>No oracle prices a pre-IPO token, so this vault settles against a{' '}
+            <strong>reading an operator posts</strong> — the issuer&rsquo;s mark and the price
+            the token actually trades at, both read live from prestocks.com. The program
+            bounds how stale that reading may be and records who posted it; it cannot make
+            it true. Everything else here is enforced on chain.</>
+        ) : (
+          <>Anyone can settle: the program&rsquo;s <span className="mono">settle_boundary</span> takes
+            no signer. This page pings the crank when its calendar says a bell has passed; the
+            operator&rsquo;s inventory fills the handoff, which on mainnet is a market maker&rsquo;s job.</>
+        )}
       </p>
     </div>
   );

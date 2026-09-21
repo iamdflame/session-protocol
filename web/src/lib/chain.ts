@@ -254,7 +254,9 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
 
   const valueNight = valueOf(nightSupply, vault.nightNav);
   const valueDay = valueOf(daySupply, vault.dayNav);
-  const next = nextBoundary(vault.lastBoundaryTs, 20);
+  // Only an equity vault has a calendar. An event vault's boundary is worked
+  // out below, from its own schedule and its own reading.
+  const next = isEvent ? null : nextBoundary(vault.lastBoundaryTs, 20);
 
   /* ── the event vault's clocks ─────────────────────────────────────────── */
   let event: ChainVault['event'] = null;
@@ -269,6 +271,23 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
       inPrint: prints.some(e => now >= e.ts && now < e.ts + e.windowSecs),
       detectorAgeSecs: detector ? now - detector.ts : null,
     };
+  }
+
+  /* What "due" means without a bell.
+     
+     Mirrors `event::session_for`: a vault is Closed — THEN wearing the risk —
+     while a scheduled print's window is open, or while the premium is past
+     the vault's tolerance. A boundary is due when that differs from the side
+     the vault is currently on, and only while the reading is fresh enough for
+     the program to accept it at all. */
+  let eventDue = false;
+  let eventNext: number | null = null;
+  if (event) {
+    const fresh = event.detectorAgeSecs !== null && event.detectorAgeSecs <= vault.maxStaleSecs;
+    const closed = event.inPrint || event.premiumBps > vault.maxPremiumBps;
+    // `lastSessionOpen` is the side the vault settled to last; Closed ≡ THEN.
+    eventDue = fresh && closed === vault.lastSessionOpen;
+    eventNext = event.nextPrint ? event.nextPrint.ts : null;
   }
 
   /* ── the auction for this bell ───────────────────────────────────────── */
@@ -299,7 +318,8 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     markAgeSecs: mark ? now - mark.publishTime : null,
     valueNight, valueDay, skew: skewWad(valueNight, valueDay),
     health: evaluate(state, now),
-    nextBoundaryTs: next, boundaryDue: next !== null && now >= next,
+    nextBoundaryTs: isEvent ? eventNext : next,
+    boundaryDue: isEvent ? eventDue : (next !== null && now >= next),
     slot: context.slot, fetchedAt: now,
     me: me ? { quote: u64At(meQ?.data, 64), night: u64At(meN?.data, 64), day: u64At(meD?.data, 64) } : null,
     issuer, vaultFrozen,
@@ -737,6 +757,39 @@ export async function pingCrank(): Promise<{ cached: boolean; report: CrankRepor
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * The event vault's tick.
+ *
+ * An equity vault is cranked against a calendar, and anyone may do it because
+ * `settle_boundary` takes no signer. An event vault cannot be: its boundary is
+ * the next print or a premium that has run, and both are read from a number an
+ * operator posts, because nothing on any chain prices a pre-IPO token. So this
+ * endpoint posts the reading *and* settles against it — refreshing one without
+ * consulting the other would be a detector nobody reads.
+ */
+export async function pingDetector(): Promise<
+  { cached: boolean; report: DetectorPing } | { error: string }
+> {
+  try {
+    const r = await fetch('/api/detector', { cache: 'no-store' });
+    return await r.json();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export interface DetectorPing {
+  ok: boolean;
+  mark: number;
+  executable: number;
+  premiumBps: number;
+  overToleranceBps: number | null;
+  previousAgeSecs: number | null;
+  source: string;
+  posted: { signature: string } | { skipped: string } | { failed: string };
+  cranked?: CrankReport | { failed: string } | { skipped: string };
 }
 
 /** Must match `faucetMessage` in api-src/faucet.ts. */

@@ -5,9 +5,15 @@ import type { Manifest } from '../../keeper/src/crank-core.ts';
 // The same file the site serves at /devnet.json, bundled into the function so
 // the two can never describe different vaults.
 import manifest from '../public/devnet.json' with { type: 'json' };
+import eventManifest from '../public/devnet-openai.json' with { type: 'json' };
 
 export function loadManifest(): Manifest {
   return manifest as unknown as Manifest;
+}
+
+/** The event-session vault: no exchange clock, a posted reading instead of a feed. */
+export function loadEventManifest(): Manifest {
+  return eventManifest as unknown as Manifest;
 }
 
 export function operator(): Keypair {
