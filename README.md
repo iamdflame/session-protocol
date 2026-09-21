@@ -25,6 +25,8 @@ Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 
 Ninety seconds, in the order that lets you check it: **[docs/JUDGE.md](docs/JUDGE.md)**.
 What we entered and what we refused: **[docs/BOUNTIES.md](docs/BOUNTIES.md)**.
+Who holds the keys and what they can do: **[docs/UPGRADE-POLICY.md](docs/UPGRADE-POLICY.md)**.
+What mainnet costs, and why it has not happened: **[docs/PHASE-F.md](docs/PHASE-F.md)**.
 
 ---
 
@@ -275,7 +277,7 @@ sdk/             calendar, settlement, account decoding, health, instruction bui
 keeper/          the permissionless crank and fill; devnet init and checks
 web/             the site — Vite + React, the wallet layer, two serverless functions
 research/        the session study, bad-print rejection, live execution costs
-docs/            the audit and the operator runbook
+docs/            the audit, the runbook, the key policy, the mainnet costing
 tests/vectors/   the cross-language vectors
 ```
 

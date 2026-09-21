@@ -87,8 +87,9 @@ the thing this project is arguing against.
   here (see below).
 - **The mark is Pyth's `Crypto.SOL/USD`.** No tokenised-equity feed is
   sponsored on devnet.
-- **Mainnet costs more than this has.** The program is ~850 KB; its rent alone
-  is about 3.7 SOL, before any inventory.
+- **Mainnet costs more than this has.** The program is 854,600 bytes; rent
+  alone is **5.95 SOL** settled and **11.9 SOL** peak during the deploy, before
+  a share of inventory. The wallet holds 0.25. → `docs/PHASE-F.md`
 
 ## The bug worth knowing about
 
