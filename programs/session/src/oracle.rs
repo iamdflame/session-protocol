@@ -173,14 +173,24 @@ pub fn check_mark(
 
     let mark = normalize(q, underlying_decimals, quote_decimals)?;
 
-    if last_mark > 0 {
-        let diff = if mark > last_mark { mark - last_mark } else { last_mark - mark };
-        let move_bps = mul_div_floor(diff, 10_000, last_mark).ok_or(OracleError::Overflow)?;
-        if move_bps > g.max_move_bps as u128 {
-            return Err(OracleError::MoveTooLarge);
-        }
-    }
+    // The move bound is *not* applied here. A 20% gap is not a bad print —
+    // it is the event the NIGHT class exists to wear — and refusing to settle
+    // it would leave the vault unable to settle at all until the price came
+    // back, which it may never do. Callers ask `move_bps` and decide: a
+    // settlement books it and pauses fills; a recap on the operator's word
+    // refuses it.
+    let _ = (last_mark, g.max_move_bps);
     Ok(mark)
+}
+
+/// How far `mark` sits from `last_mark`, in basis points of `last_mark`.
+/// Zero when there is no previous mark.
+pub fn move_bps(mark: u128, last_mark: u128) -> Result<u128, OracleError> {
+    if last_mark == 0 {
+        return Ok(0);
+    }
+    let diff = if mark > last_mark { mark - last_mark } else { last_mark - mark };
+    mul_div_floor(diff, 10_000, last_mark).ok_or(OracleError::Overflow)
 }
 
 /// The session the vault will act on.
@@ -416,9 +426,16 @@ mod tests {
         let mark = normalize(&q, 8, 6).unwrap();
         // previous boundary was half this price: a 100% move, over the 20% limit
         let w = MarkWindow::now(0, G.max_stale_secs);
-        assert_eq!(check_mark(&q, w, mark / 2, 8, 6, &G), Err(OracleError::MoveTooLarge));
+        // a doubling is a valid mark; the *caller* decides what a jump means
+        assert!(check_mark(&q, w, mark / 2, 8, 6, &G).is_ok());
+        assert_eq!(move_bps(mark, mark / 2).unwrap(), 10_000);
+        assert!(move_bps(mark, mark / 2).unwrap() > G.max_move_bps as u128);
         // a 10% move is fine
         assert!(check_mark(&q, w, mark * 100 / 110, 8, 6, &G).is_ok());
+        assert!(move_bps(mark, mark * 100 / 110).unwrap() <= G.max_move_bps as u128);
+        assert_eq!(move_bps(mark, 0).unwrap(), 0, "no previous mark, no move");
+        assert_eq!(move_bps(mark, mark).unwrap(), 0);
+        assert_eq!(move_bps(mark / 2, mark).unwrap(), 5_000, "down moves measure against the previous mark too");
     }
 
 

@@ -408,6 +408,17 @@ pub struct VaultResumed {
     pub exposed: Class,
 }
 
+/// A settlement whose move exceeded `max_move_bps`. It was booked — that is
+/// the product — and continuous fills are paused while the market absorbs it.
+#[event]
+pub struct JumpSettled {
+    pub vault: Pubkey,
+    pub ts: i64,
+    pub move_bps: u32,
+    pub mark: u128,
+    pub fills_paused_until: i64,
+}
+
 #[event]
 pub struct Recapped {
     pub vault: Pubkey,

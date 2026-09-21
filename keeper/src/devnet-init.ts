@@ -65,9 +65,14 @@ const PARAMS: VaultParams = {
   equityFeedId: hexToBytes(FEEDS['Crypto.BTC/USD']),
   fundingKBps: 2_500,
   fundingMaxBps: 50,
-  maxStaleSecs: 900,            // mainnet: 120
+  // The bell window is [bell − max_bell_lead_secs, bell + max_stale_secs].
+  // Without a Hermes key this instance settles against the sponsored feed at
+  // crank time, and the cron's retry lands 25 minutes after the bell, so the
+  // window has to admit that or the retry is refused on its publish time.
+  // A mainnet instance posts the print from the bell and uses 120.
+  maxStaleSecs: 1_800,          // mainnet: 120, with an as-of post
   maxConfBps: 500,
-  maxMoveBps: 5_000,
+  maxMoveBps: 1_000,           // a 10% move is a jump: it settles, fills pause
   equityQuietSecs: 3_600,
   fillIncentiveBps: 10,
   maxCarryDeltaBps: 500,

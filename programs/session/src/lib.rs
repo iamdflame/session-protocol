@@ -433,6 +433,14 @@ pub mod session {
         )
         .map_err(map_oracle)?;
 
+        // A move past max_move_bps is a jump. It settles — the exposed class
+        // wears it, which is the product — and ordinary fills pause for a
+        // cooling period so the residual is not swept up at a price the
+        // market has not yet absorbed. Only a loss the class cannot cover
+        // halts, below.
+        let jump_bps = oracle::move_bps(mark, v.last_mark).map_err(map_oracle)?;
+        let jumped = v.last_mark > 0 && jump_bps > v.max_move_bps as u128;
+
         let nav_state = v.nav_state(night_supply, day_supply);
         let out = settle(&nav_state, mark, &v.funding_params())
             .map_err(|_| error!(SessionError::MathOverflow))?;
@@ -465,8 +473,21 @@ pub mod session {
             .checked_add(out.handoff_delta)
             .ok_or(SessionError::MathOverflow)?;
         v.cum_funding_night = v.cum_funding_night.saturating_add(out.funding);
+        if jumped {
+            v.fill_paused_until = now.saturating_add(2 * v.auction_secs as i64);
+        }
 
         assert_solvent(v, night_supply, day_supply)?;
+
+        if jumped {
+            emit!(JumpSettled {
+                vault: v.key(),
+                ts: now,
+                move_bps: jump_bps.min(u32::MAX as u128) as u32,
+                mark,
+                fills_paused_until: v.fill_paused_until,
+            });
+        }
 
         emit!(BoundarySettled {
             vault: v.key(),
@@ -512,6 +533,7 @@ pub mod session {
             SessionError::Halted
         );
         require!(!v.paused(PAUSE_FILL), SessionError::Paused);
+        require!(now >= v.fill_paused_until, SessionError::FillsPaused);
 
         let mark_feed = v.mark_feed_id;
         let mark_u = read_quote(&ctx.accounts.mark_price_update, &mark_feed)?;

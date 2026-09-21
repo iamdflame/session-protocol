@@ -113,4 +113,6 @@ pub enum SessionError {
     NotAMint,
     #[msg("the underlying that arrived does not match the mint's transfer-fee schedule")]
     TransferFeeMismatch,
+    #[msg("fills are paused for a cooling period after a jump settled")]
+    FillsPaused,
 }
