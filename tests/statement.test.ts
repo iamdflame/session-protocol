@@ -182,6 +182,44 @@ console.log('\nthe position');
     === JSON.stringify(backward, (_, v) => (typeof v === 'bigint' ? v.toString() : v)));
 }
 
+/* ── 7. the position needs only your own trades; the benchmark needs all ── */
+//
+// This is what lets the site show a correct position off a handful of
+// signatures while the comparison waits for the vault's whole history. If the
+// two ever disagree, the panel is quietly showing one wallet a different P&L
+// depending on how much of the chain it managed to read.
+{
+  console.log('\nwhat a position needs, and what the benchmark needs');
+  const f = new Fixture();
+  f.mint(THEM, 'night', 3_000_000n);          // somebody else's money
+  f.mint(ME, 'day', 1_000_000n);
+  f.bell(WAD * 108n);
+  f.mint(ME, 'day', 500_000n);
+  f.bell(WAD * 103n);
+  f.redeem(ME, 'day', 400_000n);
+
+  const all = statement(f.events, ME, f.s.nightNav, f.s.dayNav);
+  // Only what this wallet's own share accounts would have seen.
+  const mineOnly = f.events.filter(({ event: e }) =>
+    (e.name === 'SharesMinted' || e.name === 'SharesRedeemed') && e.fields.user === ME);
+  const mine = statement(mineOnly, ME, f.s.nightNav, f.s.dayNav);
+
+  check('a wallet-only walk gives the same shares', mine.day.shares === all.day.shares,
+    `${mine.day.shares} vs ${all.day.shares}`);
+  check('the same cash in and out',
+    mine.day.quoteIn === all.day.quoteIn && mine.day.quoteOut === all.day.quoteOut);
+  check('the same value now, and the same P&L',
+    mine.day.value === all.day.value && mine.day.pnl === all.day.pnl,
+    `${mine.day.pnl} vs ${all.day.pnl}`);
+  check('the same trades, and none of the other wallet\'s',
+    mine.rows.length === all.rows.length && mine.rows.length === 3);
+
+  check('but the wallet-only walk knows it cannot price the benchmark', !mine.complete);
+  check('while the full walk can', all.complete);
+  check('and the two benchmarks differ, which is why the flag exists',
+    mine.bundle.value !== all.bundle.value, `${mine.bundle.value} vs ${all.bundle.value}`);
+}
+
 /* ── 7. the file ─────────────────────────────────────────────────────────── */
 
 console.log('\nthe CSV');

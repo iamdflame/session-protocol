@@ -18,7 +18,7 @@
 
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { WebSocket } from 'ws';
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
@@ -38,6 +38,10 @@ const wallet = FRESH
 const conn = new Connection(manifest.rpc, 'confirmed');
 
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
+/* Chrome writes ~90MB of profile per run and never cleans it up; a few
+   days of harness runs filled this machine's disk. Named here so the
+   teardown removes the same directory the browser was given. */
+const PROFILE = '/tmp/session-chainflow-' + process.pid;
 const PORT = 9650 + (process.pid % 300);
 
 let passed = 0, failed = 0, skipped = 0;
@@ -237,7 +241,7 @@ const chrome = spawn(CHROME, [
      carry over — which is what the cache is for — but wallet-adapter also
      remembers the selected wallet there and autoconnects, so the connect flow
      under test would never run. */
-  '--user-data-dir=/tmp/session-chainflow-' + process.pid, 'about:blank',
+  '--user-data-dir=' + PROFILE, 'about:blank',
 ], { stdio: 'ignore' });
 
 try {
@@ -437,19 +441,30 @@ try {
   else check('the statement picks up this run\'s two trades', stmt, `was ${before.trades}`);
   if (stmt) {
     const after = await readStatement();
-    check('three lines: both classes and the undivided token', after.rows.length === 3, JSON.stringify(after.rows.map(r => r.name)));
-    check('the third is the benchmark, not a position', after.rows[2]?.bench === true);
+    /* Two lines always — the position, which comes from the wallet's own
+       trades — and a third when the vault's whole history has been read,
+       because pricing the undivided pair needs every boundary. On a
+       throttled endpoint the third legitimately does not arrive, and a
+       panel that showed it anyway would be showing a number it guessed. */
+    check('both classes are listed', after.rows.length >= 2, JSON.stringify(after.rows.map(r => r.name)));
+    const bench = after.rows.find(r => r.bench);
+    if (bench) {
+      check('the benchmark carries the same cash flows as both classes together',
+        Math.round(bench.in * 100) === Math.round((after.rows[0].in + after.rows[1].in) * 100)
+        && Math.round(bench.out * 100) === Math.round((after.rows[0].out + after.rows[1].out) * 100),
+        JSON.stringify(after.rows.map(r => [r.in, r.out])));
+      check('and the panel says what the split was worth against holding it whole',
+        /undivided|whole|neither helped/i.test(after.verdict), after.verdict.slice(0, 140));
+    } else {
+      skip('the undivided benchmark', 'the vault history needed to price it did not finish loading');
+      check('and the panel says the comparison is missing rather than guessing it',
+        /needs every boundary/i.test(after.verdict), after.verdict.slice(0, 140));
+    }
     const pick = st => st.rows.find(r => r.name.toLowerCase().endsWith(parked)) ?? ZERO_ROW;
     const a = pick(after), b = pick(before);
     check('this run added 60 shares to the traded class', a.shares - b.shares === 60, `${b.shares} -> ${a.shares}`);
     check('and $100.00 of quote in', Math.round((a.in - b.in) * 100) === 10000, `${b.in} -> ${a.in}`);
     check('and $40.00 out', Math.round((a.out - b.out) * 100) === 4000, `${b.out} -> ${a.out}`);
-    check('the undivided line carries the same cash flows as both classes together',
-      Math.round(after.rows[2].in * 100) === Math.round((after.rows[0].in + after.rows[1].in) * 100)
-      && Math.round(after.rows[2].out * 100) === Math.round((after.rows[0].out + after.rows[1].out) * 100),
-      JSON.stringify(after.rows.map(r => [r.in, r.out])));
-    check('and the panel says what the split was worth against holding it whole',
-      /undivided|whole|neither helped/i.test(after.verdict), after.verdict.slice(0, 140));
   }
 
   /* The decoded history is kept in localStorage so a return visit does not
@@ -484,5 +499,11 @@ try {
   console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
   process.exitCode = failed ? 1 : 0;
 } finally {
+  /* Wait for it to actually go. `kill()` only sends the signal, and Chrome
+     flushes its profile on the way out — removing the directory first just
+     lets it write the files back, which is how ~90MB a run accumulated until
+     the disk was full. */
   chrome.kill();
+  await new Promise(r => { chrome.once('exit', r); setTimeout(r, 4000); });
+  rmSync(PROFILE, { recursive: true, force: true });
 }

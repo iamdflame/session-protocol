@@ -8,17 +8,20 @@
 
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { WebSocket } from 'ws';
 
 const PATHNAME = process.argv[2] ?? '/';
 const SECONDS = Number(process.argv[3] ?? 6);
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
+/* Chrome writes its profile here and never cleans it up; named so the
+   teardown can remove the same directory it was given. */
+const PROFILE = '/tmp/session-perf-' + process.pid;
 const PORT = 9800 + (process.pid % 300);
 
 const chrome = spawn(CHROME, [
   '--headless=new', `--remote-debugging-port=${PORT}`, '--no-sandbox',
-  '--disable-gpu', '--hide-scrollbars', '--user-data-dir=/tmp/session-perf-' + process.pid,
+  '--disable-gpu', '--hide-scrollbars', '--user-data-dir=' + PROFILE,
   'about:blank',
 ], { stdio: 'ignore' });
 
@@ -136,5 +139,11 @@ try {
     console.log(`  when         ${out.timeline.map(([t, d]) => `${t}ms:${d}`).join('  ')}`);
   }
 } finally {
+  /* Wait for it to actually go. `kill()` only sends the signal, and Chrome
+     flushes its profile on the way out — removing the directory first just
+     lets it write the files back, which is how ~90MB a run accumulated until
+     the disk was full. */
   chrome.kill();
+  await new Promise(r => { chrome.once('exit', r); setTimeout(r, 4000); });
+  rmSync(PROFILE, { recursive: true, force: true });
 }

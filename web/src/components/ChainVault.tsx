@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Link } from 'react-router-dom';
 import { CurveChart } from './charts/CurveChart';
 import { SessionClock } from './SessionClock';
@@ -12,7 +13,7 @@ import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/sess
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
   useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
-  useLedger, type LedgerRow,
+  useLedger, useWalletTrades, type LedgerRow,
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
 import { describe, kindOf } from '@sdk/events.ts';
@@ -37,14 +38,21 @@ const fromAtoms = (v: bigint, d: number) => Number(v) / 10 ** d;
  * have no vault on chain yet, and says so.
  */
 export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
+  const { publicKey } = useWallet();
   const chain = useChainVault(m);
   /* One history, two readers. The ledger shows the last twenty; the statement
      needs further back to price a position opened before them, and fetching
      the same signatures twice is how a public RPC starts refusing. */
   const ledger = useLedger(m.vault, 60);
+  /* The connected wallet's own trades, off its share accounts. A position is
+     exact from those alone; only the comparison needs the vault's history. */
+  const mine = useWalletTrades(m, publicKey);
   // A trade that lands should show up in both the history and the statement
   // immediately, not on the next poll.
-  const settled = useCallback(() => { chain.refresh(); ledger.refresh(); }, [chain.refresh, ledger.refresh]);
+  const settled = useCallback(
+    () => { chain.refresh(); ledger.refresh(); mine.refresh(); },
+    [chain.refresh, ledger.refresh, mine.refresh],
+  );
   const curve = useCurve(asset.symbol);
   const clockSize = useClockSize(196, 72);
 
@@ -200,7 +208,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
           </div>
 
           <Crank d={d} onDone={settled} />
-          <Statement rows={ledger.rows} history={ledger.history} d={d} symbol={asset.symbol} label={label} />
+          <Statement mine={mine.events} mineState={mine.state} rows={ledger.rows} history={ledger.history} d={d} symbol={asset.symbol} label={label} />
           <Ledger {...ledger} dec={qd} label={label} />
         </div>
 

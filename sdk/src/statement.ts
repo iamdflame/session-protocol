@@ -68,10 +68,20 @@ export interface Statement {
   navDay: bigint;
   bundleNav: bigint;
   /**
-   * False when the walk never saw the vault open, so the NAVs before the
-   * first boundary in view are assumed to be parity. The per-class figures
-   * are still exact — every trade carries its own NAV — but the bundle
-   * benchmark is only as good as that assumption, and a reader is told.
+   * Whether the walk saw the vault open.
+   *
+   * This is the line between the two halves of a statement. The per-class
+   * figures are exact either way, because every mint and redeem carries the
+   * NAV it was priced at — a wallet's own transactions are enough to say what
+   * it holds and what it paid. The **benchmark** is not: pricing the
+   * undivided pair needs the *other* class's NAV at each instant, which only
+   * the boundaries carry, and a stream that misses the opening has to assume
+   * parity before the first one it can see.
+   *
+   * So a caller may read a wallet's own trades — a handful of signatures —
+   * and get a correct position immediately, and fetch the vault's whole
+   * history only for the comparison. `bundle` and `versusBundle` are
+   * meaningless when this is false, and the UI must not show them.
    */
   complete: boolean;
 }

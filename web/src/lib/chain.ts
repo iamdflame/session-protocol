@@ -27,6 +27,7 @@ import {
   auctionBidIx, claimAuctionIx,
 } from '@sdk/ix.ts';
 import { eventsFromLogs, type VaultEvent } from '@sdk/events.ts';
+import type { TimedEvent } from '@sdk/statement.ts';
 import { evaluate, type Health, type VaultState } from '@sdk/health.ts';
 import { inspectMint, uiMultiplier, type IssuerState } from '@sdk/issuer.ts';
 import { valueOf, skewWad } from '@sdk/settle.ts';
@@ -556,6 +557,77 @@ const saveCache = () => {
     localStorage.setItem(CACHE_KEY, JSON.stringify([...eventCache.entries()].slice(-CACHE_MAX), enc));
   } catch { /* private window, or full: the cache is an optimisation */ }
 };
+
+/**
+ * A wallet's own trades in a vault, read from its share-class token accounts.
+ *
+ * The statement panel used to wait for the vault's entire history — every
+ * crank, every fill, every other wallet's mint — because the *benchmark*
+ * needs the boundaries. But the position itself does not: each mint and
+ * redeem carries the NAV it was priced at, so a wallet's own transactions are
+ * enough to say exactly what it holds and what it paid.
+ *
+ * Those are a handful of signatures against the vault's hundreds, and on a
+ * public endpoint that rate-limits per address that is the difference between
+ * a panel that loads and one that says it is still reading. So the position
+ * comes from here and appears immediately; the comparison against holding the
+ * token undivided waits for the full walk, and says so while it does.
+ */
+export function useWalletTrades(m: Devnet | null, wallet: PublicKey | null) {
+  const { connection } = useConnection();
+  const [events, setEvents] = useState<TimedEvent[] | null>(null);
+  const [state, setState] = useState<'reading' | 'complete' | 'partial'>('reading');
+  const refetch = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!m || !wallet) { setEvents(null); return; }
+    let live = true;
+
+    const go = async () => {
+      try {
+        const shareProgram = new PublicKey(m.shareTokenProgram);
+        const accounts = [m.nightMint, m.dayMint]
+          .map(mint => ata(wallet, new PublicKey(mint), shareProgram));
+
+        const sigs = new Map<string, number | null>();
+        for (const acc of accounts) {
+          const got = await connection.getSignaturesForAddress(acc, { limit: 200 }).catch(() => []);
+          for (const x of got) if (!x.err) sigs.set(x.signature, x.blockTime ?? null);
+        }
+
+        const build = () => [...sigs.entries()].flatMap(([sig, at]) =>
+          (eventCache.get(sig) ?? []).map(event => ({ signature: sig, at, event })));
+
+        if (live) { setEvents(build()); setState(sigs.size === 0 ? 'complete' : 'reading'); }
+
+        const missing = [...sigs.keys()].filter(sg => !eventCache.has(sg));
+        for (let i = 0; i < missing.length && live; i += 5) {
+          const chunk = missing.slice(i, i + 5);
+          let txs = null;
+          for (let a = 0; a < 5 && live && !txs; a++) {
+            if (a) await new Promise(r => setTimeout(r, 1_500 * 2 ** (a - 1)));
+            txs = await connection.getParsedTransactions(chunk, { maxSupportedTransactionVersion: 0 })
+              .catch(() => null);
+          }
+          if (!txs) { if (live) setState('partial'); return; }
+          txs.forEach((t, j) => eventCache.set(chunk[j], eventsFromLogs(t?.meta?.logMessages)));
+          saveCache();
+          if (live) setEvents(build());
+        }
+        if (live) setState('complete');
+      } catch {
+        if (live) setState('partial');
+      }
+    };
+
+    go();
+    refetch.current = go;
+    return () => { live = false; };
+  }, [connection, m, wallet]);
+
+  const refresh = useCallback(() => { refetch.current?.(); }, []);
+  return { events, state, refresh };
+}
 
 export function useLedger(vault: string | null, limit = 20) {
   const { connection } = useConnection();

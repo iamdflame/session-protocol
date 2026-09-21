@@ -1,5 +1,6 @@
 /* CPU profile of a live page — which functions actually burn the main thread. */
 import { spawn } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { existsSync } from 'node:fs';
 import { WebSocket } from 'ws';
@@ -8,7 +9,8 @@ const PATHNAME = process.argv[2] ?? '/';
 const BASE = process.argv[3] ?? 'http://localhost:3200';
 const CHROME = ['/usr/bin/google-chrome-stable','/usr/bin/google-chrome'].find(existsSync);
 const PORT = 9600 + (process.pid % 300);
-const chrome = spawn(CHROME, ['--headless=new',`--remote-debugging-port=${PORT}`,'--no-sandbox','--disable-gpu','--hide-scrollbars','--user-data-dir=/tmp/prof-'+process.pid,'about:blank'],{stdio:'ignore'});
+const PROFILE = '/tmp/prof-' + process.pid;
+const chrome = spawn(CHROME, ['--headless=new',`--remote-debugging-port=${PORT}`,'--no-sandbox','--disable-gpu','--hide-scrollbars','--user-data-dir='+PROFILE,'about:blank'],{stdio:'ignore'});
 const waitPort = p => new Promise((res,rej)=>{const t0=Date.now();const go=()=>{const s=createConnection({port:p,host:'127.0.0.1'},()=>{s.end();res();});s.on('error',()=>{s.destroy();Date.now()-t0>15000?rej(new Error('x')):setTimeout(go,120);});};go();});
 try {
   await waitPort(PORT);
@@ -40,4 +42,6 @@ try {
   const rows=[...self.entries()].sort((a,b)=>b[1]-a[1]).slice(0,18);
   console.log(`total ${(total/1000).toFixed(0)}ms sampled\n`);
   for(const [k,v] of rows) console.log(`  ${(v/1000).toFixed(0).padStart(6)}ms  ${(v/total*100).toFixed(1).padStart(5)}%  ${k}`);
-} finally { chrome.kill(); }
+} finally { chrome.kill();
+await new Promise(r => { chrome.once('exit', r); setTimeout(r, 4000); });
+rmSync(PROFILE, { recursive: true, force: true }); }
