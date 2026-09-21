@@ -131,6 +131,7 @@ export const useCurve = (symbol: string | undefined) =>
   useData<CurveFile>(symbol ? `/data/curves/${encodeURIComponent(symbol)}.json` : null);
 export const useStudy = () => useData<StudyFile>('/data/study.json');
 export const useExecution = () => useData<ExecutionFile>('/data/execution.json');
+export const useSimulation = () => useData<SimReport>('/data/sim-report.json');
 
 /* ── the study ───────────────────────────────────────────────────────────── */
 
@@ -152,6 +153,22 @@ export interface StudyFile {
 
 export interface ExecutionFile {
   [k: string]: unknown;
+}
+
+/**
+ * The adversarial simulation's own report, written by the Rust test that runs
+ * it and republished by CI on every change. `halts` counts *runs*, because a
+ * run stops at its first halt — it is the share of simulated years in which
+ * the vault stops once, not a per-bell rate.
+ */
+export interface SimReport {
+  runs: number;
+  bells_per_run: number;
+  halts: number;
+  halt_rate: number;
+  halt_rate_of?: string;
+  max_carry_delta_bps: number;
+  note?: string;
 }
 
 /* ── live quotes ─────────────────────────────────────────────────────────── */

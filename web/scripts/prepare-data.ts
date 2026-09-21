@@ -16,6 +16,15 @@ import { dropSpikes } from '../../research/clean.ts';
 const ROOT = '../data';
 const OUT = 'public/data';
 
+/* The adversarial simulation's halt rate, published by `cargo test` (and by
+   CI, which is the only machine that runs it on every change) into
+   `data/sim-report.json`. Copied before the gate below, because it does not
+   come from the hourly file and should not disappear with it. */
+mkdirSync(OUT, { recursive: true });
+if (existsSync(`${ROOT}/sim-report.json`)) {
+  writeFileSync(`${OUT}/sim-report.json`, readFileSync(`${ROOT}/sim-report.json`));
+}
+
 // The raw hourly file is 2.6MB and is not committed; the derived files under
 // public/data are. A clone without the raw file keeps what is committed rather
 // than failing the build — regenerating is only possible with the source.

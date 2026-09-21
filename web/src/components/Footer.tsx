@@ -15,6 +15,7 @@ const GROUPS = [
     links: [
       { href: '/research', label: 'The session study' },
       { href: '/research#controls', label: 'Controls' },
+      { href: '/research#simulation', label: 'The halt rate' },
       { href: '/research#method', label: 'Methodology' },
     ],
   },

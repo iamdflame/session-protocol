@@ -191,3 +191,27 @@
      row still scrolls for anyone who wants them here. */
   .stat, .n, .kind { display: none; }
 }
+
+/* ── the adversarial simulation ──────────────────────────────────────────── */
+
+.simGrid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-5); margin-top: var(--sp-6);
+  padding-block: var(--sp-5); border-block: 1px solid var(--line);
+}
+.simStat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.simBig {
+  font-size: clamp(30px, 4.2vw, 44px); line-height: 1;
+  letter-spacing: -0.02em; color: var(--ink);
+}
+.simUnit { font-size: 0.5em; margin-left: 2px; color: var(--ink-3); }
+.simLabel {
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.simNote {
+  font-size: var(--t-sm); line-height: 1.7; color: var(--ink-2);
+  max-width: 72ch; margin-top: var(--sp-4);
+}
+
+@media (max-width: 720px) { .simGrid { grid-template-columns: 1fr 1fr; gap: var(--sp-4); } }
