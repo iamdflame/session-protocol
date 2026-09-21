@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useDevnets } from '@/lib/chain';
 import { Mark } from './Mark';
 import s from './Footer.module.css';
 
@@ -23,6 +24,8 @@ const GROUPS = [
 ];
 
 export function Footer() {
+  const manifests = useDevnets();
+  const vaults = manifests === undefined ? null : manifests.length;
   return (
     <footer className={s.footer}>
       <div className={`shell ${s.inner}`}>
@@ -55,7 +58,12 @@ export function Footer() {
         </p>
         <p className={s.status}>
           <span className={s.statusDot} aria-hidden="true" />
-          Program live on devnet · one vault · mainnet pending
+          {/* Counted, not asserted. This line read "one vault" for as long as
+              there were two, on every page of the site, because a number
+              written into a string stops being true the moment the thing it
+              counts changes. */}
+          Program live on devnet · {vaults === null ? 'vaults' : vaults === 1 ? 'one vault' : `${vaults} vaults`}
+          {' · '}<code className="mono">$BELL</code> on mainnet · vaults on mainnet pending
         </p>
       </div>
     </footer>

@@ -87,8 +87,24 @@ npm run test:validator    # a local validator with the real mainnet NVDAx,
                           # USDC and Pyth receiver cloned in
 ```
 
-That test needs a CPU with AVX2 — `solana-test-validator` aborts without it,
-which is why this repository had no validator test for so long.
+That test needs a CPU with AVX2 — `solana-test-validator` aborts at startup
+without it — and the machine this was developed on is an Ivy Bridge i5-3427U,
+which predates AVX2 by a year. The test says so itself rather than printing a
+bare `SKIPPED`, naming the CPU and whether the flag is there, because a skip
+with no reason is indistinguishable from a test somebody switched off:
+
+```
+SKIPPED — solana-test-validator aborts without AVX2, and this CPU has none.
+          Intel(R) Core(TM) i5-3427U CPU @ 1.80GHz
+          AVX2: absent
+```
+
+It has not run in CI either: the account's GitHub Actions are locked for
+billing, so every push fails in about four seconds without starting a job.
+**The assertions in that file have never been executed anywhere** — they are
+the only proof that the program can custody a real Token-2022 asset with its
+extensions on, and they are outstanding. Run it on any machine newer than
+2013.
 
 ### Deploying the program
 

@@ -17,7 +17,7 @@ import {
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
 import { describe, kindOf } from '@sdk/events.ts';
-import { SESSION_EVENT } from '@sdk/vault.ts';
+import { SESSION_EVENT, type Vault } from '@sdk/vault.ts';
 import type { ShareClass } from '@/lib/localVault';
 import s from '@/pages/Vault.module.css';
 import h from './HealthPanel.module.css';
@@ -136,7 +136,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
         </div>
       </header>
 
-      <DevnetNote m={m} isEvent={isEvent} />
+      <DevnetNote m={m} isEvent={isEvent} v={v} />
 
       {/* ── the two classes ─────────────────────────────────────────────── */}
       <section className={`shell ${s.classes}`} aria-label="Share classes">
@@ -251,7 +251,7 @@ function ClockNote({ exposed }: { exposed: ShareClass }) {
   );
 }
 
-function DevnetNote({ m, isEvent }: { m: Devnet; isEvent: boolean }) {
+function DevnetNote({ m, isEvent, v }: { m: Devnet; isEvent: boolean; v: Vault }) {
   return (
     <div className={`shell ${c.noteWrap}`}>
       <div className={c.note} role="note">
@@ -272,10 +272,28 @@ function DevnetNote({ m, isEvent }: { m: Devnet; isEvent: boolean }) {
           <p>
             <strong>This vault is on Solana devnet.</strong> The program, both share
             classes, settlement, funding, the handoff and every health signal are the
-            real thing. Two parts stand in: the underlying and quote are test mints
-            (devnet has no xStocks or USDC), and the mark is fed by Pyth&rsquo;s{' '}
-            <span className="mono">{m.markFeed}</span> because the NVDAX feed is not
-            sponsored on devnet — on mainnet it is <span className="mono">Crypto.NVDAX/USD</span>.{' '}
+            real thing. Three parts stand in, and all three are devnet:{' '}
+            the underlying and quote are test mints (devnet has no xStocks or USDC);
+            the mark is Pyth&rsquo;s <span className="mono">{m.markFeed}</span> because the
+            NVDAX feed is not sponsored there — on mainnet it is{' '}
+            <span className="mono">Crypto.NVDAX/USD</span>; and{' '}
+            {/* Both of these are parameters an operator chose, not properties of
+                the program, and both are consequences of the same missing thing:
+                no Hermes key on this instance, so no as-of print at the bell.
+                They belonged at the top of this page rather than in a field
+                two-thirds of the way down it. */}
+            <strong>the bell&rsquo;s own print is not posted here</strong>, so a settlement
+            mark is accepted from {Math.round(v.maxBellLeadSecs / 60)} minutes before the
+            bell to {Math.round(v.maxStaleSecs / 60)} after — wide, because the crank
+            settles against the sponsored feed whenever it next runs, and honest for the
+            same reason. That is also why{' '}
+            <span className="mono">require_verified_recap</span> is{' '}
+            <strong>{v.requireVerifiedRecap ? 'on' : 'off'}</strong>
+            {v.requireVerifiedRecap
+              ? <>: replaying a missed boundary must carry a Pyth update for each one.</>
+              : <>: replaying a missed boundary does not have to carry a Pyth update for
+                each one, because without that key there would be no way to fetch them.
+                On mainnet it is on.</>}{' '}
             <Link to="/how-it-works#status" className={c.noteLink}>What is and is not live</Link>
           </p>
         )}

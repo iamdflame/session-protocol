@@ -53,6 +53,22 @@ const BTC_USD = 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b4
 const MAINNET = process.env.MAINNET_RPC ?? 'https://api.mainnet-beta.solana.com';
 
 let passed = 0, failed = 0;
+/** What /proc/cpuinfo says this machine is, for the skip message. */
+function cpuModel(): string {
+  try {
+    const m = readFileSync('/proc/cpuinfo', 'utf8').match(/^model name\s*:\s*(.+)$/m);
+    return m ? m[1].trim() : 'unknown CPU';
+  } catch { return 'unknown CPU'; }
+}
+
+/** Whether this CPU advertises AVX2 at all. */
+function hasAvx2(): boolean {
+  try {
+    const m = readFileSync('/proc/cpuinfo', 'utf8').match(/^flags\s*:\s*(.+)$/m);
+    return !!m && m[1].split(/\s+/).includes('avx2');
+  } catch { return false; }
+}
+
 const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { passed++; console.log(`  ok    ${name}`); }
   else { failed++; console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ''}`); }
@@ -126,9 +142,17 @@ try {
       if (fatal) why = fatal[0];
     } catch { /* no log at all */ }
     if (/AVX2/.test(why)) {
-      console.log('SKIPPED — this CPU has no AVX2, so solana-test-validator cannot start.');
-      console.log('          Run this on a machine that has it; the assertions below are the');
-      console.log('          only proof that the program can custody a Token-2022 asset.');
+      /* Name the machine, not just the outcome. "SKIPPED" on its own is
+         indistinguishable from a test someone quietly turned off, and this
+         one is the only proof that the program can custody a real Token-2022
+         asset — so it should be obvious both that it did not run and exactly
+         what would make it run. */
+      console.log('SKIPPED — solana-test-validator aborts without AVX2, and this CPU has none.');
+      console.log(`          ${cpuModel()}`);
+      console.log(`          AVX2: ${hasAvx2() ? 'present (so this is a different failure)' : 'absent'}`);
+      console.log('          The assertions below are the only proof that the program can');
+      console.log('          custody a real Token-2022 asset with its extensions turned on.');
+      console.log('          Nothing here has been executed. Run it where AVX2 exists.');
       process.exitCode = 0;
       throw new Error('__skip__');
     }
