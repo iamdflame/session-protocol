@@ -440,8 +440,25 @@ try {
   check('click redeem', await until(() => ev(
     `(() => { const b = document.querySelector('form button[type="submit"]'); if (!b || b.disabled) return false; b.click(); return true; })()`,
   ), 20000, 300));
-  const redeemed = await until(() => ev(`/Redeemed for \\$40\\.00/.test(document.body.innerText)`), 60000, 600);
-  check('redeem confirmed on chain at NAV 1.0', redeemed, (await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`)).slice(0, 160));
+  /* What 40 shares are worth is the NAV times 40, and the NAV is not 1.
+     It was 1.000000 for as long as no boundary had ever paid funding, and
+     this line asserted `$40.00` — so the first time funding actually moved
+     on chain, a passing test turned into a failing one while the product did
+     exactly what it should. NIGHT's NAV went to 1.005000 that afternoon, the
+     50 bp cap, and 40 shares came back as $40.20.
+
+     Read it off the page and multiply. The point of the check is that the
+     redemption is priced at the NAV the vault is carrying, which a literal
+     cannot express. */
+  const nav = Number(await ev(`(() => {
+    const dt = [...document.querySelectorAll('form dt')].find(d => /NAV per share/i.test(d.textContent));
+    return dt && dt.nextElementSibling ? dt.nextElementSibling.textContent.trim() : '';
+  })()`));
+  const want = Number.isFinite(nav) && nav > 0 ? (40 * nav).toFixed(2) : '40.00';
+  const redeemed = await until(
+    () => ev(`document.body.innerText.includes(${JSON.stringify(`Redeemed for $${want}`)})`), 60000, 600);
+  check(`redeem confirmed on chain, priced at the vault's NAV of ${nav || '?'}`, redeemed,
+    `expected $${want}; ` + (await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`)).slice(0, 140));
 
   /* ── 6. the statement, and the thing it is measured against ──────────── */
   /* The test wallet is reused between runs, so its statement carries every

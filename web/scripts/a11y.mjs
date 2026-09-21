@@ -249,19 +249,40 @@ try {
     // at rest, which is how this audit produced a different answer every run.
     const want = JSON.stringify(GROUND ?? null);
     const t0 = Date.now();
-    while (Date.now() - t0 < 10000) {
+    let ready = false;
+    while (Date.now() - t0 < 25000) {
       let ok = false;
       try {
         // Evaluating while the document is being swapped throws; that just
         // means "not ready yet".
+        /* Every route is lazy, and Suspense fills main with a skeleton while
+           the chunk loads. That skeleton satisfied the old "main has any
+           child" test, so the audit sometimes measured the *fallback* — which
+           has no h1, by design — and reported "main has no level-1 heading"
+           against pages that have one. Three runs, one failure, a different
+           page each time. Waiting for the fallback to leave is the fix; the
+           fallback announces itself as a loading status, so there is a real
+           thing to wait on rather than a sleep. */
         ok = await ev(`(() => {
           const g = document.documentElement.dataset.session;
           if (${want} && g !== ${want}) return false;
-          return document.readyState === 'complete' && !!document.querySelector('main *');
+          if (document.readyState !== 'complete') return false;
+          if (document.querySelector('main [role="status"][aria-label="Loading"]')) return false;
+          return !!document.querySelector('main *');
         })()`);
       } catch { /* mid-navigation */ }
-      if (ok) break;
+      if (ok) { ready = true; break; }
       await new Promise(r => setTimeout(r, 150));
+    }
+    /* A wait that ran out used to fall through and audit whatever was on
+       screen, which on a cold edge is the loading skeleton — so the audit
+       reported a missing h1 and a clean run was a matter of luck. A page that
+       never finished loading has not been audited, and saying so is the only
+       honest thing the harness can do with it. */
+    if (!ready) {
+      console.log(`  FAIL  ${path.padEnd(22)} never finished loading in 25s — not audited`);
+      total += 1;
+      continue;
     }
     // Past the longest ground transition (--t-route, 500ms) with room to spare.
     await new Promise(r => setTimeout(r, 1400));
