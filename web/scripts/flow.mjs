@@ -65,6 +65,21 @@ try {
   };
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
+  /* Wait for the page to *be* something, rather than sleeping and hoping.
+     A fixed pause is a bet on how fast the machine is that day: the same
+     build that passes on a warm profile reports eight failures on a cold
+     one, and every one of them is a lie about the product. Poll instead,
+     and say so when the condition never arrives. */
+  const until = async (expression, label, ms = 20000) => {
+    const t0 = Date.now();
+    for (;;) {
+      if (await ev(expression)) return true;
+      if (Date.now() - t0 > ms) { check(`page ready: ${label}`, false, `still false after ${ms}ms`); return false; }
+      await wait(100);
+    }
+  };
+  const rendered = () => until(`!!document.querySelector('main h1')?.textContent`, 'vault page painted');
+
   /* React-controlled inputs ignore a plain `.value =`; set it through the
      native setter and dispatch an input event, which is what typing does. */
   const type = (selector, value) => ev(`(() => {
@@ -102,7 +117,7 @@ try {
 
   console.log(`\nvault ${SYMBOL}`);
   await send('Page.navigate', { url: `${BASE}/markets/${SYMBOL}` });
-  await wait(3500);
+  await rendered();
 
   /* ── 1. the page knows what it is ────────────────────────────────────── */
   const h1 = await text('main h1');
@@ -205,7 +220,7 @@ try {
   await click('form button[type="submit"]');
   await wait(300);
   await send('Page.navigate', { url: `${BASE}/markets/${SYMBOL}` });
-  await wait(3500);
+  await rendered();
   const persisted = await ev(`(() => {
     const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)});
     return [...card.querySelectorAll('dl dd')].map(d => d.textContent.trim())[2];
@@ -223,7 +238,7 @@ try {
 
   /* ── 8. the markets table and the nav still agree on the session ────── */
   await send('Page.navigate', { url: `${BASE}/markets` });
-  await wait(3000);
+  await until(`document.querySelectorAll('tbody tr').length > 0`, 'catalog painted');
   const navHolder = await ev(`document.querySelector('header [data-holder]')?.dataset.holder`);
   const leadHolder = await ev(`document.querySelector('main strong[data-holder]')?.dataset.holder`);
   check('nav badge and markets lead agree on who holds', navHolder && navHolder === leadHolder, `${navHolder} vs ${leadHolder}`);
