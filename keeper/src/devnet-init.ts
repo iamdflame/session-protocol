@@ -36,7 +36,9 @@ import {
   getMinimumBalanceForRentExemptMint, createInitializePermanentDelegateInstruction,
   getMintLen, ExtensionType, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID as SPL_TOKEN,
 } from '@solana/spl-token';
-import { PROGRAM_ID, vaultPda, nightMintPda, dayMintPda, underlyingVaultPda, quoteVaultPda, decodeVault } from '../../sdk/src/vault.ts';
+import {
+  PROGRAM_ID, vaultPda, nightMintPda, dayMintPda, underlyingVaultPda, quoteVaultPda, decodeVault, SESSION_EQUITY,
+} from '../../sdk/src/vault.ts';
 import {
   initializeVaultIx, createAtaIdempotentIx, ata, pythFeedAccount, hexToBytes, TOKEN_PROGRAM_ID,
   type VaultParams,
@@ -80,6 +82,12 @@ const PARAMS: VaultParams = {
   maxPostedSlotAge: 4_500, maxBellLeadSecs: 300, maxPremiumBps: 1_000, auctionSecs: 120,
   incentiveRamp: [10, 25, 50], requireVerifiedRecap: false,
 };
+
+/** The on-chain symbol: uppercase ASCII only, so the real ticker's lowercase
+ *  x cannot be used. The classes become NVDA.NIGHT and NVDA.DAY. */
+const VAULT_SYMBOL = 'NVDA';
+/** Where each class's off-chain metadata is served from. */
+const METADATA_BASE = process.env.METADATA_BASE ?? 'https://session-roan.vercel.app/meta';
 
 const load = (p: string) => Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(p, 'utf8'))));
 
@@ -177,7 +185,8 @@ async function main() {
       markPriceUpdate: markUpdate, equityPriceUpdate: equityUpdate,
       underlyingTokenProgram: TOKEN_2022_PROGRAM_ID,
       quoteTokenProgram: SPL_TOKEN,
-    }, PARAMS, 'NVDA');
+      shareTokenProgram: TOKEN_2022_PROGRAM_ID,
+    }, PARAMS, VAULT_SYMBOL, SESSION_EQUITY, METADATA_BASE);
     const sig = await sendAndConfirmTransaction(conn, new Transaction().add(ix), [deployer]);
     console.log(`vault        ${vault.toBase58()}  initialised in ${sig}`);
   }
@@ -208,7 +217,10 @@ async function main() {
     rpc: RPC,
     programId: PROGRAM_ID.toBase58(),
     symbol: 'NVDAx',
-    note: 'Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate — the same shape as the real NVDAx — and the quote is a classic SPL mint like USDC. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.',
+    /** What the share classes are called on chain. */
+    vaultSymbol: VAULT_SYMBOL,
+    metadataBase: METADATA_BASE,
+    note: 'Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate — the same shape as the real NVDAx — and the quote is a classic SPL mint like USDC. The share classes are Token-2022 so they carry their own names. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.',
     vault: vault.toBase58(),
     underlyingMint: underlyingMint.toBase58(),
     quoteMint: quoteMint.toBase58(),
@@ -223,6 +235,7 @@ async function main() {
     operator: operator.publicKey.toBase58(),
     tokenProgram: SPL_TOKEN.toBase58(),
     underlyingTokenProgram: TOKEN_2022_PROGRAM_ID.toBase58(),
+    shareTokenProgram: TOKEN_2022_PROGRAM_ID.toBase58(),
     params: { ...PARAMS, markFeedId: FEEDS['Crypto.SOL/USD'], equityFeedId: FEEDS['Crypto.BTC/USD'] },
     initialised: new Date().toISOString(),
   };

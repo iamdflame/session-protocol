@@ -115,4 +115,6 @@ pub enum SessionError {
     TransferFeeMismatch,
     #[msg("fills are paused for a cooling period after a jump settled")]
     FillsPaused,
+    #[msg("token program does not match the one this vault's accounts live under")]
+    WrongTokenProgram,
 }

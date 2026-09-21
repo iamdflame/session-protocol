@@ -41,8 +41,10 @@ export interface Manifest {
   operator: string;
   /** The program owning the underlying — Token-2022 for a real xStock. */
   underlyingTokenProgram: string;
-  /** The program owning the quote and the share classes. */
+  /** The program owning the quote. */
   tokenProgram: string;
+  /** The program owning the share classes — Token-2022, for their metadata. */
+  shareTokenProgram: string;
 }
 
 export interface CrankReport {

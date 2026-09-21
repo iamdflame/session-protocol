@@ -19,7 +19,7 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
 anchor-lang = "0.31.1"
-anchor-spl = "0.31.1"
+anchor-spl = { version = "0.31.1", features = ["token_2022_extensions"] }
 
 [dev-dependencies]
 serde_json = "1"

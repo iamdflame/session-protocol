@@ -173,6 +173,38 @@ for (const a of assets as any[]) {
 writeFileSync(`${OUT}/study.json`, JSON.stringify(study));
 writeFileSync(`${OUT}/execution.json`, JSON.stringify(exec));
 
+/* ── token metadata the share mints point at ──────────────────────────────
+   Each class's mint carries its name on chain and a URI pointing here. The
+   file is the off-chain half wallets and explorers fetch for an image and a
+   description, and it exists for whatever vault the manifest describes. */
+try {
+  const m = JSON.parse(readFileSync('public/devnet.json', 'utf8'));
+  const event = m.sessionKind === 1;
+  // Named by the ticker the program actually wrote into the mint, because the
+  // mint's URI is `{base}/{TICKER}.json` and nothing else will be fetched.
+  const sym = m.vaultSymbol ?? m.symbol;
+  mkdirSync('public/meta', { recursive: true });
+  for (const [cls, suffix] of [['night', event ? 'THEN' : 'NIGHT'], ['day', event ? 'NOW' : 'DAY']] as const) {
+    const ticker = `${sym}.${suffix}`;
+    writeFileSync(`public/meta/${ticker}.json`, JSON.stringify({
+      name: `SESSION ${ticker}`,
+      symbol: ticker,
+      description: cls === 'day'
+        ? `${m.symbol} for the hours the real market is open. Always exitable, and it never holds the overnight gap.`
+        : `${m.symbol} for the hours the real market is shut. It wears every gap, and it is the only way to sell them.`,
+      external_url: `https://session-roan.vercel.app/markets/${m.symbol}`,
+      attributes: [
+        { trait_type: 'protocol', value: 'SESSION' },
+        { trait_type: 'class', value: suffix },
+        { trait_type: 'underlying', value: m.underlyingMint },
+        { trait_type: 'vault', value: m.vault },
+        { trait_type: 'cluster', value: m.cluster },
+      ],
+    }));
+  }
+  console.log(`meta/          ${sym}.${event ? 'THEN' : 'NIGHT'}.json, ${sym}.${event ? 'NOW' : 'DAY'}.json`);
+} catch { /* no manifest yet: the site builds without a live vault */ }
+
 const kb = (s: string) => (Buffer.byteLength(s) / 1024).toFixed(0);
 console.log(`markets.json   ${kb(JSON.stringify({ assets: index }))}kb   ${assets.length} assets`);
 console.log(`curves/        ${kb(JSON.stringify((assets as any[])[0].points))}kb each`);

@@ -45,11 +45,17 @@ const init = initializeVaultIx(acc, {
   fundingKBps: 0, fundingMaxBps: 0, maxStaleSecs: 1, maxConfBps: 1, maxMoveBps: 1, equityQuietSecs: 60,
   fillIncentiveBps: 0, maxCarryDeltaBps: 0, maxUnexpectedClosedSecs: 3600, maxPostedSlotAge: 1,
   maxBellLeadSecs: 0, maxPremiumBps: 0, auctionSecs: 30, incentiveRamp: [0, 0, 0], requireVerifiedRecap: false,
-}, 'OPENAI', SESSION_EVENT);
+}, 'OPENAI', SESSION_EVENT, 'https://x.io/m');
 const d = init.data;
-check('init data = 8 + 113 + (4 + 6) + 1 bytes', d.length === 8 + 113 + 10 + 1, String(d.length));
+check('init data = 8 + 113 + (4+6) + 1 + (4+14) bytes', d.length === 8 + 113 + 10 + 1 + 18, String(d.length));
 check('symbol is length-prefixed', d[8 + 113] === 6 && d[8 + 113 + 4] === 'O'.charCodeAt(0));
-check('session kind is the last byte', d[d.length - 1] === 1);
+check('session kind follows the symbol', d[8 + 113 + 10] === 1);
+check('metadata base is a length-prefixed string', d[8 + 113 + 11] === 14 && d[d.length - 1] === 'm'.charCodeAt(0));
+check('the share program is an account, defaulted to Token-2022',
+  init.keys[12].pubkey.toBase58() === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', init.keys[12].pubkey.toBase58());
+let longBase = false;
+try { initializeVaultIx(acc, {} as never, 'NVDA', 0, 'x'.repeat(129)); } catch { longBase = true; }
+check('an over-long metadata base is refused before the chain sees it', longBase);
 let threw = false;
 try { initializeVaultIx(acc, {} as never, 'nvda', 0); } catch { threw = true; }
 check('a lowercase symbol is refused before it reaches the chain', threw);

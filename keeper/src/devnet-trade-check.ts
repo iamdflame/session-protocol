@@ -30,23 +30,25 @@ const exposedMint = v.exposed === 'night' ? m.nightMint : m.dayMint;
 const parkedMint = parked === 'night' ? m.nightMint : m.dayMint;
 console.log(`exposed=${v.exposed}, minting into ${parked}`);
 
-// The quote and the share classes live under the quote program; the
-// underlying is Token-2022 and is not touched by mint or redeem.
+// Quote moves under its own program; the share classes are minted and burned
+// under theirs, so their ATAs are different addresses. The underlying is not
+// touched by mint or redeem at all.
 const qp = pk(m.tokenProgram);
+const sp = pk(m.shareTokenProgram);
 const userQuote = ata(op.publicKey, pk(m.quoteMint), qp);
-const userShares = ata(op.publicKey, pk(parkedMint), qp);
-const userExposedShares = ata(op.publicKey, pk(exposedMint), qp);
+const userShares = ata(op.publicKey, pk(parkedMint), sp);
+const userExposedShares = ata(op.publicKey, pk(exposedMint), sp);
 const q0 = await bal(userQuote);
 const quoteIn = 250n * 10n ** 6n;   // $250
 
 /* ── mint into the exposed class must be refused ─────────────────────── */
 {
   const tx = new Transaction().add(
-    createAtaIdempotentIx(op.publicKey, op.publicKey, pk(exposedMint), qp),
+    createAtaIdempotentIx(op.publicKey, op.publicKey, pk(exposedMint), sp),
     mintSharesIx({
       vault: pk(m.vault), classMint: pk(exposedMint), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
       quoteVault: pk(m.quoteVault), userQuote, userShares: userExposedShares, user: op.publicKey,
-      quoteMint: pk(m.quoteMint), tokenProgram: qp,
+      quoteMint: pk(m.quoteMint), tokenProgram: qp, shareTokenProgram: sp,
     }, v.exposed, quoteIn),
   );
   const r = await send(tx);
@@ -57,11 +59,11 @@ const quoteIn = 250n * 10n ** 6n;   // $250
 /* ── mint into the parked class ──────────────────────────────────────── */
 {
   const tx = new Transaction().add(
-    createAtaIdempotentIx(op.publicKey, op.publicKey, pk(parkedMint), qp),
+    createAtaIdempotentIx(op.publicKey, op.publicKey, pk(parkedMint), sp),
     mintSharesIx({
       vault: pk(m.vault), classMint: pk(parkedMint), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
       quoteVault: pk(m.quoteVault), userQuote, userShares, user: op.publicKey,
-      quoteMint: pk(m.quoteMint), tokenProgram: qp,
+      quoteMint: pk(m.quoteMint), tokenProgram: qp, shareTokenProgram: sp,
     }, parked, quoteIn),
   );
   const r = await send(tx);
@@ -85,7 +87,7 @@ const quoteIn = 250n * 10n ** 6n;   // $250
   const tx = new Transaction().add(redeemSharesIx({
     vault: pk(m.vault), classMint: pk(parkedMint), nightMint: pk(m.nightMint), dayMint: pk(m.dayMint),
     quoteVault: pk(m.quoteVault), userQuote, userShares, user: op.publicKey,
-    quoteMint: pk(m.quoteMint), tokenProgram: qp,
+    quoteMint: pk(m.quoteMint), tokenProgram: qp, shareTokenProgram: sp,
   }, parked, half));
   const r = await send(tx);
   check('redeem_shares confirms', 'sig' in r, JSON.stringify(r));

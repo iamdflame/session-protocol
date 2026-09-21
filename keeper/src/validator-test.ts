@@ -156,6 +156,7 @@ try {
     markPriceUpdate: markAccount, equityPriceUpdate: equityAccount,
     underlyingTokenProgram: TOKEN_2022_PROGRAM_ID,
     quoteTokenProgram: TOKEN_PROGRAM_ID,
+    shareTokenProgram: TOKEN_2022_PROGRAM_ID,
   }, params, 'NVDA')));
 
   check('initialize_vault succeeds against the real NVDAx and USDC',
@@ -181,8 +182,8 @@ try {
   check('the quote vault is a classic SPL account',
     !!qv && qv.owner.equals(TOKEN_PROGRAM_ID), qv ? qv.owner.toBase58() : 'missing');
   const nm = await conn.getAccountInfo(nightMint);
-  check('the share classes are classic SPL, for wallet compatibility',
-    !!nm && nm.owner.equals(TOKEN_PROGRAM_ID), nm ? nm.owner.toBase58() : 'missing');
+  check('the share classes are Token-2022, so they can carry their own names',
+    !!nm && nm.owner.equals(TOKEN_2022_PROGRAM_ID), nm ? nm.owner.toBase58() : 'missing');
 
   /* ── 4. mint and redeem with real USDC ────────────────────────────────── */
   // The cloned USDC mint's authority is not ours, so quote is moved into the
@@ -217,14 +218,14 @@ try {
   } else {
     const parked = v.exposed === 'night' ? 'day' : 'night';
     const classMint = parked === 'night' ? nightMint : dayMint;
-    const userShares = ata(payer.publicKey, classMint, TOKEN_PROGRAM_ID);
+    const userShares = ata(payer.publicKey, classMint, TOKEN_2022_PROGRAM_ID);
     const accounts = {
       vault, classMint, nightMint, dayMint, quoteVault,
       userQuote, userShares, user: payer.publicKey, quoteMint: USDC,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: TOKEN_PROGRAM_ID, shareTokenProgram: TOKEN_2022_PROGRAM_ID,
     };
     const m = await send(new Transaction().add(
-      createAtaIdempotentIx(payer.publicKey, payer.publicKey, classMint, TOKEN_PROGRAM_ID),
+      createAtaIdempotentIx(payer.publicKey, payer.publicKey, classMint, TOKEN_2022_PROGRAM_ID),
       mintSharesIx(accounts, parked, 1_000n * 10n ** 6n),
     ));
     check('mint_shares moves real USDC into a vault holding a Token-2022 underlying',

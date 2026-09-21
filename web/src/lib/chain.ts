@@ -50,6 +50,8 @@ export interface Devnet {
   /** The program owning the quote and the two share classes. Part of every
       ATA seed, so it cannot be assumed. */
   tokenProgram: string;
+  /** The share classes' program: Token-2022, because they carry their names. */
+  shareTokenProgram: string;
   /** The program owning the underlying — Token-2022 for a real xStock. */
   underlyingTokenProgram: string;
   params: { maxStaleSecs: number; [k: string]: unknown };
@@ -117,11 +119,12 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     new PublicKey(m.underlyingMint),
   ];
   const tokenProgram = new PublicKey(m.tokenProgram);
+  const shareProgram = new PublicKey(m.shareTokenProgram);
   if (me) {
     keys.push(
       ata(me, new PublicKey(m.quoteMint), tokenProgram),
-      ata(me, new PublicKey(m.nightMint), tokenProgram),
-      ata(me, new PublicKey(m.dayMint), tokenProgram),
+      ata(me, new PublicKey(m.nightMint), shareProgram),
+      ata(me, new PublicKey(m.dayMint), shareProgram),
     );
   }
 
@@ -265,26 +268,29 @@ export function useSendTx() {
 }
 
 const tradeAccounts = (m: Devnet, user: PublicKey, cls: ShareClass) => {
+  // Two programs on one instruction: quote moves under its own, shares are
+  // minted and burned under theirs. Their ATAs are different addresses.
   const tokenProgram = new PublicKey(m.tokenProgram);
+  const shareTokenProgram = new PublicKey(m.shareTokenProgram);
   const classMint = new PublicKey(cls === 'night' ? m.nightMint : m.dayMint);
   const quoteMint = new PublicKey(m.quoteMint);
   return {
-    tokenProgram, classMint, quoteMint,
+    tokenProgram, shareTokenProgram, classMint, quoteMint,
     accounts: {
       vault: new PublicKey(m.vault), classMint,
       nightMint: new PublicKey(m.nightMint), dayMint: new PublicKey(m.dayMint),
       quoteVault: new PublicKey(m.quoteVault),
       userQuote: ata(user, quoteMint, tokenProgram),
-      userShares: ata(user, classMint, tokenProgram),
-      user, quoteMint, tokenProgram,
+      userShares: ata(user, classMint, shareTokenProgram),
+      user, quoteMint, tokenProgram, shareTokenProgram,
     },
   };
 };
 
 export function buildMint(m: Devnet, user: PublicKey, cls: ShareClass, quoteAtoms: bigint): TransactionInstruction[] {
-  const { accounts, classMint, tokenProgram } = tradeAccounts(m, user, cls);
+  const { accounts, classMint, shareTokenProgram } = tradeAccounts(m, user, cls);
   return [
-    createAtaIdempotentIx(user, user, classMint, tokenProgram),
+    createAtaIdempotentIx(user, user, classMint, shareTokenProgram),
     mintSharesIx(accounts, cls, quoteAtoms),
   ];
 }

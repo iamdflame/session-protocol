@@ -39,6 +39,10 @@ use anchor_spl::token_interface::{
     self as token, Burn, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked,
 };
 use anchor_spl::token_2022::spl_token_2022::state::AccountState;
+use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_2022_extensions::token_metadata::{
+    token_metadata_initialize, TokenMetadataInitialize,
+};
 
 pub mod calendar;
 pub mod errors;
@@ -82,6 +86,7 @@ pub mod session {
         p: VaultParams,
         symbol: String,
         session_kind: u8,
+        metadata_base: String,
     ) -> Result<()> {
         p.validate()?;
         require!(
@@ -92,6 +97,11 @@ pub mod session {
             !symbol.is_empty() && symbol.len() <= 8 && symbol.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()),
             SessionError::BadParameter
         );
+        // Where each class's off-chain metadata lives. The program does not
+        // own a domain and does not pretend to: whoever lists the vault
+        // supplies the base, and an empty one leaves the URI empty, which is
+        // legal — the name and ticker are on chain either way.
+        require!(metadata_base.len() <= 128, SessionError::BadParameter);
         require_keys_neq!(
             ctx.accounts.underlying_mint.key(),
             ctx.accounts.quote_mint.key(),
@@ -125,6 +135,7 @@ pub mod session {
         require_recent_post(&mark_u, p.max_posted_slot_age)?;
         let mark_q = mark_u.quote;
 
+        {
         let v = &mut ctx.accounts.vault;
         v.version = VAULT_VERSION;
         v.bump = ctx.bumps.vault;
@@ -167,7 +178,7 @@ pub mod session {
         v.recap_count = 0;
         // Until a detector key is set, the authority is it.
         v.detector_authority = ctx.accounts.authority.key();
-        v.share_token_program = ctx.accounts.quote_token_program.key();
+        v.share_token_program = ctx.accounts.share_token_program.key();
 
         v.last_mark = oracle::check_mark(
             &mark_q,
@@ -185,7 +196,58 @@ pub mod session {
         v.set_last_session(s);
         v.exposed = class_for(s).into();
         v.last_boundary_ts = now;
+        }
 
+        // Name the classes on chain. Without this a wallet shows a base58
+        // address and a holder has no way to tell NVDA.DAY from NVDA.NIGHT;
+        // with it, the two claims are legible everywhere SPL metadata is
+        // read. The metadata lives in the mint account itself, so the rent
+        // for it is topped up before the write — `init` sized the account
+        // for the pointer only, since the length is not known until here.
+        let vault_ai = ctx.accounts.vault.to_account_info();
+        let bump = ctx.bumps.vault;
+        let seeds: [&[u8]; 4] = [
+            Vault::SEED,
+            ctx.accounts.underlying_mint.to_account_info().key.as_ref(),
+            ctx.accounts.quote_mint.to_account_info().key.as_ref(),
+            std::slice::from_ref(&bump),
+        ];
+        for (mint, class) in [
+            (ctx.accounts.night_mint.to_account_info(), Class::Night),
+            (ctx.accounts.day_mint.to_account_info(), Class::Day),
+        ] {
+            let (name, ticker) = class_names(&symbol, session_kind, class);
+            let uri = if metadata_base.is_empty() {
+                String::new()
+            } else {
+                format!("{metadata_base}/{ticker}.json")
+            };
+            fund_metadata_rent(
+                &mint,
+                &ctx.accounts.authority.to_account_info(),
+                &ctx.accounts.system_program.to_account_info(),
+                &name,
+                &ticker,
+                &uri,
+            )?;
+            token_metadata_initialize(
+                CpiContext::new_with_signer(
+                    ctx.accounts.share_token_program.to_account_info(),
+                    TokenMetadataInitialize {
+                        program_id: ctx.accounts.share_token_program.to_account_info(),
+                        mint: mint.clone(),
+                        metadata: mint.clone(),
+                        mint_authority: vault_ai.clone(),
+                        update_authority: vault_ai.clone(),
+                    },
+                    &[&seeds[..]],
+                ),
+                name,
+                ticker,
+                uri,
+            )?;
+        }
+        let v = &ctx.accounts.vault;
         emit!(VaultInitialized {
             vault: v.key(),
             authority: v.authority,
@@ -233,7 +295,7 @@ pub mod session {
         let seeds = vault_seeds(v);
         token::mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.quote_token_program.to_account_info(),
+                ctx.accounts.share_token_program.to_account_info(),
                 MintTo {
                     mint: ctx.accounts.class_mint.to_account_info(),
                     to: ctx.accounts.user_shares.to_account_info(),
@@ -282,7 +344,7 @@ pub mod session {
 
         token::burn(
             CpiContext::new(
-                ctx.accounts.quote_token_program.to_account_info(),
+                ctx.accounts.share_token_program.to_account_info(),
                 Burn {
                     mint: ctx.accounts.class_mint.to_account_info(),
                     from: ctx.accounts.user_shares.to_account_info(),
@@ -1104,6 +1166,50 @@ fn supplies_after(
     })
 }
 
+/// What a class is called, which depends on what a session is here.
+///
+/// An equity session has a day and a night. An event session has neither —
+/// only the stretch before the next print and the print itself — so the same
+/// two mints wear NOW and THEN.
+fn class_names(symbol: &str, session_kind: u8, class: Class) -> (String, String) {
+    let suffix = match (session_kind, class) {
+        (SESSION_EVENT, Class::Night) => "THEN",
+        (SESSION_EVENT, Class::Day) => "NOW",
+        (_, Class::Night) => "NIGHT",
+        (_, Class::Day) => "DAY",
+    };
+    let ticker = format!("{symbol}.{suffix}");
+    (format!("SESSION {ticker}"), ticker)
+}
+
+/// Token-2022 keeps metadata inside the mint account, so the account has to
+/// be rent-exempt at its *new* length before the write. `init` sized it for
+/// the pointer alone; this tops up the difference from the payer.
+fn fund_metadata_rent<'info>(
+    mint: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    name: &str,
+    ticker: &str,
+    uri: &str,
+) -> Result<()> {
+    use anchor_lang::solana_program::program::invoke;
+    use anchor_lang::solana_program::system_instruction;
+
+    // TLV type (2) + length (2), then the packed TokenMetadata: two pubkeys
+    // and three length-prefixed strings.
+    let needed = mint.data_len() + 4 + 64 + (4 + name.len()) + (4 + ticker.len()) + (4 + uri.len()) + 4;
+    let rent = Rent::get()?.minimum_balance(needed);
+    let have = mint.lamports();
+    if rent > have {
+        invoke(
+            &system_instruction::transfer(payer.key, mint.key, rent - have),
+            &[payer.clone(), mint.clone(), system_program.clone()],
+        )?;
+    }
+    Ok(())
+}
+
 /// The first issuer condition holding against this vault's underlying, if any.
 fn issuer_condition(
     owned: u64,
@@ -1249,21 +1355,26 @@ pub struct InitializeVault<'info> {
     pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    // The share classes are created under the *quote* program, which is the
-    // ordinary SPL one for a USDC-quoted vault. They are this program's own
-    // mints with no extensions, so there is nothing to gain from 2022 and a
-    // great deal of wallet compatibility to lose.
+    // The share classes are Token-2022 mints that carry their own names, so a
+    // wallet shows NVDA.DAY rather than a base58 address. Nothing else about
+    // them is a 2022 feature: no fee, no hook, no delegate, no pause. That a
+    // class so shaped can still back a Meteora pool was settled on devnet
+    // before this changed — see `npm run gate:pool`.
     #[account(
         init, payer = authority, seeds = [b"night", vault.key().as_ref()], bump,
         mint::decimals = quote_mint.decimals, mint::authority = vault,
-        mint::token_program = quote_token_program,
+        mint::token_program = share_token_program,
+        extensions::metadata_pointer::authority = vault,
+        extensions::metadata_pointer::metadata_address = night_mint,
     )]
     pub night_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init, payer = authority, seeds = [b"day", vault.key().as_ref()], bump,
         mint::decimals = quote_mint.decimals, mint::authority = vault,
-        mint::token_program = quote_token_program,
+        mint::token_program = share_token_program,
+        extensions::metadata_pointer::authority = vault,
+        extensions::metadata_pointer::metadata_address = day_mint,
     )]
     pub day_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -1291,6 +1402,10 @@ pub struct InitializeVault<'info> {
     // the original design unable to hold the asset it was written for.
     pub underlying_token_program: Interface<'info, TokenInterface>,
     pub quote_token_program: Interface<'info, TokenInterface>,
+    /// The share classes' own program. Token-2022, because they carry
+    /// metadata; pinned rather than an interface so the extension
+    /// constraints above are meaningful.
+    pub share_token_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -1326,6 +1441,10 @@ pub struct MintShares<'info> {
     #[account(address = vault.quote_mint @ SessionError::WrongMint)]
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_token_program: Interface<'info, TokenInterface>,
+    /// The share classes' own program: quote moves under one program, shares
+    /// are minted and burned under another.
+    #[account(address = vault.share_token_program @ SessionError::WrongTokenProgram)]
+    pub share_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -1359,6 +1478,10 @@ pub struct RedeemShares<'info> {
     #[account(address = vault.quote_mint @ SessionError::WrongMint)]
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_token_program: Interface<'info, TokenInterface>,
+    /// The share classes' own program: quote moves under one program, shares
+    /// are minted and burned under another.
+    #[account(address = vault.share_token_program @ SessionError::WrongTokenProgram)]
+    pub share_token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]

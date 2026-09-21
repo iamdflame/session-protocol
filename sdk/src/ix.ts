@@ -210,17 +210,23 @@ export interface InitializeVaultAccounts {
    */
   underlyingTokenProgram?: PublicKey;
   quoteTokenProgram?: PublicKey;
+  /** The share classes' program. Token-2022, because they carry metadata. */
+  shareTokenProgram?: PublicKey;
 }
 
 /**
  * `symbol` names the share classes (`NVDA` → `NVDA.DAY` / `NVDA.NIGHT`);
  * uppercase ASCII, at most 8 bytes. `sessionKind` is `SESSION_EQUITY` or
- * `SESSION_EVENT`.
+ * `SESSION_EVENT`. `metadataBase` is where each class's off-chain metadata
+ * lives: the program writes `{base}/{TICKER}.json` into the mint. Empty
+ * leaves the URI empty, which is legal — the names are on chain regardless.
  */
 export function initializeVaultIx(
-  a: InitializeVaultAccounts, p: VaultParams, symbol: string, sessionKind: SessionKind = SESSION_EQUITY,
+  a: InitializeVaultAccounts, p: VaultParams, symbol: string,
+  sessionKind: SessionKind = SESSION_EQUITY, metadataBase = '',
 ): TransactionInstruction {
   if (!/^[A-Z0-9]{1,8}$/.test(symbol)) throw new Error('symbol is 1–8 uppercase ASCII letters or digits');
+  if (metadataBase.length > 128) throw new Error('metadata base is at most 128 bytes');
   return new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
@@ -236,11 +242,12 @@ export function initializeVaultIx(
       meta(a.equityPriceUpdate),
       meta(a.underlyingTokenProgram ?? TOKEN_PROGRAM_ID),
       meta(a.quoteTokenProgram ?? TOKEN_PROGRAM_ID),
+      meta(a.shareTokenProgram ?? TOKEN_2022_PROGRAM_ID),
       meta(SystemProgram.programId),
       meta(SYSVAR_RENT_PUBKEY),
     ],
     data: concat(
-      discriminator('initialize_vault'), encodeVaultParams(p), str(symbol), u8(sessionKind),
+      discriminator('initialize_vault'), encodeVaultParams(p), str(symbol), u8(sessionKind), str(metadataBase),
     ) as Buffer,
   });
 }
@@ -256,8 +263,10 @@ export interface TradeAccounts {
   user: PublicKey;
   /** The quote mint — `transfer_checked` validates the transfer against it. */
   quoteMint: PublicKey;
-  /** The quote program; the share mints live under it too. */
+  /** The quote program. */
   tokenProgram?: PublicKey;
+  /** The share classes' program; Token-2022 since they carry metadata. */
+  shareTokenProgram?: PublicKey;
 }
 
 const tradeKeys = (a: TradeAccounts) => [
@@ -271,6 +280,7 @@ const tradeKeys = (a: TradeAccounts) => [
   meta(a.user, false, true),
   meta(a.quoteMint),
   meta(a.tokenProgram ?? TOKEN_PROGRAM_ID),
+  meta(a.shareTokenProgram ?? TOKEN_2022_PROGRAM_ID),
 ];
 
 export function mintSharesIx(a: TradeAccounts, cls: ClassName, quoteAmount: bigint): TransactionInstruction {
