@@ -57,24 +57,37 @@ export class HermesUnavailable extends Error {
   }
 }
 
+export interface AsOfUpdate {
+  /** The base64 blob the receiver program takes. */
+  data: string;
+  price: bigint;
+  conf: bigint;
+  expo: number;
+  publishTime: number;
+}
+
 /**
- * The update Pyth published for `feedId` at (or just before) `ts`, as the
- * base64 blob the receiver program takes.
+ * The update Pyth published for `feedId` at (or just before) `ts`: the
+ * bytes to post, and the parsed price so a recap can be written from it.
  */
-export async function fetchUpdateAsOf(
-  feedIdHex: string, ts: number, cfg: HermesConfig = {},
-): Promise<string> {
-  const url = `${cfg.url ?? HERMES_URL}/v2/updates/price/${ts}?ids[]=${feedIdHex}&encoding=base64&parsed=false`;
+export async function fetchAsOf(feedIdHex: string, ts: number, cfg: HermesConfig = {}): Promise<AsOfUpdate> {
+  const url = `${cfg.url ?? HERMES_URL}/v2/updates/price/${ts}?ids[]=${feedIdHex}&encoding=base64&parsed=true`;
   const headers: Record<string, string> = {};
   const key = cfg.apiKey ?? process.env.HERMES_API_KEY;
   if (key) headers.authorization = `Bearer ${key}`;
   const r = await fetch(url, { headers });
   if (!r.ok) throw new HermesUnavailable(r.status, (await r.text()).slice(0, 200));
-  const body = await r.json() as { binary?: { data?: string[] } };
+  const body = await r.json() as {
+    binary?: { data?: string[] };
+    parsed?: { price: { price: string; conf: string; expo: number; publish_time: number } }[];
+  };
   const data = body.binary?.data?.[0];
-  if (!data) throw new Error('Hermes returned no update data');
-  return data;
+  const p = body.parsed?.[0]?.price;
+  if (!data || !p) throw new Error('Hermes returned no update data');
+  return { data, price: BigInt(p.price), conf: BigInt(p.conf), expo: p.expo, publishTime: p.publish_time };
 }
+
+
 
 /** Whether a key is configured — the crank reports which path it took. */
 export const hermesConfigured = (): boolean => Boolean(process.env.HERMES_API_KEY);
@@ -91,6 +104,37 @@ function walletFor(kp: Keypair) {
     signTransaction: sign,
     signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]) =>
       Promise.all(txs.map(sign)),
+  };
+}
+
+export interface PostedUpdate {
+  account: PublicKey;
+  signatures: string[];
+  /** Instructions that give the rent back once the account has been read. */
+  close: () => Promise<string[]>;
+}
+
+/**
+ * Post one update and leave its account open. A recap needs one account per
+ * replayed bell, all readable in the same instruction, so they cannot be
+ * closed in the posting batch the way a settlement's can.
+ */
+export async function postUpdate(conn: Connection, payer: Keypair, updateData: string): Promise<PostedUpdate> {
+  const PythSolanaReceiver = loadReceiver();
+  const receiver = new PythSolanaReceiver({ connection: conn, wallet: walletFor(payer) });
+  const { postInstructions, priceFeedIdToPriceUpdateAccount, closeInstructions } =
+    await receiver.buildPostPriceUpdateInstructions([updateData]);
+  const accounts = Object.values(priceFeedIdToPriceUpdateAccount);
+  if (accounts.length !== 1) throw new Error(`expected one price update account, got ${accounts.length}`);
+  const txs = await receiver.batchIntoVersionedTransactions(postInstructions, { computeUnitPriceMicroLamports: 50_000, tightComputeBudget: true });
+  const signatures = await receiver.provider.sendAll(txs, { skipPreflight: false, preflightCommitment: 'confirmed' });
+  return {
+    account: accounts[0],
+    signatures,
+    close: async () => {
+      const ctx = await receiver.batchIntoVersionedTransactions(closeInstructions, { computeUnitPriceMicroLamports: 50_000, tightComputeBudget: true });
+      return receiver.provider.sendAll(ctx, { skipPreflight: false, preflightCommitment: 'confirmed' });
+    },
   };
 }
 

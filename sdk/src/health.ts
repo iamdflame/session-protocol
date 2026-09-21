@@ -104,7 +104,7 @@ export function evaluate(v: VaultState, now: number): Health {
       id: 'halted',
       severity: Severity.Critical,
       message: `vault halted: ${v.haltReason}`,
-      action: 'follow the runbook for this reason, then resolve_halt with it named',
+      action: 'recap the missed bells (npm run devnet:recap), fill any residue, then resolve_halt naming this reason',
     });
   }
 

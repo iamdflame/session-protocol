@@ -46,10 +46,12 @@ pub mod funding;
 pub mod machine;
 pub mod ops;
 pub mod oracle;
+pub mod recap;
 pub mod settle;
 pub mod state;
 
 use calendar::{session_at, Session};
+use anchor_lang::solana_program::hash::hashv;
 use errors::SessionError;
 use fixed::{mul_div_floor, WAD};
 use machine::Decision;
@@ -476,7 +478,13 @@ pub mod session {
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let v = &ctx.accounts.vault;
-        v.check_live()?;
+        require!(v.version == VAULT_VERSION, SessionError::VersionMismatch);
+        // A residue is the one thing a fill fixes, so a halt *for* a residue
+        // must not block it. Every other halt does.
+        require!(
+            !v.halted || matches!(v.halt_reason, HaltReason::UnfilledHandoff | HaltReason::BadDebt),
+            SessionError::Halted
+        );
         require!(!v.paused(PAUSE_FILL), SessionError::Paused);
 
         let mark_feed = v.mark_feed_id;
@@ -655,24 +663,154 @@ pub mod session {
         Ok(())
     }
 
-    /// Re-anchor a halted vault and resume.
+    /// Replay the boundaries a halted vault missed, one supplied mark each.
     ///
-    /// Halting means the program could not determine who was owed what. Code
-    /// cannot resolve that on its own — someone has to decide, from off-chain
-    /// marks, where the vault restarts. This records that decision explicitly
-    /// rather than pretending it did not happen.
-    pub fn resolve_halt(ctx: Context<Admin>, ack: HaltReason) -> Result<()> {
+    /// The calendar decides which boundaries those are and `settle()` — the
+    /// same function the live path runs — applies each one. The operator
+    /// chooses nothing but the prices; every attested price is bounded, and
+    /// a price backed by a Pyth update from that bell's window (one account
+    /// per entry in `remaining_accounts`, in order) is not the operator's
+    /// choice at all. A loss the exposed class cannot cover stops the replay
+    /// unless `absorb_shortfall` names the only place it can go, and the
+    /// receipt says so.
+    ///
+    /// The vault stays halted afterwards; `resolve_halt` resumes it once the
+    /// books are current.
+    pub fn recap<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Recap<'info>>,
+        entries: Vec<RecapEntry>,
+        absorb_shortfall: bool,
+    ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let v = &mut ctx.accounts.vault;
+        let v = &ctx.accounts.vault;
+        require!(v.version == VAULT_VERSION, SessionError::VersionMismatch);
         require!(v.halted, SessionError::NotHalted);
-        // The operator must name the condition being cleared, so a halt for a
-        // new reason cannot be cleared by a stale, already-signed transaction.
+        // A vault whose stored state contradicts the calendar has nothing to
+        // replay *from*. That one is an upgrade, not a recap.
+        require!(v.halt_reason != HaltReason::Inconsistent, SessionError::RecapNotApplicable);
+        require!(!entries.is_empty() && entries.len() <= 32, SessionError::BadParameter);
+
+        // Verified mode is all-or-nothing: one Pyth account per entry, or none.
+        let pyth = ctx.remaining_accounts;
+        let verified = match pyth.len() {
+            0 => false,
+            n if n == entries.len() => true,
+            _ => return Err(SessionError::RecapMismatch.into()),
+        };
+        require!(verified || !v.require_verified_recap, SessionError::RecapUnverified);
+
+        let mut input: Vec<recap::Entry> = Vec::with_capacity(entries.len());
+        for (i, e) in entries.iter().enumerate() {
+            if verified {
+                let u = read_quote(&pyth[i], &v.mark_feed_id)?;
+                require_recent_post(&u, v.max_posted_slot_age)?;
+                // The window is the check; the move bound is Pyth's problem.
+                let mark = oracle::check_mark(
+                    &u.quote,
+                    MarkWindow::at_bell(e.boundary_ts, v.max_bell_lead_secs, v.max_stale_secs),
+                    0,
+                    v.underlying_decimals,
+                    v.quote_decimals,
+                    &v.guards(),
+                )
+                .map_err(map_oracle)?;
+                require!(mark == e.mark, SessionError::RecapMismatch);
+            }
+            input.push(recap::Entry { boundary_ts: e.boundary_ts, mark: e.mark, verified });
+        }
+
+        let night_supply = ctx.accounts.night_mint.supply;
+        let day_supply = ctx.accounts.day_mint.supply;
+        let out = recap::replay(&recap::Input {
+            last_session: v.last_session(),
+            last_boundary_ts: v.last_boundary_ts,
+            state: v.nav_state(night_supply, day_supply),
+            pending_delta: v.pending_delta,
+            funding: v.funding_params(),
+            max_move_bps: v.max_move_bps,
+            absorb_shortfall,
+            now,
+            entries: &input,
+        })
+        .map_err(map_recap)?;
+
+        let from_ts = v.last_boundary_ts;
+        let v = &mut ctx.accounts.vault;
+        v.night_nav = out.night_nav;
+        v.day_nav = out.day_nav;
+        v.exposed = out.exposed.into();
+        v.last_mark = out.last_mark;
+        v.set_last_session(out.last_session);
+        v.last_boundary_ts = out.last_boundary_ts;
+        v.boundary_count = v.boundary_count.saturating_add(out.boundaries as u64);
+        v.pending_delta = out.pending_delta;
+        v.cum_funding_night = v.cum_funding_night.saturating_add(out.funding);
+        v.last_recap_ts = now;
+        v.recap_count = v.recap_count.saturating_add(1);
+
+        assert_solvent(v, night_supply, day_supply)?;
+
+        // A receipt: everything needed to audit the replay from the event
+        // alone, including a hash of exactly what the operator submitted.
+        let mut bytes = Vec::with_capacity(entries.len() * 24);
+        for e in &entries {
+            bytes.extend_from_slice(&e.boundary_ts.to_le_bytes());
+            bytes.extend_from_slice(&e.mark.to_le_bytes());
+        }
+        emit!(Recapped {
+            vault: v.key(),
+            ts: now,
+            from_ts,
+            to_ts: out.last_boundary_ts,
+            boundaries: out.boundaries,
+            verified,
+            absorbed: out.absorbed,
+            unabsorbed: out.unabsorbed,
+            entries_hash: hashv(&[&bytes]).to_bytes(),
+            exposed: v.exposed,
+            night_nav: v.night_nav,
+            day_nav: v.day_nav,
+            pending_delta: v.pending_delta,
+            funding: out.funding,
+        });
+        Ok(())
+    }
+
+    /// Resume a halted vault whose books are current.
+    ///
+    /// This writes nothing to the accounting. It refuses while boundaries are
+    /// unaccounted for (`recap` first), while a handoff residue is larger than
+    /// the carry limit (`fill_handoff` first — allowed during these halts for
+    /// exactly this reason), and while an issuer condition still holds. The
+    /// operator names the condition being cleared so a stale, already-signed
+    /// transaction cannot clear a newer halt.
+    pub fn resolve_halt(ctx: Context<ResolveHalt>, ack: HaltReason) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let v = &ctx.accounts.vault;
+        require!(v.version == VAULT_VERSION, SessionError::VersionMismatch);
+        require!(v.halted, SessionError::NotHalted);
         require!(v.halt_reason == ack, SessionError::HaltReasonMismatch);
 
-        let s = session_at(now);
-        v.set_last_session(s);
-        v.exposed = class_for(s).into();
-        v.last_boundary_ts = now;
+        // Current means at most one boundary has elapsed since the last one
+        // settled — that one, the next crank settles in the ordinary way.
+        match machine::decide(v.last_session(), v.last_boundary_ts, now) {
+            Decision::Stale { .. } => return Err(SessionError::RecapRequired.into()),
+            Decision::Inconsistent => return Err(SessionError::RecapNotApplicable.into()),
+            _ => {}
+        }
+
+        let night_supply = ctx.accounts.night_mint.supply;
+        let day_supply = ctx.accounts.day_mint.supply;
+        let total_value = value_of(night_supply, v.night_nav)
+            .and_then(|a| value_of(day_supply, v.day_nav).map(|b| a.saturating_add(b)))
+            .ok_or(SessionError::MathOverflow)?;
+        if v.pending_delta != 0 && total_value > 0 {
+            let residue = v.pending_delta.unsigned_abs();
+            let bps = mul_div_floor(residue, 10_000, total_value).unwrap_or(u128::MAX);
+            require!(bps <= v.max_carry_delta_bps as u128, SessionError::ResidueTooLarge);
+        }
+
+        let v = &mut ctx.accounts.vault;
         v.halted = false;
         v.halt_reason = HaltReason::None;
 
@@ -731,6 +869,14 @@ pub mod session {
 }
 
 /* ── parameters ──────────────────────────────────────────────────────────── */
+
+/// One missed boundary, as the operator submits it.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct RecapEntry {
+    pub boundary_ts: i64,
+    /// Quote atoms per underlying atom, WAD-scaled — `Vault::last_mark`'s units.
+    pub mark: u128,
+}
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
 pub struct VaultParams {
@@ -945,6 +1091,18 @@ fn map_op(e: OpError) -> Error {
         OpError::InsufficientUnderlying => error!(SessionError::InsufficientUnderlying),
         OpError::NoFeePayer => error!(SessionError::NoFeePayer),
         OpError::SlippageExceeded => error!(SessionError::SlippageExceeded),
+    }
+}
+
+fn map_recap(e: recap::RecapError) -> Error {
+    use recap::RecapError as R;
+    match e {
+        R::Empty => error!(SessionError::BadParameter),
+        R::Mismatch | R::Future => error!(SessionError::RecapMismatch),
+        R::MoveTooLarge => error!(SessionError::MoveTooLarge),
+        R::Shortfall => error!(SessionError::RecapShortfall),
+        R::ZeroMark => error!(SessionError::BadOraclePrice),
+        R::Overflow => error!(SessionError::MathOverflow),
     }
 }
 
@@ -1177,6 +1335,37 @@ pub struct SkimSurplus<'info> {
     // Both, because this instruction moves both assets.
     pub underlying_token_program: Interface<'info, TokenInterface>,
     pub quote_token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct Recap<'info> {
+    #[account(mut, has_one = authority @ SessionError::Unauthorized,
+              seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    pub authority: Signer<'info>,
+    #[account(address = vault.night_mint)]
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.day_mint)]
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
+    // remaining_accounts: optionally one Pyth price update per entry, in order.
+}
+
+#[derive(Accounts)]
+pub struct ResolveHalt<'info> {
+    #[account(mut, has_one = authority @ SessionError::Unauthorized,
+              seeds = [Vault::SEED, vault.underlying_mint.as_ref(), vault.quote_mint.as_ref()], bump = vault.bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    pub authority: Signer<'info>,
+    #[account(address = vault.night_mint)]
+    pub night_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.day_mint)]
+    pub day_mint: Box<InterfaceAccount<'info, Mint>>,
+    // The issuer checks in `resolve_halt` read these; a halt for an issuer
+    // condition cannot be cleared while the condition holds.
+    #[account(address = vault.underlying_mint @ SessionError::WrongMint)]
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = vault.underlying_vault)]
+    pub underlying_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 }
 
 #[derive(Accounts)]

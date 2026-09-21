@@ -163,6 +163,12 @@ const symbolOf = (b: Uint8Array): string => {
  * borsh serialises in declaration order and nothing else pins the two together.
  */
 export function decodeVault(data: Uint8Array): Vault {
+  // The version is the first byte after the discriminator. Check it before
+  // reading anything else: an older layout is shorter, and walking it with
+  // this decoder would report "truncated" instead of the actual problem.
+  if (data.length > 8 && data[8] !== VAULT_VERSION) {
+    throw new Error(`vault version ${data[8]}, expected ${VAULT_VERSION}; refusing to decode`);
+  }
   const c = new Cursor(data, 8); // skip the anchor discriminator
 
   const v: Vault = {

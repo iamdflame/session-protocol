@@ -15,7 +15,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from '@solana/web3.js';
-import { PROGRAM_ID, SESSION_EQUITY, type ClassName, type SessionKind } from './vault.ts';
+import { PROGRAM_ID, SESSION_EQUITY, HALT_REASON, type ClassName, type SessionKind } from './vault.ts';
 
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 /** Token-2022. Every real xStock mint is owned by this, not by the classic program. */
@@ -42,6 +42,7 @@ export const DISCRIMINATOR: Record<string, number[]> = {
   set_params:         [27, 234, 178, 52, 147, 2, 187, 141],
   transfer_authority: [48, 169, 76, 72, 229, 180, 55, 161],
   accept_authority:   [107, 86, 198, 91, 33, 12, 107, 160],
+  recap:              [204, 15, 215, 235, 79, 60, 231, 134],
 };
 
 export function discriminator(name: string): Uint8Array {
@@ -56,6 +57,15 @@ const u8 = (v: number) => Uint8Array.of(v & 0xff);
 const u16 = (v: number) => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v, true); return b; };
 const u32 = (v: number) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v, true); return b; };
 const u64 = (v: bigint) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, v, true); return b; };
+const i64 = (v: bigint) => { const b = new Uint8Array(8); new DataView(b.buffer).setBigInt64(0, v, true); return b; };
+const u128 = (v: bigint) => {
+  if (v < 0n || v >= 1n << 128n) throw new Error('u128 out of range');
+  const b = new Uint8Array(16);
+  const dv = new DataView(b.buffer);
+  dv.setBigUint64(0, v & ((1n << 64n) - 1n), true);
+  dv.setBigUint64(8, v >> 64n, true);
+  return b;
+};
 
 const concat = (...parts: Uint8Array[]): Uint8Array => {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
@@ -341,6 +351,102 @@ export function fillHandoffIx(
     data: concat(
       discriminator('fill_handoff'), u64(underlyingAmount), u64(maxQuoteIn), u64(minQuoteOut),
     ) as Buffer,
+  });
+}
+
+/* ── halts and recaps ────────────────────────────────────────────────────── */
+
+export type HaltReasonName = (typeof HALT_REASON)[number];
+/** `HaltReason` is a plain borsh enum in declaration order. */
+export const haltReasonByte = (r: HaltReasonName): number => {
+  const i = HALT_REASON.indexOf(r);
+  if (i < 0) throw new Error(`unknown halt reason ${r}`);
+  return i;
+};
+
+export interface AdminAccounts {
+  vault: PublicKey;
+  authority: PublicKey;
+}
+
+/** Stop the vault. Settlement is not pausable, so this is the only brake. */
+export function haltIx(a: AdminAccounts): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(a.vault, true), meta(a.authority, false, true)],
+    data: discriminator('halt') as Buffer,
+  });
+}
+
+export function setFlagsIx(a: AdminAccounts, flags: number): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [meta(a.vault, true), meta(a.authority, false, true)],
+    data: concat(discriminator('set_flags'), u8(flags)) as Buffer,
+  });
+}
+
+export interface RecapEntry {
+  boundaryTs: number;
+  /** Quote atoms per underlying atom, WAD-scaled — `Vault.lastMark`'s units. */
+  mark: bigint;
+}
+
+export interface RecapAccounts {
+  vault: PublicKey;
+  authority: PublicKey;
+  nightMint: PublicKey;
+  dayMint: PublicKey;
+}
+
+/**
+ * Replay missed boundaries. `pythUpdates`, when given, is one posted price
+ * update per entry, in order, each from that bell's own window; the program
+ * then takes the marks from Pyth rather than from the operator.
+ */
+export function recapIx(
+  a: RecapAccounts, entries: RecapEntry[], absorbShortfall: boolean, pythUpdates: PublicKey[] = [],
+): TransactionInstruction {
+  if (entries.length === 0 || entries.length > 32) throw new Error('1–32 recap entries');
+  if (pythUpdates.length && pythUpdates.length !== entries.length) {
+    throw new Error('one Pyth update per entry, or none');
+  }
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(a.vault, true),
+      meta(a.authority, false, true),
+      meta(a.nightMint),
+      meta(a.dayMint),
+      ...pythUpdates.map(k => meta(k)),
+    ],
+    data: concat(
+      discriminator('recap'),
+      u32(entries.length),
+      ...entries.map(e => concat(i64(BigInt(e.boundaryTs)), u128(e.mark))),
+      u8(absorbShortfall ? 1 : 0),
+    ) as Buffer,
+  });
+}
+
+export interface ResolveHaltAccounts extends RecapAccounts {
+  underlyingMint: PublicKey;
+  underlyingVault: PublicKey;
+}
+
+/** Resume a vault whose books are current. Writes nothing to the accounting. */
+export function resolveHaltIx(a: ResolveHaltAccounts, ack: HaltReasonName): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: PROGRAM_ID,
+    keys: [
+      meta(a.vault, true),
+      meta(a.authority, false, true),
+      meta(a.nightMint),
+      meta(a.dayMint),
+      meta(a.underlyingMint),
+      meta(a.underlyingVault),
+    ],
+    data: concat(discriminator('resolve_halt'), u8(haltReasonByte(ack))) as Buffer,
   });
 }
 

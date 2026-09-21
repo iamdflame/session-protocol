@@ -95,4 +95,16 @@ pub enum SessionError {
     PostedSlotStale,
     #[msg("mark publish time is outside the window this instruction accepts")]
     MarkOutsideWindow,
+    #[msg("boundaries are unaccounted for; recap them before resuming")]
+    RecapRequired,
+    #[msg("recap entry is not the next boundary the calendar produces, lies in the future, or does not match its Pyth update")]
+    RecapMismatch,
+    #[msg("a replayed boundary wiped the exposed class; absorb_shortfall must be set to charge the remainder to the other class")]
+    RecapShortfall,
+    #[msg("this vault requires a Pyth update for every recapped boundary")]
+    RecapUnverified,
+    #[msg("a vault halted for an inconsistency cannot be recapped or resumed")]
+    RecapNotApplicable,
+    #[msg("handoff residue exceeds the carry limit; fill it before resuming")]
+    ResidueTooLarge,
 }

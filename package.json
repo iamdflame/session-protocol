@@ -20,7 +20,8 @@
     "devnet:crank": "node --experimental-strip-types keeper/src/devnet-crank.ts",
     "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts",
     "build:program": "./scripts/build-sbf.sh",
-    "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts"
+    "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts",
+    "devnet:recap": "node --experimental-strip-types keeper/src/recap.ts"
   },
   "dependencies": {
     "@pythnetwork/pyth-solana-receiver": "^0.16.0",

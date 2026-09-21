@@ -404,6 +404,29 @@ pub struct VaultResumed {
 }
 
 #[event]
+pub struct Recapped {
+    pub vault: Pubkey,
+    pub ts: i64,
+    pub from_ts: i64,
+    pub to_ts: i64,
+    pub boundaries: u32,
+    /// Every entry carried a Pyth update from its bell's window.
+    pub verified: bool,
+    /// Quote atoms charged to the non-exposed class because the exposed one
+    /// was wiped. Nonzero only when the operator asked for it.
+    pub absorbed: u128,
+    /// Loss nobody could pay: both classes at zero.
+    pub unabsorbed: u128,
+    /// sha256 over the submitted (boundary_ts, mark) pairs, little-endian.
+    pub entries_hash: [u8; 32],
+    pub exposed: Class,
+    pub night_nav: u128,
+    pub day_nav: u128,
+    pub pending_delta: i128,
+    pub funding: i128,
+}
+
+#[event]
 pub struct ParamsChanged {
     pub vault: Pubkey,
     pub authority: Pubkey,

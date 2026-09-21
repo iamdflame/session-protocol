@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 import {
   DISCRIMINATOR, encodeVaultParams, classByte, hexToBytes, bytesToHex, initializeVaultIx, VAULT_PARAMS_SIZE,
+  recapIx, resolveHaltIx, haltReasonByte,
 } from '../sdk/src/ix.ts';
 import { SESSION_EVENT } from '../sdk/src/vault.ts';
 
@@ -54,6 +55,27 @@ try { initializeVaultIx(acc, {} as never, 'nvda', 0); } catch { threw = true; }
 check('a lowercase symbol is refused before it reaches the chain', threw);
 check('Class encodes Night=0 Day=1', classByte('night') === 0 && classByte('day') === 1);
 check('hex round-trips', bytesToHex(hexToBytes('0x00ff10')) === '00ff10');
+
+// recap: Vec<RecapEntry> is a u32 count then (i64, u128) pairs, then the absorb flag
+const rc = recapIx({ vault: k, authority: k, nightMint: k, dayMint: k }, [
+  { boundaryTs: -1, mark: (1n << 64n) + 5n },
+  { boundaryTs: 1_774_618_201, mark: 2_203_400_000_000_000_000n },
+], true);
+const rd = rc.data;
+check('recap data = 8 + 4 + 2×24 + 1 bytes', rd.length === 8 + 4 + 48 + 1, String(rd.length));
+check('entry count is a u32', rd[8] === 2 && rd[9] === 0);
+check('i64 -1 is all ones', rd.subarray(12, 20).every(b => b === 0xff));
+check('u128 high word lands at +8', rd[20 + 8] === 1 && rd[20] === 5);
+check('absorb flag is the last byte', rd[rd.length - 1] === 1);
+check('recap keys are vault, authority(signer), night, day', rc.keys.length === 4 && rc.keys[1].isSigner);
+const rc2 = recapIx({ vault: k, authority: k, nightMint: k, dayMint: k }, [{ boundaryTs: 1, mark: 1n }], false, [k]);
+check('a Pyth update per entry is appended as a remaining account', rc2.keys.length === 5);
+let bad = false;
+try { recapIx({ vault: k, authority: k, nightMint: k, dayMint: k }, [{ boundaryTs: 1, mark: 1n }, { boundaryTs: 2, mark: 1n }], false, [k]); } catch { bad = true; }
+check('a partial set of Pyth updates is refused', bad);
+check('HaltReason encodes by declaration order', haltReasonByte('None') === 0 && haltReasonByte('BadDebt') === 4 && haltReasonByte('Operator') === 6);
+const rh = resolveHaltIx({ vault: k, authority: k, nightMint: k, dayMint: k, underlyingMint: k, underlyingVault: k }, 'MissedBoundary');
+check('resolve_halt carries the acknowledged reason', rh.data.length === 9 && rh.data[8] === 1 && rh.keys.length === 6);
 
 console.log(failed ? `\n${failed} failed` : '\nall instruction checks passed');
 process.exit(failed ? 1 : 0);

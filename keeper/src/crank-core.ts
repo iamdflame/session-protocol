@@ -25,7 +25,7 @@ import { settleBoundaryIx, fillHandoffIx, createAtaIdempotentIx, ata, explainPro
 import { nextBoundary, sessionAt, Session } from '../../sdk/src/calendar.ts';
 import { WAD, mulDivFloor } from '../../sdk/src/settle.ts';
 import { bytesToHex } from '../../sdk/src/ix.ts';
-import { fetchUpdateAsOf, hermesConfigured, postUpdateAndConsume, HermesUnavailable } from './hermes.ts';
+import { fetchAsOf, hermesConfigured, postUpdateAndConsume, HermesUnavailable } from './hermes.ts';
 
 export interface Manifest {
   rpc: string;
@@ -142,7 +142,7 @@ export async function crank(conn: Connection, m: Manifest, operator: Keypair): P
     if (hermesConfigured()) {
       try {
         const feed = bytesToHex(v.markFeedId);
-        const update = await fetchUpdateAsOf(feed, next);
+        const update = (await fetchAsOf(feed, next)).data;
         const r = await postUpdateAndConsume(conn, operator, feed, update, acc => [settleWith(acc)]);
         report.settled = { signature: r.signatures[r.signatures.length - 2] ?? r.signatures[0] };
         report.markSource = 'hermes-as-of';

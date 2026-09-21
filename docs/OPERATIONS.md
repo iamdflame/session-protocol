@@ -223,60 +223,98 @@ session. `notice` belongs in a dashboard, not a pager.
 
 ## Halts and how to clear them
 
-`resolve_halt` requires naming the reason being cleared, so a stale pre-signed
-transaction cannot clear a halt it was not written for. Resolving re-anchors the
-session, exposure and boundary timestamp to *now*.
+Two instructions, and a rule between them.
+
+`recap` replays the bells a halted vault missed, one mark each, through the
+same `settle()` the live path runs. The calendar decides which bells those
+are — an entry whose timestamp is not the next bell is refused — and the
+operator supplies only prices. Each price is either **verified** (a Pyth
+update from that bell's own window, posted alongside; the program takes the
+mark from it) or **attested** (the operator's word, bounded by
+`max_move_bps`). The receipt event says which, carries a hash of what was
+submitted, and the instrument card shows the mode.
+
+`resolve_halt` resumes a vault and writes **nothing** to the accounting. It
+refuses while any bell is unaccounted for (`RecapRequired`), while a handoff
+residue exceeds the carry limit (`ResidueTooLarge`), and while an issuer
+condition still holds. It also requires naming the reason being cleared, so a
+stale pre-signed transaction cannot clear a halt it was not written for.
+
+There is no path that resumes with missed sessions unpaid. If a replayed bell
+wipes the exposed class, the replay stops unless `--absorb` names the only
+place the remainder can go — the other class — and that choice is in the
+event.
+
+```bash
+npm run devnet:recap -- --dry-run          # which bells, which source
+npm run devnet:recap                       # HERMES_API_KEY: Pyth's prints, verified
+npm run devnet:recap -- --marks <ts>=<mark>,...   # attested, on your word
+npm run devnet:recap -- --absorb --resume  # explicit, and then resume
+```
 
 ### `MissedBoundary`
 
-Two or more boundaries elapsed without a crank. The intermediate mark is gone.
+Two or more bells elapsed without a crank.
 
-1. Establish from off-chain data what the mark was at each missed boundary, and
-   what each class *should* have earned.
-2. Decide whether the difference is material. Over one weekend on a quiet name
-   it is often dust; over a week it is not.
-3. If material, settle the difference out of band before resuming — there is no
-   on-chain path to retroactively attribute a session, deliberately.
-4. `resolve_halt(MissedBoundary)`.
+1. `recap`. With a Hermes key the marks are Pyth's own and the operator
+   chooses nothing. Without one, attest them from a source you can defend and
+   expect the move bound to hold you to it.
+2. The replay produces a handoff residue for every bell, since nobody filled
+   between them. Fill it — `fill_handoff` is permitted during this halt.
+3. `resolve_halt(MissedBoundary)`.
 
 ### `UnfilledHandoff`
 
-An imbalance above `max_carry_delta_bps` was still outstanding when another
-boundary arrived. The vault is holding the wrong inventory.
+An imbalance above `max_carry_delta_bps` was still outstanding when a bell
+arrived. That bell was **not** settled.
 
-1. Fill it: `fill_handoff` until `pending_delta` is near zero.
-2. Work out why nobody filled it. Usually `fill_incentive_bps` is below the real
-   execution cost, or the pool is too thin for the vault's size.
-3. Raise the incentive via `set_params` before resuming, or the next boundary
-   halts the same way.
+1. Fill it: `fill_handoff` until `pending_delta` is under the limit. Allowed
+   while halted for this reason — it is the remedy.
+2. `recap` the bell that was refused (and any since).
+3. Work out why nobody filled. Usually the incentive ramp tops out below the
+   real execution cost, or the pool is too thin for the vault's size. Raise it
+   via `set_params` before resuming, or the next bell halts the same way.
 4. `resolve_halt(UnfilledHandoff)`.
 
 ### `BadDebt`
 
-A price move produced a loss larger than the exposed class was worth. Only
+A bell's move produced a loss larger than the exposed class was worth. Only
 reachable when an unfilled handoff left the vault badly over-hedged and the
-price then fell.
+price then moved against the inventory. Nothing was applied — the settlement
+was refused, not half-done.
 
-1. Nothing was applied — the settlement was refused, not half-done.
-2. The exposed class is close to worthless at the attempted mark. Check whether
-   the shortfall in the `VaultHalted` event exceeds the class's remaining value.
-3. This is a capital decision, not an operational one: either the shortfall is
-   absorbed from outside, or the class is wound down.
-4. Only then `resolve_halt(BadDebt)`.
+1. `recap` that bell. Without `--absorb` the replay refuses, which is the
+   program telling you the class is wiped.
+2. Decide, on purpose: `--absorb` charges the remainder to the other class,
+   the only place it can go, and the `Recapped` event records `absorbed` (and
+   `unabsorbed`, if both classes reached zero). Or wind the vault down.
+3. Fill the residue; `fill_handoff` is permitted during this halt.
+4. `resolve_halt(BadDebt)`.
+
+### `IssuerAction`
+
+The underlying's issuer used a power the vault cannot override: set a transfer
+hook, paused the mint, froze the vault's token account, or moved inventory out
+under a permanent delegate. The halt detail says which. Nothing this program
+can do clears it; `resolve_halt(IssuerAction)` re-checks the condition and
+refuses while it holds. Once it clears, `recap` any bells that passed, then
+resolve.
 
 ### `Inconsistent`
 
-Either the stored session contradicts the calendar, or the equity feed stayed
-quiet through a nominal session past `max_unexpected_closed_secs`.
+The stored session contradicts the calendar, or the equity feed stayed quiet
+through a nominal session past `max_unexpected_closed_secs`.
 
 1. Check whether the market was genuinely shut — an unencoded holiday, or an
    exchange-wide halt.
 2. If the calendar is wrong, that is a program fix, not a parameter change.
-3. `resolve_halt(Inconsistent)` once the feed is publishing normally again.
+   A vault in this state cannot be recapped or resumed: there is no trusted
+   position to replay from.
 
 ### `Operator`
 
-Somebody called `halt`. `resolve_halt(Operator)` when done.
+Somebody called `halt`. Bells that passed meanwhile are recapped like any
+other, then `resolve_halt(Operator)`.
 
 ---
 
