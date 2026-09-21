@@ -22,7 +22,8 @@
     "build:program": "./scripts/build-sbf.sh",
     "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts",
     "devnet:recap": "node --experimental-strip-types keeper/src/recap.ts",
-    "gate:pool": "node --experimental-strip-types keeper/src/gate-token2022-pool.ts"
+    "gate:pool": "node --experimental-strip-types keeper/src/gate-token2022-pool.ts",
+    "pools": "node --experimental-strip-types keeper/src/pools.ts"
   },
   "dependencies": {
     "@meteora-ag/cp-amm-sdk": "^1.4.9",

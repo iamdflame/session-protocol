@@ -10,3 +10,15 @@ proptest-regressions/
 node_modules/
 keeper/.devnet/
 problems.md
+
+# Keys and anything holding one. A private key reaching a public repository is
+# unrecoverable — the key is spent the moment it is pushed — so these are
+# matched broadly rather than exactly.
+.env
+.env.*
+!.env.example
+*.key
+*-keypair.json
+keeper/.agent/
+REBUILD.md
+Problems.md

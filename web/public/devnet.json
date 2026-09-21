@@ -44,5 +44,8 @@
     ],
     "requireVerifiedRecap": false
   },
-  "initialised": "2026-09-21T03:21:57.127Z"
+  "initialised": "2026-09-21T03:21:57.127Z",
+  "pools": {
+    "NVDA.DAY/quote": "8Vm6ei7cgBacHdxbsLYEoXdZo5zCPzqBN1YgpVKXiybN"
+  }
 }
