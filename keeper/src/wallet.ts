@@ -76,6 +76,14 @@ export function parseSecret(raw: string): Parsed {
 
 /* ── report ──────────────────────────────────────────────────────────────── */
 
+// Only when run directly. `parseSecret` is imported by the launcher, and a
+// module that prints a wallet report on import is a module that prints it in
+// the middle of somebody else's output.
+const RUN_DIRECTLY = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!);
+if (!RUN_DIRECTLY) {
+  // nothing else to do; the parser above is the export
+} else {
+
 let text: string;
 try {
   text = readFileSync(ENV, 'utf8');
@@ -138,4 +146,6 @@ for (const net of ['mainnet-beta', 'devnet'] as const) {
   } catch (e) {
     console.log(`  ${net.padEnd(13)} rpc error: ${(e as Error).message.split('\n')[0]}`);
   }
+}
+
 }
