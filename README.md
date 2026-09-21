@@ -332,9 +332,12 @@ therefore variable width — a fixed-offset reader silently misreads every
 - **A 20% gap settles.** Refusing it would leave a vault unable to settle at
   all on exactly the night the NIGHT class exists for. Fills pause; only a
   shortfall halts.
-- **The residual clears in a call auction** at one price for everyone —
-  though no auction has run on chain yet: it needs a real bell leaving a real
-  residual. The arithmetic is property-tested over arbitrary bid sets.
+- **The residual clears in a call auction** at one price for everyone, and one
+  has now run on devnet: the 21 Sep closing bell left a $7,528 residual, the
+  auction opened on it, took a single bid for all 63.59 of the underlying it
+  wanted, and cleared at the bell's own mark of 1.183837 with the bid account
+  closed and its rent returned. `npm run devnet:auction` is that sequence. The
+  arithmetic is property-tested over arbitrary bid sets.
 - **An event session** carries names with no exchange behind them. `OPENAI`
   has no 09:30, so its vault has no clock: the boundary is the next print or
   a premium divergence, read live from prestocks.com. That detector is the

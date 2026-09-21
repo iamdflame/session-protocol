@@ -5,7 +5,7 @@
   "symbol": "NVDAx",
   "vaultSymbol": "NVDA",
   "metadataBase": "https://session-roan.vercel.app/meta",
-  "note": "Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate — the same shape as the real NVDAx — and the quote is a classic SPL mint like USDC. The share classes are Token-2022 so they carry their own names. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.",
+  "note": "Devnet stand-in. The underlying is a Token-2022 mint with a permanent delegate \u2014 the same shape as the real NVDAx \u2014 and the quote is a classic SPL mint like USDC. The share classes are Token-2022 so they carry their own names. The mark is Pyth SOL/USD because no tokenised-equity feed is sponsored on devnet.",
   "vault": "DqdXeMbPHiDMMrVPeiGDBCNtDAxtMZNtEtTLN4eYoBti",
   "underlyingMint": "gxXt4XT9b2WXZcZcwckdaSmTdtrG6QMGgDx7UrKQLVu",
   "quoteMint": "7GWMrVqJpttjz916ijZ8fK6efm3oXACGcY5LdC9EierL",
@@ -36,7 +36,7 @@
     "maxPostedSlotAge": 4500,
     "maxBellLeadSecs": 300,
     "maxPremiumBps": 1000,
-    "auctionSecs": 900,
+    "auctionSecs": 120,
     "incentiveRamp": [
       10,
       25,

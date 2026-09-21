@@ -192,8 +192,8 @@ export default function HowItWorks() {
             <a className={s.statusLink} href="https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet" target="_blank" rel="noreferrer">
               <span className="mono">8gWC37…KqKZ</span> ↗
             </a>, and one token is live on <strong>mainnet</strong>. What stands in
-            on devnet is about what devnet does not have — and one thing below has
-            simply never been exercised. Here is the line.
+            on devnet is about what devnet does not have, and nothing else. Here
+            is the line.
           </p>
         </Reveal>
 
@@ -219,6 +219,13 @@ export default function HowItWorks() {
                   <strong>A bell that actually settled.</strong> Exposure flipped, and the
                   handoff was filled by an arbitrageur paid 25 bp for bringing the stock —
                   which took DAY&rsquo;s NAV down by exactly that.
+                </li>
+                <li>
+                  <strong>A call auction that cleared.</strong> The next bell left a $7,528
+                  residual and it went to auction instead of to whoever arrived first: one
+                  price for everyone, open for two minutes, filled in full at the bell&rsquo;s
+                  own mark. Funding moved with it — NIGHT&rsquo;s NAV went 1.000000 to
+                  1.005000, which is the 50 bp cap, because DAY was three-quarters larger.
                 </li>
                 <li>
                   <strong>Anyone can open one.</strong>{' '}
@@ -280,12 +287,7 @@ export default function HowItWorks() {
                   can only ever pass. <strong>On this instance the calendar is the only
                   clock.</strong>
                 </li>
-                <li>
-                  <strong>The auction has never run.</strong> The residual can be offered at
-                  one price to everyone for a window after the bell instead of going to
-                  whoever arrives first — the code is there, the window is set, and no
-                  auction account exists on this program. Nothing has needed one yet.
-                </li>
+
                 <li>
                   <strong>Recap is not required here.</strong>{' '}
                   <code className="mono">require_verified_recap</code> is off on both
