@@ -70,3 +70,7 @@
   transition: color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
 }
 .reset:hover { color: var(--ink); border-color: var(--ink); }
+
+/* What the next bell will charge, above the balance-sheet figures: it is the
+   number a holder acts on, and the rest is what it is computed from. */
+.funding { padding-bottom: var(--sp-4); border-bottom: 1px solid var(--line); }

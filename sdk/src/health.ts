@@ -191,11 +191,24 @@ export function evaluate(v: VaultState, now: number): Health {
   const total = nightValue + dayValue;
   const skew = total > 0n ? ((nightValue - dayValue) * WAD) / total : 0n;
   if (abs(skew) > (WAD * 80n) / 100n && total > 0n) {
+    // A skew past 80% has two very different causes and the same number.
+    //
+    // With both classes held, funding is at its cap and pulling hard. With
+    // one class empty, funding is *zero* — the transfer is sized on the
+    // smaller side, so there is nobody to pay and nobody to pay them. Saying
+    // "already at its cap" in that case tells an operator to expect a pull
+    // that is not coming, and it is the state every vault starts in.
+    const oneSideEmpty = nightValue === 0n || dayValue === 0n;
     signals.push({
       id: 'extreme-skew',
       severity: Severity.Notice,
-      message: `${skew > 0n ? 'NIGHT' : 'DAY'} holds ${Number((abs(skew) * 100n) / WAD)}% more value`,
-      action: 'funding is already at its cap; expect large handoffs at every boundary',
+      message: oneSideEmpty
+        ? `only ${nightValue === 0n ? 'DAY' : 'NIGHT'} has holders`
+        : `${skew > 0n ? 'NIGHT' : 'DAY'} holds ${Number((abs(skew) * 100n) / WAD)}% more value`,
+      action: oneSideEmpty
+        ? 'funding is zero until both classes have holders, so nothing pulls the book level; '
+          + 'the whole exposure hands over at every boundary'
+        : 'funding is already at its cap; expect large handoffs at every boundary',
     });
   }
 

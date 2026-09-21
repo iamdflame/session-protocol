@@ -6,6 +6,7 @@ import { ChainTrade } from './ChainTrade';
 import { Instrument } from './Instrument';
 import { EventSession } from './EventSession';
 import { Auction } from './Auction';
+import { FundingRate } from './FundingRate';
 import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
@@ -342,6 +343,7 @@ function ChainHealth({ d }: { d: ChainState }) {
         <h2 className={h.title}>Vault health</h2>
         <span className={h.badge} data-sev={health.severity}><span className={h.dot} aria-hidden="true" />{LABEL[health.severity]}</span>
       </header>
+      <div className={h.funding}><FundingRate d={d} /></div>
       <dl className={h.metrics}>
         <div><dt>Backing</dt><dd className="num">{fmtUsd(fromAtoms(health.margin + d.valueNight + d.valueDay, qd), 2)}</dd></div>
         <div><dt>Claims</dt><dd className="num">{fmtUsd(fromAtoms(d.valueNight + d.valueDay, qd), 2)}</dd></div>

@@ -179,5 +179,25 @@ console.log('\nthe issuer acted');
   check('a transfer fee is a notice, not an alarm', fee.signals.some(s => s.id === 'transfer-fee' && s.severity === Severity.Notice));
 }
 
+console.log('\nskew with one class empty');
+{
+  // Every vault starts here, and the number is identical to a genuinely
+  // crowded book: 100% skew. The cause is not, and the advice must not be.
+  const v = healthy(now);
+  v.nightSupply = 0n;
+  const h = evaluate(v, now);
+  const sig = h.signals.find(s => s.id === 'extreme-skew');
+  check('an empty class is reported as an empty class', !!sig && /only DAY has holders/.test(sig.message), sig?.message);
+  check('and is not described as funding at its cap',
+    !!sig && !/at its cap/.test(sig.action) && /funding is zero/.test(sig.action), sig?.action);
+
+  // With both sides held and one much larger, the cap advice is right.
+  const crowded = healthy(now);
+  crowded.nightSupply = crowded.daySupply * 20n;
+  const c = evaluate(crowded, now).signals.find(s => s.id === 'extreme-skew');
+  check('a genuinely crowded book still says the cap is reached',
+    !!c && /at its cap/.test(c.action), c?.action);
+}
+
 console.log(failed ? `\n${failed} FAILURES` : '\nall health checks passed');
 process.exit(failed ? 1 : 0);
