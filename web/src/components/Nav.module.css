@@ -253,3 +253,9 @@
 @media (min-width: 961px) {
   .drawer[data-open='true'] { display: none; }
 }
+
+/* A market with no exchange session: the pill says so rather than counting
+   down to a bell that will not ring for this name. */
+.pillMuted { color: var(--ink-3); }
+.pillMuted .dot { background: var(--ink-3); }
+.dot[data-off='true'] { background: var(--ink-3); box-shadow: none; animation: none; }

@@ -6,12 +6,14 @@ import { CurveChart } from './charts/CurveChart';
 import { SessionClock } from './SessionClock';
 import { ChainTrade } from './ChainTrade';
 import { Instrument } from './Instrument';
+import { EventSession } from './EventSession';
 import { useSession, useClockSize, countdown, etClock, etDate } from '@/lib/session';
 import { useCurve, fmtUsd, fmtPct, type Asset } from '@/lib/data';
 import {
   useChainVault, pingCrank, explorer, explorerAddr, short, type Devnet, type ChainVault as ChainState,
 } from '@/lib/chain';
 import { Severity } from '@sdk/health.ts';
+import { SESSION_EVENT } from '@sdk/vault.ts';
 import type { ShareClass } from '@/lib/localVault';
 import s from '@/pages/Vault.module.css';
 import h from './HealthPanel.module.css';
@@ -58,6 +60,11 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
   const d = chain.data!;
   const v = d.vault;
   const qd = v.quoteDecimals;
+  // One program, two vocabularies: an equity vault has a day and a night, an
+  // event vault has only the stretch before the next print and the print.
+  const isEvent = v.sessionKind === SESSION_EVENT;
+  const label = (k: ShareClass) =>
+    isEvent ? `${asset.symbol}.${k === 'night' ? 'THEN' : 'NOW'}` : `${asset.symbol}.${k.toUpperCase()}`;
 
   return (
     <div className={s.page}>
@@ -92,14 +99,26 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
             </dl>
           </div>
 
-          <div className={s.clockCol}>
-            <SessionClock size={clockSize} compact />
-            <ClockNote exposed={v.exposed} />
-          </div>
+          {isEvent ? (
+            // No clock. A pre-IPO name has no session to count down to, and a
+            // ring showing NYSE hours next to OPENAI would be a lie with a
+            // timer on it. The event panel below carries its real clock.
+            <div className={s.clockCol}>
+              <p className={s.clockNote}>
+                <strong data-holder={v.exposed}>{v.exposed === 'night' ? 'THEN' : 'NOW'}</strong> holds this vault.
+                There is no bell here — the boundary is the next print, or a premium that runs.
+              </p>
+            </div>
+          ) : (
+            <div className={s.clockCol}>
+              <SessionClock size={clockSize} compact />
+              <ClockNote exposed={v.exposed} />
+            </div>
+          )}
         </div>
       </header>
 
-      <DevnetNote m={m} />
+      <DevnetNote m={m} isEvent={isEvent} />
 
       {/* ── the two classes ─────────────────────────────────────────────── */}
       <section className={`shell ${s.classes}`} aria-label="Share classes">
@@ -114,8 +133,12 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
             <article key={k} className={s.classCard} data-class={k} data-exposed={isExposed}>
               <header className={s.classHead}>
                 <div>
-                  <span className={s.classTag}>{asset.symbol}.{k.toUpperCase()}</span>
-                  <p className={s.classState}>{isExposed ? 'Holding the stock' : 'Flat — parked in quote'}</p>
+                  <span className={s.classTag}>{label(k)}</span>
+                  <p className={s.classState}>
+                    {isExposed
+                      ? (isEvent ? 'Wearing the print and the premium' : 'Holding the stock')
+                      : 'Flat — parked in quote'}
+                  </p>
                 </div>
                 <span className={s.classBadge} data-on={isExposed}>{isExposed ? 'exposed' : 'parked'}</span>
               </header>
@@ -148,6 +171,7 @@ export function ChainVault({ m, asset }: { m: Devnet; asset: Asset }) {
       {/* ── chart + trade ───────────────────────────────────────────────── */}
       <section className={`shell ${s.body}`}>
         <div className={c.left}>
+          {isEvent && <EventSession m={m} d={d} />}
           <div className={`card ${s.chartCard}`}>
             <header className={s.cardHead}>
               <div>
@@ -192,20 +216,34 @@ function ClockNote({ exposed }: { exposed: ShareClass }) {
   );
 }
 
-function DevnetNote({ m }: { m: Devnet }) {
+function DevnetNote({ m, isEvent }: { m: Devnet; isEvent: boolean }) {
   return (
     <div className={`shell ${c.noteWrap}`}>
       <div className={c.note} role="note">
         <span className={c.noteDot} aria-hidden="true" />
-        <p>
-          <strong>This vault is on Solana devnet.</strong> The program, both share
-          classes, settlement, funding, the handoff and every health signal are the
-          real thing. Two parts stand in: the underlying and quote are test mints
-          (devnet has no xStocks or USDC), and the mark is fed by Pyth&rsquo;s{' '}
-          <span className="mono">{m.markFeed}</span> because the NVDAX feed is not
-          sponsored on devnet — on mainnet it is <span className="mono">Crypto.NVDAX/USD</span>.{' '}
-          <Link to="/how-it-works#status" className={c.noteLink}>What is and is not live</Link>
-        </p>
+        {isEvent ? (
+          <p>
+            <strong>This vault is on Solana devnet.</strong> The program, both classes,
+            settlement, funding, the handoff and every health signal are the real thing.
+            The underlying is a devnet mint built to the same shape as the real{' '}
+            <span className="mono">{m.symbol}</span> PreStock — Token-2022 with a 1% transfer
+            fee, a scaled-UI multiplier, a permanent delegate and a pause switch — because
+            those are the paths that have to work. The token itself is mainnet-only.{' '}
+            <strong>The detector is not a stand-in:</strong> the mark and the executable price
+            below are read live from prestocks.com and posted on chain.{' '}
+            <Link to="/how-it-works#status" className={c.noteLink}>What is and is not live</Link>
+          </p>
+        ) : (
+          <p>
+            <strong>This vault is on Solana devnet.</strong> The program, both share
+            classes, settlement, funding, the handoff and every health signal are the
+            real thing. Two parts stand in: the underlying and quote are test mints
+            (devnet has no xStocks or USDC), and the mark is fed by Pyth&rsquo;s{' '}
+            <span className="mono">{m.markFeed}</span> because the NVDAX feed is not
+            sponsored on devnet — on mainnet it is <span className="mono">Crypto.NVDAX/USD</span>.{' '}
+            <Link to="/how-it-works#status" className={c.noteLink}>What is and is not live</Link>
+          </p>
+        )}
       </div>
     </div>
   );

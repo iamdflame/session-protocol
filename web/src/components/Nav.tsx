@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useGround } from './SessionGround';
 import { useSession, countdown, NIGHT_SHARE } from '@/lib/session';
+import { useDevnets } from '@/lib/chain';
+import { SESSION_EVENT } from '@sdk/vault.ts';
 import { Mark } from './Mark';
 import { WalletButton } from './wallet/WalletButton';
 import s from './Nav.module.css';
@@ -21,6 +23,25 @@ const LINKS = [
  */
 function LivePill() {
   const sess = useSession();
+  const { pathname } = useLocation();
+  const devnets = useDevnets();
+
+  // A pre-IPO vault has no NYSE session, and a countdown to 16:00 sitting in
+  // the nav above it is a clock for a market that name does not trade on.
+  // The page's own panel carries its real boundary; this stands down.
+  const symbol = pathname.startsWith('/markets/') ? decodeURIComponent(pathname.slice(9)) : null;
+  const isEventPage = !!symbol && !!devnets?.some(
+    m => m.symbol === symbol && m.sessionKind === SESSION_EVENT,
+  );
+  if (isEventPage) {
+    return (
+      <div className={`${s.pill} ${s.pillMuted}`} title="This name is private: no exchange session, so no bell.">
+        <span className={s.dot} aria-hidden="true" data-off="true" />
+        <span className={s.pillLabel}>No session</span>
+        <span className="sr-only">This market has no exchange session; its boundary is the next print.</span>
+      </div>
+    );
+  }
 
   if (!sess) {
     return <div className={`${s.pill} ${s.pillLoading}`} aria-hidden="true">

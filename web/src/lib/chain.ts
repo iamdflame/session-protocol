@@ -16,6 +16,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Connection, PublicKey, Transaction, type TransactionInstruction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import {
+  decodeSchedule, decodeDetector, premiumBps, SESSION_EVENT,
+  type EventSchedule, type DetectorReading, type ScheduledEvent,
+} from '@sdk/vault.ts';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
 import {
   ata, createAtaIdempotentIx, mintSharesIx, redeemSharesIx, explainProgramError,
@@ -52,18 +56,45 @@ export interface Devnet {
   tokenProgram: string;
   /** The share classes' program: Token-2022, because they carry their names. */
   shareTokenProgram: string;
+  /** 0 equity (NYSE hours), 1 event (the next print). Absent means equity. */
+  sessionKind?: number;
+  /** What the classes are called on chain: NVDA → NVDA.DAY. */
+  vaultSymbol?: string;
+  /** An event vault's two clocks. */
+  schedule?: string;
+  detector?: string;
+  /** The real mint this stands in for, when it lives on another cluster. */
+  realMint?: string;
+  /** Meteora pools, by pair name. */
+  pools?: Record<string, string>;
   /** The program owning the underlying — Token-2022 for a real xStock. */
   underlyingTokenProgram: string;
   params: { maxStaleSecs: number; [k: string]: unknown };
   initialised: string;
 }
 
-export function useDevnet() {
-  const [m, setM] = useState<Devnet | null | undefined>(undefined);
+/* Every vault the desk knows about.
+ *
+ * One program, several vaults: an equity session over an xStock-shaped mint,
+ * an event session over a PreStock-shaped one. Each has its own manifest, and
+ * the site picks by symbol rather than assuming there is only ever one. */
+const MANIFESTS = ['/devnet.json', '/devnet-openai.json'];
+
+export function useDevnets() {
+  const [all, setAll] = useState<Devnet[] | undefined>(undefined);
   useEffect(() => {
-    load<Devnet>('/devnet.json').then(setM).catch(() => setM(null));
+    let live = true;
+    Promise.all(MANIFESTS.map(u => load<Devnet>(u).catch(() => null)))
+      .then(xs => { if (live) setAll(xs.filter((x): x is Devnet => x !== null)); });
+    return () => { live = false; };
   }, []);
-  return m;   // undefined = loading, null = no devnet deployment
+  return all;   // undefined = loading, [] = no devnet deployment
+}
+
+/** The first vault, for surfaces that only need one. */
+export function useDevnet() {
+  const all = useDevnets();
+  return all === undefined ? undefined : (all[0] ?? null);
 }
 
 /* ── reads ───────────────────────────────────────────────────────────────── */
@@ -99,6 +130,19 @@ export interface ChainVault {
   /** Atoms → the number a person reads, honouring a scaled-UI multiplier. */
   uiMultiplier: number;
   epoch: number;
+  /** An event vault's own clocks. Null for an equity vault. */
+  event: {
+    schedule: EventSchedule | null;
+    detector: DetectorReading | null;
+    /** How far the token's executable price sits from the issuer's mark. */
+    premiumBps: number;
+    /** The next print, or null when none is scheduled. */
+    nextPrint: ScheduledEvent | null;
+    /** Inside a print window right now. */
+    inPrint: boolean;
+    /** Seconds since the detector was posted. */
+    detectorAgeSecs: number | null;
+  } | null;
 }
 
 /** SPL token account `amount` is a u64 at offset 64; a mint's `supply` at 36. */
@@ -136,6 +180,13 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     new PublicKey(m.markPriceUpdate), new PublicKey(m.equityPriceUpdate),
     new PublicKey(m.underlyingMint),
   ];
+  // An event vault carries two more accounts: the prints it watches and the
+  // last reading somebody posted. Both are read here so the page never has to
+  // guess at a session it cannot compute from a calendar.
+  const isEvent = m.sessionKind === SESSION_EVENT;
+  if (isEvent && m.schedule && m.detector) {
+    keys.push(new PublicKey(m.schedule), new PublicKey(m.detector));
+  }
   const tokenProgram = new PublicKey(m.tokenProgram);
   const shareProgram = new PublicKey(m.shareTokenProgram);
   if (me) {
@@ -150,7 +201,11 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     conn.getMultipleAccountsInfoAndContext(keys),
     currentEpoch(conn),
   ]);
-  const [vAcc, nMint, dMint, uVault, qVault, markAcc, eqAcc, uMint, meQ, meN, meD] = value;
+  const evOffset = isEvent && m.schedule && m.detector ? 2 : 0;
+  const [vAcc, nMint, dMint, uVault, qVault, markAcc, eqAcc, uMint] = value;
+  const schedAcc = evOffset ? value[8] : null;
+  const detAcc = evOffset ? value[9] : null;
+  const [meQ, meN, meD] = value.slice(8 + evOffset);
   if (!vAcc) throw new Error(`no vault account at ${m.vault}`);
   // What the issuer can do to this vault, and whether it already has. Read
   // the way the program reads it, so the card and the halt never disagree.
@@ -186,6 +241,21 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
   const valueDay = valueOf(daySupply, vault.dayNav);
   const next = nextBoundary(vault.lastBoundaryTs, 20);
 
+  /* ── the event vault's clocks ─────────────────────────────────────────── */
+  let event: ChainVault['event'] = null;
+  if (isEvent) {
+    const schedule = schedAcc ? safe(() => decodeSchedule(schedAcc.data)) : null;
+    const detector = detAcc ? safe(() => decodeDetector(detAcc.data)) : null;
+    const prints = schedule?.events ?? [];
+    event = {
+      schedule, detector,
+      premiumBps: detector ? premiumBps(detector) : 0,
+      nextPrint: prints.find(e => e.ts + e.windowSecs > now) ?? null,
+      inPrint: prints.some(e => now >= e.ts && now < e.ts + e.windowSecs),
+      detectorAgeSecs: detector ? now - detector.ts : null,
+    };
+  }
+
   return {
     vault, address, nightSupply, daySupply, balanceUnderlying, balanceQuote,
     mark, equity,
@@ -200,8 +270,11 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     issuer, vaultFrozen,
     uiMultiplier: issuer ? uiMultiplier(issuer, now) : 1,
     epoch,
+    event,
   };
 }
+
+const safe = <T,>(f: () => T): T | null => { try { return f(); } catch { return null; } };
 
 function safeQuote(data: Uint8Array): PythQuote | null {
   try { return decodePythQuote(data); } catch { return null; }
@@ -393,6 +466,9 @@ export const short = (k: string | PublicKey, n = 4) => {
 
 /** A fixed list of what this deployment stands in for, kept beside the code that reads it. */
 export const useDevnetVaultFor = (symbol: string | undefined) => {
-  const m = useDevnet();
-  return useMemo(() => (m && symbol && m.symbol === symbol ? m : null), [m, symbol]);
+  const all = useDevnets();
+  return useMemo(
+    () => (all && symbol ? all.find(m => m.symbol === symbol) ?? null : null),
+    [all, symbol],
+  );
 };
