@@ -13,10 +13,18 @@ Those are two different assets wearing one ticker. SESSION separates them into
 
 Built for [STOCKLANA](https://hackathons.solana.com/hackathons/stocklana).
 
-**Live:** [session-roan.vercel.app](https://session-roan.vercel.app) — the site,
-and a vault on Solana devnet you can mint into from your wallet.
-Program [`8gWC37…KqKZ`](https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet),
-vault [`DqdXeM…oBti`](https://explorer.solana.com/address/DqdXeMbPHiDMMrVPeiGDBCNtDAxtMZNtEtTLN4eYoBti?cluster=devnet).
+**Live:** [session-roan.vercel.app](https://session-roan.vercel.app)
+
+| | |
+|---|---|
+| Program, devnet | [`8gWC37…KqKZ`](https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet) |
+| Equity vault — NYSE hours | [`DqdXeM…oBti`](https://explorer.solana.com/address/DqdXeMbPHiDMMrVPeiGDBCNtDAxtMZNtEtTLN4eYoBti?cluster=devnet) · [`/markets/NVDAx`](https://session-roan.vercel.app/markets/NVDAx) |
+| Event vault — no exchange session | [`FtpWQU…SGDDC`](https://explorer.solana.com/address/FtpWQUy4ZAoyBDS4zbwsLLc92qppciEgcCgCavVSGDDC?cluster=devnet) · [`/markets/OPENAI`](https://session-roan.vercel.app/markets/OPENAI) |
+| `NVDA.DAY/quote` pool, Meteora DAMM v2 | [`8Vm6ei…XiybN`](https://explorer.solana.com/address/8Vm6ei7cgBacHdxbsLYEoXdZo5zCPzqBN1YgpVKXiybN?cluster=devnet) |
+| `$BELL`, **mainnet**, quoted in real NVDAx | [`7z9y4P…PdQTe`](https://solscan.io/token/7z9y4P3yatZki2AHHtzjPxEhjVTP1d362BQH1kDPdQTe) · [`/bell`](https://session-roan.vercel.app/bell) |
+
+Ninety seconds, in the order that lets you check it: **[docs/JUDGE.md](docs/JUDGE.md)**.
+What we entered and what we refused: **[docs/BOUNTIES.md](docs/BOUNTIES.md)**.
 
 ---
 
@@ -300,19 +308,39 @@ therefore variable width — a fixed-offset reader silently misreads every
   mark from Pyth's `Crypto.SOL/USD`. The program, the classes, settlement,
   funding, the handoff and the health signals are the mainnet program doing the
   mainnet thing; the site says which parts stand in, above the fold.
-- **The live vault is the Phase-A program.** The mark for a settlement must
-  come from the bell's own window; a missed bell is replayed by `recap`
-  rather than written off; an issuer hook, pause, freeze or seizure halts
-  with a named reason; a 20% gap settles instead of refusing; the residual
-  clears in a call auction at one price; and the share classes carry their
-  own names on chain.
+- **The mark for a settlement must come from the bell's own window.** A crank
+  landing an hour late reading the live feed has a number that is fresh and
+  wrong; the keeper posts the print Pyth published *at* the bell instead.
+- **A missed bell is replayed, not written off.** `recap` walks the calendar
+  and applies each one through the same `settle()` the live path runs. There
+  is no path that resumes with sessions unpaid.
+- **A 20% gap settles.** Refusing it would leave a vault unable to settle at
+  all on exactly the night the NIGHT class exists for. Fills pause; only a
+  shortfall halts.
+- **The residual clears in a call auction** at one price for everyone —
+  though no auction has run on chain yet: it needs a real bell leaving a real
+  residual. The arithmetic is property-tested over arbitrary bid sets.
+- **An event session** carries names with no exchange behind them. `OPENAI`
+  has no 09:30, so its vault has no clock: the boundary is the next print or
+  a premium divergence, read live from prestocks.com. That detector is the
+  one place the protocol rests on somebody's word, and the page says so.
+- **The share classes carry their own names on chain** — `NVDA.DAY`,
+  `NVDA.NIGHT` — as Token-2022 mints with metadata.
 - **The live vault holds a Token-2022 underlying.** Real xStocks are Token-2022
   with extensions, and USDC is not, so the program takes two token programs and
   the devnet vault is shaped like the real pair: a Token-2022 underlying with a
   permanent delegate, a classic-SPL quote. A browser wallet has minted and
   redeemed against it on devnet. `npm run test:validator` goes further and runs
   the program against the *actual* mainnet NVDAx and USDC accounts on a local
-  validator; it needs a CPU with AVX2.
+  validator; it needs a CPU with AVX2, which is why CI runs it and this machine
+  cannot.
+- **Holding a real xStock needed a second fix, deeper than the first.** Anchor
+  sizes a token account by enumerating the mint's extensions, and that call
+  refuses any extension the pinned `spl-token-2022` predates — which NVDAx and
+  OPENAI both carry two of. The length now comes from the chain itself, via
+  `GetAccountDataSize`. The story is in [docs/JUDGE.md](docs/JUDGE.md), because
+  a project arguing for honesty about what is deployed should be plain about
+  what was broken.
 - **The issuer holds powers no program can take away.** NVDAx carries a
   permanent delegate, a pause switch and a freeze authority. A vault holding it
   can be emptied, paused or frozen by the issuer. That is true of holding the
