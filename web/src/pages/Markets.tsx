@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SessionClock } from '@/components/SessionClock';
 import { Spark } from '@/components/charts/Spark';
 import { PreLaunch } from '@/components/PreLaunch';
+import { Census } from '@/components/Census';
 import { useSession, useClockSize, countdown } from '@/lib/session';
 import { useDevnets } from '@/lib/chain';
 import {
@@ -59,6 +60,12 @@ export default function Markets() {
   // prop no cell ever read. On a rate-limited endpoint that is a request
   // taken from whoever is trying to mint.
   const listed = useMemo(() => new Set((allVaults ?? []).map(v => v.symbol)), [allVaults]);
+  // Vault address → the symbol this site has a page for. `NVDA` on chain is
+  // `NVDAx` here, so only the manifest knows which page a vault belongs to.
+  const pageForVault = useMemo(
+    () => new Map((allVaults ?? []).map(v => [v.vault, v.symbol])),
+    [allVaults],
+  );
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('liquidity');
   const [curves, setCurves] = useState<Record<string, CurvePoint[]>>({});
@@ -107,6 +114,8 @@ export default function Markets() {
       </header>
 
       <PreLaunch />
+
+      <Census pages={pageForVault} />
 
       <div className={`shell ${s.controls}`}>
         <div className={s.filters} role="group" aria-label="Filter by asset type">

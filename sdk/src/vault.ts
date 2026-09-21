@@ -187,6 +187,16 @@ const symbolOf = (b: Uint8Array): string => {
 };
 
 /**
+ * `sha256("account:Vault")[..8]` — what Anchor stamps on a vault account.
+ *
+ * Needed to find vaults rather than to read one: a `getProgramAccounts` scan
+ * filters on it, which is how the catalog lists every vault the program
+ * knows about instead of the ones this repository happened to ship.
+ * `tests/ix.test.ts` recomputes it from the name.
+ */
+export const VAULT_DISCRIMINATOR = [211, 8, 232, 43, 2, 152, 117, 119] as const;
+
+/**
  * Decode a vault account. Field order mirrors the Rust struct exactly, because
  * borsh serialises in declaration order and nothing else pins the two together.
  */

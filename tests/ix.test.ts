@@ -9,7 +9,9 @@ import {
   recapIx, resolveHaltIx, haltReasonByte, settleBoundaryIx, setScheduleIx, postDetectorIx, curateIx,
   openAuctionIx, auctionBidIx, closeAuctionIx, claimAuctionIx,
 } from '../sdk/src/ix.ts';
-import { SESSION_EVENT, PROGRAM_ID, premiumBps, auctionPda, bidPda, award } from '../sdk/src/vault.ts';
+import {
+  SESSION_EVENT, PROGRAM_ID, premiumBps, auctionPda, bidPda, award, VAULT_DISCRIMINATOR,
+} from '../sdk/src/vault.ts';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -148,6 +150,17 @@ check('award matches the program: 900 at two-thirds is 599', aw.underlying === 5
 check('and every atom is filled or returned', aw.underlying + aw.refund === 900n);
 const sell = award({ ...twoThirds, vaultBuys: false }, 900n, 10_000n);
 check('a seller pays the ceil, never less', sell.quote >= aw.quote);
+
+
+/* The account discriminator the catalog scans for. A `getProgramAccounts`
+   filter on the wrong eight bytes silently returns nothing, which looks
+   exactly like a program nobody has used. */
+{
+  const want = createHash('sha256').update('account:Vault').digest().subarray(0, 8);
+  check('VAULT_DISCRIMINATOR = sha256("account:Vault")[..8]',
+    VAULT_DISCRIMINATOR.join(',') === [...want].join(','),
+    `${VAULT_DISCRIMINATOR.join(',')} vs ${[...want].join(',')}`);
+}
 
 console.log(failed ? `\n${failed} failed` : '\nall instruction checks passed');
 process.exit(failed ? 1 : 0);

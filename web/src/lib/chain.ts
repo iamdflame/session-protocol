@@ -18,8 +18,9 @@ import bs58 from 'bs58';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import {
   decodeSchedule, decodeDetector, decodeAuction, decodeBid, auctionPda, bidPda,
-  premiumBps, eventBoundaryDue, SESSION_EVENT,
+  premiumBps, eventBoundaryDue, SESSION_EVENT, PROGRAM_ID, VAULT_DISCRIMINATOR,
   type EventSchedule, type DetectorReading, type ScheduledEvent, type Auction, type Bid,
+  type SessionKind, type ClassName,
 } from '@sdk/vault.ts';
 import { decodeVault, decodePythQuote, normalizeMark, type Vault, type PythQuote } from '@sdk/vault.ts';
 import {
@@ -99,6 +100,88 @@ export function useDevnets() {
 export function useDevnet() {
   const all = useDevnets();
   return all === undefined ? undefined : (all[0] ?? null);
+}
+
+/* ── every vault there is ────────────────────────────────────────────────── */
+
+/**
+ * What the program knows about, rather than what this site was told.
+ *
+ * `initialize_vault` takes no permission from anybody: the signer becomes the
+ * authority and the PDA is seeded by the mint pair, so anyone can open one.
+ * A catalog built from two manifest files could not show that — it would list
+ * exactly the vaults this repository happened to ship, and a vault somebody
+ * else created would exist on chain and nowhere on the page, which makes
+ * "permissionless" a word rather than a fact.
+ *
+ * So the catalog asks the chain. `curated` is the desk's opinion, flipped by
+ * the curator key, and it decides what is shown by default — not what works.
+ */
+export interface DiscoveredVault {
+  address: string;
+  symbol: string;
+  sessionKind: SessionKind;
+  curated: boolean;
+  creator: string;
+  authority: string;
+  halted: boolean;
+  nightNav: bigint;
+  dayNav: bigint;
+  exposed: ClassName;
+  createdAt: number;
+}
+
+export interface VaultCensus {
+  vaults: DiscoveredVault[] | null;
+  /** Accounts this SDK is too old or too new to read. Counted, never hidden. */
+  unreadable: number;
+  error: Error | null;
+}
+
+export function useVaultCensus(rpc?: string): VaultCensus {
+  const { connection } = useConnection();
+  const [state, setState] = useState<VaultCensus>({ vaults: null, unreadable: 0, error: null });
+
+  useEffect(() => {
+    let live = true;
+    const conn = rpc ? new Connection(rpc, 'confirmed') : connection;
+    (async () => {
+      try {
+        const got = await conn.getProgramAccounts(PROGRAM_ID, {
+          filters: [{ memcmp: { offset: 0, bytes: bs58.encode(Uint8Array.from(VAULT_DISCRIMINATOR)) } }],
+        });
+        if (!live) return;
+        let unreadable = 0;
+        const vaults: DiscoveredVault[] = [];
+        for (const { pubkey, account } of got) {
+          // A vault written by an older layout is not an error and not a
+          // secret: this decoder refuses it on purpose, and the count says so.
+          const v = safe(() => decodeVault(account.data));
+          if (!v) { unreadable++; continue; }
+          vaults.push({
+            address: pubkey.toBase58(),
+            symbol: v.symbol,
+            sessionKind: v.sessionKind,
+            curated: v.curated,
+            creator: v.creator.toBase58(),
+            authority: v.authority.toBase58(),
+            halted: v.halted,
+            nightNav: v.nightNav,
+            dayNav: v.dayNav,
+            exposed: v.exposed,
+            createdAt: v.createdAt,
+          });
+        }
+        vaults.sort((a, b) => Number(b.curated) - Number(a.curated) || a.symbol.localeCompare(b.symbol));
+        setState({ vaults, unreadable, error: null });
+      } catch (e) {
+        if (live) setState({ vaults: null, unreadable: 0, error: e instanceof Error ? e : new Error(String(e)) });
+      }
+    })();
+    return () => { live = false; };
+  }, [connection, rpc]);
+
+  return state;
 }
 
 /* ── reads ───────────────────────────────────────────────────────────────── */
