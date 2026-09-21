@@ -15,7 +15,12 @@
   align-items: center;
 }
 
-.heroCopy { display: flex; flex-direction: column; align-items: flex-start; }
+.heroCopy { display: flex; flex-direction: column; align-items: flex-start; grid-column: 1; grid-row: 1 / span 2; }
+/* Wide: the clock and the schedule stack in the right-hand column and the
+   copy spans both rows, so the column stays one visual block rather than
+   stretching the grid and stranding the copy against dead space. */
+.heroSchedule { grid-column: 2; grid-row: 2; display: flex; justify-content: stretch; margin-top: var(--sp-4); }
+.heroSchedule > * { width: 100%; }
 
 /* The live badge. Its dot takes the holder's colour, not a green "all clear" —
    a shut market is not a fault, and green would say the opposite of the words
@@ -146,6 +151,7 @@
 
 /* ── hero clock ──────────────────────────────────────────────────────────── */
 
+.heroClock { grid-column: 2; grid-row: 1; }
 .heroClock {
   display: flex; flex-direction: column; align-items: center;
   gap: var(--sp-6);
@@ -304,10 +310,17 @@
 /* ── responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 1000px) {
+  .heroSchedule { grid-column: auto; grid-row: auto; margin-top: 0; }
+  .heroCopy { grid-column: auto; grid-row: auto; }
+  .heroClock { grid-column: auto; grid-row: auto; }
   .heroInner { grid-template-columns: 1fr; gap: clamp(40px, 7vw, 64px); }
   /* The live object leads on a narrow screen: it is the thing that makes the
-     page make sense, and it fits above the fold where the headline would not. */
+     page make sense, and it fits above the fold where the headline would not.
+     The schedule follows the copy, because four rows of reference timings do
+     not earn the top of a phone screen and were costing the fold the one line
+     that says what is actually deployed. */
   .heroClock { order: -1; align-items: center; }
+  .heroSchedule { order: 1; display: flex; justify-content: center; }
   .upNext { max-width: 460px; }
   .findingGrid { grid-template-columns: 1fr; }
 }
@@ -331,3 +344,18 @@
      wrap: the countdown reads without it. */
   .statusLabel:last-child { display: none; }
 }
+
+/* The finding, above the fold. It is the reason the product exists, and the
+   one number a reader should leave with even if they read nothing else. */
+.finding {
+  margin-top: var(--sp-5);
+  padding: var(--sp-4) var(--sp-4) var(--sp-4) calc(var(--sp-4) + 2px);
+  border-left: 2px solid var(--night);
+  background: color-mix(in srgb, var(--night) 6%, transparent);
+  border-radius: 0 var(--r-1) var(--r-1) 0;
+  font-size: var(--t-sm); line-height: 1.65; color: var(--ink-2);
+  max-width: 58ch;
+}
+.finding strong { color: var(--ink); font-weight: 550; }
+.findingLink { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.findingLink:hover { color: var(--ink); border-color: var(--ink); }

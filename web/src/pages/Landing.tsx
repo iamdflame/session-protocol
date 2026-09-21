@@ -6,7 +6,7 @@ import { CurveChart } from '@/components/charts/CurveChart';
 import { VolBars } from '@/components/charts/VolBars';
 import { useSession, useClockSize, countdown, upcoming, etClock, SESSION_HOURS, NIGHT_SHARE } from '@/lib/session';
 import { useCurve, useMarkets, fmtPctAbs, type Headline } from '@/lib/data';
-import { useDevnet } from '@/lib/chain';
+import { useDevnets } from '@/lib/chain';
 import s from './Landing.module.css';
 
 /**
@@ -64,8 +64,9 @@ function HeroClock() {
  * holds NVDAx. It does not, and §2 of every honest review starts there.
  */
 function ChainLine() {
-  const m = useDevnet();
-  if (m === undefined) return null;
+  const all = useDevnets();
+  const m = all?.[0] ?? null;
+  if (all === undefined) return null;
   if (m === null) {
     return (
       <p className={s.chainLine}>
@@ -79,9 +80,10 @@ function ChainLine() {
     <p className={s.chainLine}>
       <span className={s.chainDot} data-live="true" aria-hidden="true" />
       <span>
-        <strong>One vault is live, on devnet.</strong> It runs the real program —
-        settlement, funding, the handoff — but devnet has no xStocks and no USDC,
-        so it holds <em>test mints</em> and marks them with Pyth&rsquo;s{' '}
+        <strong>{all.length === 1 ? 'One vault is' : `${all.length} vaults are`} live, on devnet.</strong>{' '}
+        They run the real program — settlement, funding, the handoff, the auction — but
+        devnet has no xStocks, no USDC and no pre-IPO tokens, so they hold{' '}
+        <em>mints built to the same shape</em> and mark them with Pyth&rsquo;s{' '}
         <span className="mono">{m.markFeed}</span>. Nothing here holds NVDAx yet.{' '}
         <Link to="/how-it-works#status" className={s.chainLink}>The full line</Link>
       </span>
@@ -161,6 +163,17 @@ export default function Landing() {
               and until now you had to hold both.
             </p>
 
+            {/* The study is the reason this exists, and burying it below the
+                fold is how a measured result becomes decoration. One sentence,
+                computed from the same file the research page plots. */}
+            <p className={s.finding}>
+              Across <span className="num">{STUDY.equities}</span> tokenized equities and{' '}
+              <span className="num">{STUDY.sessions.toLocaleString()}</span> sessions, the night
+              carries <strong><span className="num">{Math.round((STUDY.volRatio - 1) * 100)}%</span> more
+              volatility</strong> than the day — and pays nothing extra for it.{' '}
+              <Link to="/research" className={s.findingLink}>That is the whole argument for selling it</Link>
+            </p>
+
             <ChainLine />
 
             <div className={s.actions}>
@@ -190,6 +203,13 @@ export default function Landing() {
 
           <div className={s.heroClock}>
             <HeroClock />
+          </div>
+          {/* A sibling, not a child of the clock column, so a narrow screen can
+              put the schedule after the copy. The countdown is the product and
+              earns the top of the page; four rows of reference timings do not,
+              and on a phone they were pushing the one line that says what is
+              actually deployed below the fold. */}
+          <div className={s.heroSchedule}>
             <UpNext />
           </div>
         </div>
