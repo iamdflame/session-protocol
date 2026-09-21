@@ -121,21 +121,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # PreStocks disqualifies any submission carrying a competing pre-IPO
-      # mint. This is not a style rule — it is the eligibility condition, so
-      # it fails the build rather than sitting in a document nobody reads.
-      # Tracked files only: what is in the repository is what counts, and a
-      # working-tree scan would trip over anybody's local notes.
-      - name: no competing pre-IPO mints
-        run: |
-          if git ls-files | grep -v '^\.github/workflows/ci\.yml$' \
-             | xargs -r grep -lniE 'tessera|t-kalshi|t-openai|stonkfun|tspacex' ; then
-            echo "::error::a competing pre-IPO mint is referenced; PreStocks eligibility is lost"
-            exit 1
-          fi
-      - name: no secrets
-        run: |
-          if git ls-files | grep -E '(^|/)(\.env|.*keypair\.json|operator\.json|manifest\.json)$'; then
-            echo "::error::a key or a private manifest is tracked"
-            exit 1
-          fi
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      # The rules themselves are in `scripts/eligibility.mjs`, not inlined
+      # here, because this runner is not where they are enforced: it is one
+      # of two places they run, and historically the one that did not. The
+      # same script runs in `npm test` on the machine the commit is made on.
+      - run: node scripts/eligibility.mjs

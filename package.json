@@ -8,7 +8,7 @@
   ],
   "description": "Split a tokenized equity into the hours arbitrage works and the hours it does not",
   "scripts": {
-    "test": "npm run test:rust && npm run test:ts",
+    "test": "npm run check:eligibility && npm run test:rust && npm run test:ts",
     "test:rust": "cargo test -p session",
     "test:ts": "node --experimental-strip-types tests/calendar.check.ts && node --experimental-strip-types tests/layout.test.ts && node --experimental-strip-types tests/health.test.ts && node --experimental-strip-types tests/ix.test.ts && node --experimental-strip-types tests/issuer.test.ts && node --experimental-strip-types tests/events.test.ts && node --experimental-strip-types tests/statement.test.ts",
     "vectors": "node --experimental-strip-types tests/gen-vectors.ts && node --experimental-strip-types tests/gen-settle-vectors.ts && cargo test -p session --lib emit_account_vector",
@@ -31,7 +31,8 @@
     "bell:verify": "node --experimental-strip-types agent/verify.ts",
     "mcp": "node --experimental-strip-types agent/mcp.ts",
     "auction": "node --experimental-strip-types keeper/src/auction.ts",
-    "retune": "node --experimental-strip-types keeper/src/retune.ts"
+    "retune": "node --experimental-strip-types keeper/src/retune.ts",
+    "check:eligibility": "node scripts/eligibility.mjs"
   },
   "dependencies": {
     "@meteora-ag/cp-amm-sdk": "^1.4.9",

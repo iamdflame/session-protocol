@@ -334,8 +334,12 @@ therefore variable width — a fixed-offset reader silently misreads every
   permanent delegate, a classic-SPL quote. A browser wallet has minted and
   redeemed against it on devnet. `npm run test:validator` goes further and runs
   the program against the *actual* mainnet NVDAx and USDC accounts on a local
-  validator; it needs a CPU with AVX2, which is why CI runs it and this machine
-  cannot.
+  validator; it needs a CPU with AVX2, which this machine does not have, so it
+  reports SKIPPED here and is the reason `.github/workflows/ci.yml` exists.
+  That workflow has never run: the account's Actions are locked for billing
+  and every push fails in four seconds without starting a job. So the test
+  against the real mainnet accounts has not been executed anywhere, and this
+  says so rather than pointing at a green badge that does not exist.
 - **Holding a real xStock needed a second fix, deeper than the first.** Anchor
   sizes a token account by enumerating the mint's extensions, and that call
   refuses any extension the pinned `spl-token-2022` predates — which NVDAx and

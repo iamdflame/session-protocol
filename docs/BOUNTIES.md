@@ -70,7 +70,19 @@ prints the amount and the payee first.
 Would forfeit PreStocks. Their rule disqualifies any submission integrating a
 competing pre-IPO mint, and a resolution-session product is a different
 program instance in a different repository — not a second pre-IPO token in
-this one. CI fails the build on the mention.
+this one.
+
+`npm test` refuses to run if one is referenced anywhere in the tracked tree
+(`scripts/eligibility.mjs`). It is checked there rather than only in CI for a
+reason worth stating: this account's GitHub Actions are locked for billing, so
+every push has failed in four seconds without starting a job, and the earlier
+claim that "CI fails the build on the mention" was never once true. The first
+version of the rule was also wrong on its own terms — a bare substring grep
+that matched our own `devnet-openai.json` inside the word `devnet-openai`, so
+it would have failed every push on the PreStocks-shaped vault this entry is
+*built around*. It matches whole tokens now, and this file is the one place
+exempted, because naming a thing in order to say it was refused is not
+carrying it.
 
 ### Pyth
 
