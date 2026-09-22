@@ -1,0 +1,14 @@
+.delta { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: -0.02em; white-space: nowrap; border-radius: 4px; }
+.delta[data-sign='pos'] { color: var(--positive); }
+.delta[data-sign='neg'] { color: var(--negative); }
+.delta[data-sign='zero'] { color: var(--text-muted); }
+.delta[data-flash='up'] { animation: tick-up 600ms var(--ease) both; }
+.delta[data-flash='down'] { animation: tick-down 600ms var(--ease) both; }
+
+.price { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: -0.03em; white-space: nowrap; border-radius: 4px; }
+.price[data-flash='up'] { animation: tick-up 500ms var(--ease) both; }
+.price[data-flash='down'] { animation: tick-down 500ms var(--ease) both; }
+
+/* A countdown never changes width: every digit is tabular and the string is
+   always the same shape for a given magnitude. */
+.countdown { font-family: var(--font-mono); font-variant-numeric: tabular-nums slashed-zero; letter-spacing: -0.02em; white-space: nowrap; }

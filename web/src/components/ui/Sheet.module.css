@@ -1,0 +1,68 @@
+/* One overlay primitive: a drawer on the right on wide screens, a bottom sheet
+   on narrow ones, a centred dialog when asked. Opacity plus a short
+   translate; nothing theatrical. */
+.scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(4, 5, 7, 0.62);
+  animation: scrim-in var(--dur-panel) var(--ease) both;
+}
+@keyframes scrim-in { from { opacity: 0; } }
+
+.panel {
+  position: fixed; z-index: 91;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-3);
+  display: flex; flex-direction: column;
+  outline: none;
+}
+.panel[data-kind='drawer'] {
+  top: 8px; right: 8px; bottom: 8px; width: min(460px, calc(100vw - 16px));
+  border-radius: var(--radius-lg);
+  animation: drawer-in var(--dur-panel) var(--ease-out) both;
+}
+@keyframes drawer-in { from { opacity: 0; transform: translateX(16px); } }
+
+.panel[data-kind='dialog'] {
+  top: 12vh; left: 50%; width: min(620px, calc(100vw - 24px)); max-height: 72vh;
+  transform: translateX(-50%);
+  border-radius: var(--radius-lg);
+  animation: dialog-in var(--dur-panel) var(--ease-out) both;
+}
+@keyframes dialog-in { from { opacity: 0; transform: translateX(-50%) scale(0.98); } }
+
+.panel[data-kind='sheet'] {
+  left: 50%; bottom: 12px; width: min(480px, calc(100vw - 24px)); transform: translateX(-50%);
+  border-radius: var(--radius-lg); max-height: 88dvh;
+  animation: sheet-in-c var(--dur-panel) var(--ease-out) both;
+}
+/* The centred sheet keeps its -50% offset through the entrance, or it would
+   start half a width to the right and slide sideways into place. */
+@keyframes sheet-in-c { from { opacity: 0; transform: translate(-50%, 24px); } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(24px); } }
+
+.head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.title { font-size: var(--t-body); font-weight: 580; }
+.close {
+  width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--text-muted);
+  transition: background-color var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease);
+}
+.close:hover { background: var(--surface-raised); color: var(--text); }
+.body { overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px 20px; }
+.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 8px auto 0; display: none; }
+@media (max-width: 720px) { .panel[data-kind='drawer'] .grab, .panel[data-kind='sheet'] .grab { display: block; } }
+
+@media (max-width: 720px) {
+  .panel[data-kind='drawer'], .panel[data-kind='sheet'] {
+    top: auto; left: 0; right: 0; bottom: 0; width: 100%;
+    max-height: 88dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: 0; transform: none;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation: sheet-in var(--dur-panel) var(--ease-out) both;
+  }
+  .panel[data-kind='dialog'] { top: 8dvh; }
+}

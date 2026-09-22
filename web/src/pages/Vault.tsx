@@ -55,8 +55,9 @@ function ClockNote({ exposed }: { exposed: ShareClass }) {
   );
 }
 
-export default function Vault() {
-  const { symbol = '' } = useParams();
+export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
+  const params = useParams();
+  const symbol = forced ?? params.symbol ?? '';
   const markets = useMarkets();
   const curve = useCurve(symbol);
 

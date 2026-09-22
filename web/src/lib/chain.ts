@@ -980,10 +980,14 @@ export async function requestFaucet(
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
+/* Solscan, on the cluster the object actually lives on. Every on-chain object
+   the site shows links to its own page there — a real address or signature,
+   never a placeholder. Mainnet takes no cluster parameter. */
+const cq = (cluster: string) => (cluster === 'mainnet-beta' || cluster === 'mainnet' ? '' : `?cluster=${cluster}`);
 export const explorer = (sig: string, cluster = 'devnet') =>
-  `https://explorer.solana.com/tx/${sig}?cluster=${cluster}`;
+  `https://solscan.io/tx/${sig}${cq(cluster)}`;
 export const explorerAddr = (addr: string, cluster = 'devnet') =>
-  `https://explorer.solana.com/address/${addr}?cluster=${cluster}`;
+  `https://solscan.io/account/${addr}${cq(cluster)}`;
 export const short = (k: string | PublicKey, n = 4) => {
   const s = typeof k === 'string' ? k : k.toBase58();
   return `${s.slice(0, n)}…${s.slice(-n)}`;

@@ -40,6 +40,8 @@ const ONLY_W = arg('w', null);
 
 const PAGES = [
   ['/', 'landing'],
+  ['/trade', 'trade'],
+  ['/portfolio', 'portfolio'],
   ['/markets', 'markets'],
   ['/markets/SPYx', 'vault'],
   ['/markets/NVDAx', 'vault-chain'],
@@ -47,14 +49,20 @@ const PAGES = [
   ['/bell', 'keeper'],
   ['/research', 'research'],
   ['/how-it-works', 'how'],
+  ['/list', 'list'],
   ['/no-such-page', '404'],
 ];
 
+/* The widths the redesign is checked at: two desks, a small laptop, a
+   tablet, and three phones. */
 const WIDTHS = [
   [1440, 900, 1],
+  [1280, 800, 1],
   [1024, 768, 1],
   [768, 1024, 2],
+  [430, 932, 3],
   [390, 844, 3],
+  [375, 812, 3],
 ];
 
 /* ── minimal CDP client ──────────────────────────────────────────────────── */
@@ -152,8 +160,25 @@ try {
 
   // A stable clock makes shots diffable: without it every capture lands on a
   // different countdown and every comparison is noise.
+  /* A session is shown by *being* in it: the page's clock is moved to a real
+     instant inside (day) or outside (night) the regular session, checked
+     against sdk/src/calendar.ts. The interface accepts no pinned ground — the
+     active class is whatever the calendar says — so this is the only honest
+     way to capture both states on demand. */
+  const AT = { day: 1790186400, night: 1790215200 };
   if (GROUND) {
-    await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
+    if (!(GROUND in AT)) throw new Error(`--ground must be day or night, not ${GROUND}`);
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(() => {
+        const RealDate = Date, start = RealDate.now(), at = ${AT[GROUND]} * 1000;
+        const now = () => at + (RealDate.now() - start);
+        class ShiftedDate extends RealDate {
+          constructor(...a) { a.length ? super(...a) : super(now()); }
+          static now() { return now(); }
+        }
+        globalThis.Date = ShiftedDate;
+      })();`,
+    });
   }
 
   let inflight = 0, lastActivity = Date.now();
@@ -182,11 +207,6 @@ try {
         width: w, height: h, deviceScaleFactor: 1, mobile: false,
       });
 
-      if (GROUND) {
-        await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
-          source: `try{localStorage.setItem('session.ground',${JSON.stringify(GROUND)})}catch(e){}`,
-        });
-      }
 
       inflight = 0;
       await cdp.send('Page.navigate', { url: BASE + path });

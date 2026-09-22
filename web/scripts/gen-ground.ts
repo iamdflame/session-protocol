@@ -84,25 +84,28 @@ function has(a,v){for(var i=0;i<a.length;i++){if(a[i]===v)return 1}return 0}
 var t=Math.floor(Date.now()/1000),et=t+(dst(t)?-14400:-18000);
 var d=Math.floor(et/86400),s=et-d*86400,w=((d%7)+7+4)%7,g='night';
 if(w!==0&&w!==6&&!has(H,d)){var c=has(E,d)?46800:57600;if(s>=34200&&s<c)g='day'}
-var m=null;try{m=localStorage.getItem('session.ground')}catch(e){}
-document.documentElement.dataset.session=(m==='night'||m==='day')?m:g;
+document.documentElement.dataset.session=g;
 }catch(e){document.documentElement.dataset.session='night'}})();`;
+/* No override is read. The ground used to honour a pinned preference from
+   localStorage, which was harmless while it only chose a background. It now
+   decides which class the interface calls *active*, and a pin would let the
+   page say DAY holds the stock while the market is shut. */
 
 /* ── verify against the real module ──────────────────────────────────────── */
 
-const sandbox = {
-  W: windows, H: hol, E: early,
-  dst(t: number) { for (const [a, b] of windows) if (t >= a && t < b) return 1; return 0; },
-  has(a: number[], v: number) { return a.includes(v) ? 1 : 0; },
-};
+/* Run the script that actually ships, not a transcription of it.
+
+   This used to check a TypeScript re-implementation of the inline logic, so
+   "verified across N timestamps" was a statement about a copy: the emitted
+   string could drift from it and nothing would notice. Now the string itself
+   is compiled once and executed per timestamp against a stub `document` and
+   a frozen clock. */
+const shipped = new Function('document', 'Date', script);
 function inlineGround(t: number): 'day' | 'night' {
-  const et = t + (sandbox.dst(t) ? -14400 : -18000);
-  const d = Math.floor(et / 86400);
-  const s = et - d * 86400;
-  const w = ((d % 7) + 7 + 4) % 7;
-  if (w === 0 || w === 6 || sandbox.has(hol, d)) return 'night';
-  const c = sandbox.has(early, d) ? 46800 : 57600;
-  return s >= 34200 && s < c ? 'day' : 'night';
+  const doc = { documentElement: { dataset: {} as Record<string, string> } };
+  const FrozenDate = { now: () => t * 1000 };
+  shipped(doc, FrozenDate);
+  return doc.documentElement.dataset.session as 'day' | 'night';
 }
 
 const start = daysFromCivil(FROM_YEAR, 1, 1) * SEC_PER_DAY;

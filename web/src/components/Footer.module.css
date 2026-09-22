@@ -1,58 +1,12 @@
-.footer {
-  margin-top: var(--sp-10);
-  border-top: 1px solid var(--line);
-  background: var(--bg-sunken);
-  padding-block: var(--sp-8) var(--sp-6);
+.foot {
+  border-top: 1px solid var(--border);
+  padding: 20px var(--gutter) 24px;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
-  gap: var(--sp-7);
-  align-items: start;
-}
-.brandCol { display: flex; flex-direction: column; gap: var(--sp-4); }
-.brand {
-  display: inline-flex; align-items: center; gap: 10px;
-  font-size: 0.85rem; font-weight: 590; letter-spacing: 0.14em;
-}
-.tagline {
-  color: var(--ink-3);
-  font-size: var(--t-sm);
-  line-height: 1.65;
-  max-width: 46ch;
-}
-.col { display: flex; flex-direction: column; gap: var(--sp-3); }
-.link {
-  font-size: var(--t-sm);
-  color: var(--ink-2);
-  transition: color var(--t-hover) var(--ease);
-  width: fit-content;
-}
-.link:hover { color: var(--ink); }
-
-.legal {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-4);
-  flex-wrap: wrap;
-  margin-top: var(--sp-8);
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--line);
-  font-size: var(--t-xs);
-  color: var(--ink-3);
-}
-.legal p { max-width: 62ch; }
-.status { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.statusDot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--warn);
-  flex: none;
-}
-@media (max-width: 860px) {
-  .inner { grid-template-columns: 1fr 1fr; gap: var(--sp-6); }
-  .brandCol { grid-column: 1 / -1; }
-}
-@media (max-width: 520px) {
-  .legal { flex-direction: column; align-items: flex-start; }
-}
+.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.links { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: var(--t-xs); color: var(--text-muted); }
+.links a { min-height: 28px; display: inline-flex; align-items: center; }
+.links a:hover { color: var(--text); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--text-faint); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #B98CF0; }
+.legal { font-size: var(--t-micro); line-height: 1.6; color: var(--text-faint); max-width: 90ch; }

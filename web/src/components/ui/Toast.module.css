@@ -1,0 +1,25 @@
+.region {
+  position: fixed; z-index: 120; right: 16px; bottom: 16px;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  pointer-events: none;
+}
+@media (max-width: 720px) { .region { left: 12px; right: 12px; bottom: calc(var(--bottomnav-h) + 12px + env(safe-area-inset-bottom)); align-items: stretch; } }
+.toast {
+  pointer-events: auto;
+  width: min(360px, 100%);
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start;
+  padding: 12px 12px 12px 14px; border-radius: 12px;
+  background: #151A20; border: 1px solid var(--border-strong); box-shadow: var(--shadow-3);
+  animation: toast-in var(--dur-panel) var(--ease-out) both;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; margin-top: 1px; }
+.toast[data-tone='ok'] .mark { background: var(--positive-soft); color: var(--positive); }
+.toast[data-tone='error'] .mark { background: var(--negative-soft); color: var(--negative); }
+.toast[data-tone='info'] .mark { background: var(--surface-hover); color: var(--text-muted); }
+.title { font-size: var(--t-sm); font-weight: 580; }
+.detail { font-size: var(--t-xs); color: var(--text-muted); margin-top: 2px; }
+.link { font-size: var(--t-xs); color: var(--text); margin-top: 6px; display: inline-flex; gap: 4px; align-items: center; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.x { color: var(--text-faint); width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; }
+.x:hover { color: var(--text); background: var(--surface-raised); }

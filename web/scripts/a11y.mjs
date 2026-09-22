@@ -230,9 +230,28 @@ try {
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  /* Audit a page in a given session by *being* in that session.
+
+     The interface no longer accepts a pinned ground — the active identity is
+     whatever the calendar says — so the day pass moves the page's clock to a
+     real instant inside the regular session (Wed 23 Sep 2026, 14:00 ET, checked
+     against sdk/src/calendar.ts) and the night pass to one outside it. Both
+     the pre-paint script and React then reach "day" or "night" the way they
+     would for a real visitor, which is the thing worth auditing. The clock
+     keeps running from there so countdowns still tick. */
+  const AT = { day: 1790186400, night: 1790215200 };
   if (GROUND) {
+    if (!(GROUND in AT)) throw new Error(`--ground must be day or night, not ${GROUND}`);
     await send('Page.addScriptToEvaluateOnNewDocument', {
-      source: `try{localStorage.setItem('session.ground',${JSON.stringify(GROUND)})}catch(e){}`,
+      source: `(() => {
+        const RealDate = Date, start = RealDate.now(), at = ${AT[GROUND]} * 1000;
+        const now = () => at + (RealDate.now() - start);
+        class ShiftedDate extends RealDate {
+          constructor(...a) { a.length ? super(...a) : super(now()); }
+          static now() { return now(); }
+        }
+        globalThis.Date = ShiftedDate;
+      })();`,
     });
   }
 

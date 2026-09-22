@@ -1,0 +1,19 @@
+/* One geometry for every asset: a rounded square, two letters, a tone taken
+   from the kind of asset — never from its performance. */
+.av {
+  flex: none; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 9px;
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; letter-spacing: -0.02em;
+  color: var(--text); background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  position: relative; overflow: hidden;
+}
+.av::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 2px;
+  background: var(--av-tone, var(--border-strong)); opacity: 0.9;
+}
+.av[data-kind='equity'] { --av-tone: var(--text-faint); }
+.av[data-kind='etf'] { --av-tone: var(--text-muted); }
+.av[data-kind='preipo'] { --av-tone: #B98CF0; }
+.av[data-size='sm'] { width: 24px; height: 24px; font-size: 9.5px; border-radius: 7px; }
+.av[data-size='lg'] { width: 44px; height: 44px; font-size: 14px; border-radius: 12px; }

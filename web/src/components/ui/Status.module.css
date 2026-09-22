@@ -1,0 +1,39 @@
+/* Compact status. A dot and a word, never a giant pill. */
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 8px;
+  border-radius: 6px;
+  font-size: var(--t-micro); font-weight: 560; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.status[data-bare='true'] { background: transparent; border-color: transparent; padding: 0; height: auto; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.dot[data-live='true'] { animation: breathe 2.2s ease-in-out infinite; }
+
+.status[data-kind='live'], .status[data-kind='healthy'], .status[data-kind='confirmed'],
+.status[data-kind='open'], .status[data-kind='mainnet'] { color: var(--positive); }
+.status[data-kind='mint-available'] { color: var(--text); }
+.status[data-kind='devnet'] { color: #B98CF0; }
+.status[data-kind='simulated'], .status[data-kind='demo'] { color: var(--text-muted); }
+.status[data-kind='closed'], .status[data-kind='mint-closed'] { color: var(--text-muted); }
+.status[data-kind='handoff'] { color: var(--text); }
+.status[data-kind='stale'], .status[data-kind='paused'] { color: var(--warn); }
+.status[data-kind='halted'] { color: var(--negative); }
+.status[data-kind='event'] { color: var(--text-muted); }
+
+/* A class tag: DAY or NIGHT, in its own identity. */
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 8px; border-radius: 6px;
+  font-size: var(--t-micro); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.tag[data-cls='day'] { color: var(--day-ink); border-color: var(--day-line); background: var(--day-soft); }
+.tag[data-cls='night'] { color: var(--night-ink); border-color: var(--night-line); background: var(--night-soft); }
+.tag[data-quiet='true'] { background: transparent; }
+.tagDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.tag[data-active='true'] .tagDot { animation: breathe 2.2s ease-in-out infinite; box-shadow: 0 0 0 0 currentColor; }

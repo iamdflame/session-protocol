@@ -1,9 +1,9 @@
 import { Suspense, lazy, useEffect, useRef } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import { GroundProvider } from '@/components/SessionGround';
 import { WalletProviders } from '@/components/wallet/WalletProviders';
-import { Nav } from '@/components/Nav';
-import { Footer } from '@/components/Footer';
+import { AppShell } from '@/components/shell/AppShell';
+import { ToastProvider } from '@/components/ui/Toast';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteFallback } from '@/components/RouteFallback';
 
@@ -15,6 +15,14 @@ const HowItWorks = lazy(() => import('@/pages/HowItWorks'));
 const Bell = lazy(() => import('@/pages/Bell'));
 const List = lazy(() => import('@/pages/List'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
+
+/* /trade is the trading screen for one instrument: NVDAx unless ?asset= names
+   another. It is the asset page in its trade-first form, not a second copy of
+   it, so a deep link to either lands on the same state. */
+function TradeRoute() {
+  const [q] = useSearchParams();
+  return <Vault symbol={q.get('asset') ?? 'NVDAx'} />;
+}
 
 /**
  * Scroll behaviour on navigation.
@@ -74,15 +82,16 @@ export function App() {
   return (
     <GroundProvider>
     <WalletProviders>
+    <ToastProvider>
       <Scroll />
       <FocusOnRoute />
       <a className="skip-link" href="#main">Skip to content</a>
-      <Nav />
-      <main id="main">
+      <AppShell>
         <ErrorBoundary key={pathname}>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/trade" element={<TradeRoute />} />
               <Route path="/markets" element={<Markets />} />
               <Route path="/markets/:symbol" element={<Vault />} />
               <Route path="/research" element={<Research />} />
@@ -93,8 +102,8 @@ export function App() {
             </Routes>
           </Suspense>
         </ErrorBoundary>
-      </main>
-      <Footer />
+      </AppShell>
+    </ToastProvider>
     </WalletProviders>
     </GroundProvider>
   );

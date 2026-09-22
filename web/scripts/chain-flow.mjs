@@ -290,9 +290,9 @@ try {
   const txt = await bodyText();
   check('vault page is in chain mode', /Live · devnet/i.test(txt));
   check('mark comes from Pyth', /pyth · crypto\.sol\/usd/i.test(txt), txt.match(/pyth.*?\n/i)?.[0]);
-  check('vault address is shown and linked', await ev(`!!document.querySelector('a[href*="explorer.solana.com/address/${manifest.vault}"]')`));
+  check('vault address is shown and linked', await ev(`!!document.querySelector('a[href*="solscan.io/account/${manifest.vault}"]')`));
   check('health panel is computed from chain', /Computed by the SDK/.test(txt));
-  check('ledger shows on-chain signatures', await until(() => ev(`document.querySelectorAll('a[href*="explorer.solana.com/tx/"]').length > 0`), 20000));
+  check('ledger shows on-chain signatures', await until(() => ev(`document.querySelectorAll('a[href*="solscan.io/tx/"]').length > 0`), 20000));
 
   /* ── 2. connect ──────────────────────────────────────────────────────── */
   check('open the wallet modal from the trade panel', await clickText('form button', 'Connect a wallet'));
@@ -403,7 +403,7 @@ try {
   const minted = await until(() => ev(`/Minted 100/.test(document.querySelector('form')?.innerText ?? '')`), 60000, 600);
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
   check('mint confirmed on chain with a signature link', minted && /view transaction/.test(flash), flash.slice(0, 160));
-  const sig1 = await ev(`document.querySelector('form p[role="status"] a[href*="explorer.solana.com/tx/"]')?.href.match(/tx\\/([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null`);
+  const sig1 = await ev(`document.querySelector('form p[role="status"] a[href*="solscan.io/tx/"]')?.href.match(/tx\\/([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null`);
   /* The page is backfilling its ledger over the same public endpoint, so this
      one competes for the per-IP budget. A 429 here says nothing about the
      product; failing on it would be a flaky test reporting a bug that is not
