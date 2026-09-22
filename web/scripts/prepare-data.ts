@@ -25,6 +25,24 @@ if (existsSync(`${ROOT}/sim-report.json`)) {
   writeFileSync(`${OUT}/sim-report.json`, readFileSync(`${ROOT}/sim-report.json`));
 }
 
+/* When the study was last computed, and off what.
+   
+   It is deliberately the *only* file here carrying a wall clock: every other
+   derived file is keyed to the newest bar, so a diff in one of them means a
+   figure moved. This is how the site can say "as of" without the study
+   itself churning on every build. Absent on a clone that has never run the
+   pipeline, and the page says so rather than implying freshness it cannot
+   vouch for. */
+if (existsSync(`${ROOT}/freshness.json`)) {
+  writeFileSync(`${OUT}/freshness.json`, readFileSync(`${ROOT}/freshness.json`));
+}
+
+/* What the vault has actually paid at each boundary, from the collector.
+   Keyed to the newest bar like everything else, so it does not churn. */
+if (existsSync(`${ROOT}/funding.json`)) {
+  writeFileSync(`${OUT}/funding.json`, readFileSync(`${ROOT}/funding.json`));
+}
+
 // The raw hourly file is 2.6MB and is not committed; the derived files under
 // public/data are. A clone without the raw file keeps what is committed rather
 // than failing the build — regenerating is only possible with the source.

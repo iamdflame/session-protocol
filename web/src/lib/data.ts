@@ -132,6 +132,8 @@ export const useCurve = (symbol: string | undefined) =>
 export const useStudy = () => useData<StudyFile>('/data/study.json');
 export const useExecution = () => useData<ExecutionFile>('/data/execution.json');
 export const useSimulation = () => useData<SimReport>('/data/sim-report.json');
+export const useFreshness = () => useData<Freshness>('/data/freshness.json');
+export const useFunding = () => useData<FundingFile>('/data/funding.json');
 
 /* ── the study ───────────────────────────────────────────────────────────── */
 
@@ -145,10 +147,56 @@ export interface StudyAsset {
 }
 
 export interface StudyFile {
-  generated?: string;
+  /** The newest bar the study read — not when it ran. See `Freshness`. */
+  snapshot?: string;
   equities: StudyAsset[];
   controls: StudyAsset[];
   [k: string]: unknown;
+}
+
+/**
+ * When the study was last computed, and off how much.
+ *
+ * Split out of `study.json` so that file is byte-identical whenever no figure
+ * has moved. It is the only derived file carrying a wall clock, which is what
+ * lets the page say "as of" without the study churning on every build — and
+ * it is absent on a clone that has never run the pipeline, so the page has to
+ * handle not knowing rather than implying a freshness it cannot vouch for.
+ */
+/**
+ * What the vault actually paid at each boundary it has settled.
+ *
+ * The study says what the night/day difference *was*; this says what the
+ * vault *charged* for it. The defaults behind that charge — `k = 2,500 bps`,
+ * capped at 50 bp a boundary — are reasoned rather than fitted, and the only
+ * thing that can calibrate them is a live book. Publishing both means the
+ * rate can be checked against an outcome instead of asserted.
+ */
+export interface FundingBell {
+  boundary: number;
+  /** The bell this settled, when the chain could tell us; the event does not carry it. */
+  bellTs: number | null;
+  /** When the crank actually ran, which is not the same thing. */
+  crankedTs: number;
+  exposed: string;
+  fundingAtoms: string;
+  payer: 'night' | 'day' | null;
+  /** Null when one class is empty: nobody to pay, and nobody to pay them. */
+  rateBps: number | null;
+  valueNight: string;
+  valueDay: string;
+}
+
+export interface FundingFile {
+  snapshot: string;
+  bells: FundingBell[];
+}
+
+export interface Freshness {
+  computed: string;
+  snapshot: string;
+  assets: number;
+  bars: number;
 }
 
 export interface ExecutionFile {

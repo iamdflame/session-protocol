@@ -308,12 +308,25 @@ console.log('    snap-back. If that biases anything it understates the effect.')
 console.log('  · *** |t|>2.58   ** |t|>1.96   * |t|>1.64, Newey-West corrected.');
 console.log('  · A cumulative return is not evidence on its own. Read the t-stats.');
 
+/* No wall clock in here.
+   
+   `generated: new Date()` meant this file differed on every run whether a
+   number had moved or not, so `web/public/data/study.json` showed dirty after
+   every build and got discarded by hand. What the study is *as of* is a
+   property of the data — `snapshot` is the newest bar it read — and when it
+   was computed belongs beside it, not inside it. `data/freshness.json`
+   carries that, so a diff in this file always means a figure changed. */
 writeFileSync('data/session-study.json', JSON.stringify({
-  generated: new Date().toISOString(),
   policy, snapshot: raw.generated,
   spikesDropped,
   barsTotal: rawAssets.reduce((n, a) => n + a.rows.length, 0),
   equities, controls, pooled: { night: pn, day: pd },
+}, null, 1));
+writeFileSync('data/freshness.json', JSON.stringify({
+  computed: new Date().toISOString(),
+  snapshot: raw.generated,
+  assets: rawAssets.length,
+  bars: rawAssets.reduce((n, a) => n + a.rows.length, 0),
 }, null, 1));
 console.log(`\nrejected ${spikesDropped} single-bar spikes of ` +
   `${rawAssets.reduce((n, a) => n + a.rows.length, 0).toLocaleString()} hourly closes`);

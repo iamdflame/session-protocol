@@ -215,3 +215,26 @@
 }
 
 @media (max-width: 720px) { .simGrid { grid-template-columns: 1fr 1fr; gap: var(--sp-4); } }
+
+/* The as-of line under the study's headline figures. Quiet when the data is
+   current, and marked when it is not — a stale statistic presented as a live
+   one is the failure this line exists to prevent. */
+.freshness {
+  margin-top: var(--sp-5);
+  font-size: var(--t-xs); line-height: 1.7; color: var(--ink-3);
+  max-width: 72ch;
+}
+.freshness[data-behind='true'] { color: var(--warn-ink); }
+
+/* Funding against the prior it is meant to price. */
+.fundingTable { width: 100%; border-collapse: collapse; margin-top: var(--sp-5); font-size: var(--t-xs); }
+.fundingTable th, .fundingTable td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+.fundingTable thead th {
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 500;
+}
+.fundingTable tbody th { font-weight: 500; color: var(--ink-2); }
+.fundingTable .num, .fundingTable td.num, .fundingTable th.num {
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.fundingNote { margin-top: var(--sp-4); font-size: var(--t-xs); line-height: 1.75; color: var(--ink-3); max-width: 74ch; }

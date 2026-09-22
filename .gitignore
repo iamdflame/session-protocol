@@ -22,3 +22,10 @@ problems.md
 keeper/.agent/
 REBUILD.md
 Problems.md
+
+# The collector's store. 14MB and growing, rebuildable from `--backfill` plus
+# a catch-up pass, and it is a working set rather than a source: committing it
+# would put a binary in every diff for data the chain and the API still hold.
+data/collector.db
+data/collector.db-wal
+data/collector.db-shm

@@ -1,0 +1,27 @@
+{
+ "snapshot": "2026-09-22T11:00:00.000Z",
+ "bells": [
+  {
+   "boundary": 1,
+   "bellTs": null,
+   "crankedTs": 1789998997,
+   "exposed": "day",
+   "fundingAtoms": "0",
+   "payer": null,
+   "rateBps": null,
+   "valueNight": "0",
+   "valueDay": "8815000000"
+  },
+  {
+   "boundary": 2,
+   "bellTs": 1790020800,
+   "crankedTs": 1790020809,
+   "exposed": "night",
+   "fundingAtoms": "-6300000",
+   "payer": "day",
+   "rateBps": 49,
+   "valueNight": "1266300000",
+   "valueDay": "8794445366"
+  }
+ ]
+}

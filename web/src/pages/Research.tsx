@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { VolBars } from '@/components/charts/VolBars';
 import { Reveal } from '@/components/Reveal';
-import { useMarkets, useStudy, useSimulation, fmtPct, fmtPctAbs, type StudyAsset } from '@/lib/data';
+import {
+  useMarkets, useStudy, useSimulation, useFreshness, useFunding, fmtPct, fmtPctAbs,
+  type StudyAsset, type StudyFile,
+} from '@/lib/data';
 import { useViewport } from '@/lib/session';
 import s from './Research.module.css';
 
@@ -14,10 +17,153 @@ const stars = (t: number) => {
   return a > 2.58 ? '***' : a > 1.96 ? '**' : a > 1.64 ? '*' : '';
 };
 
+/**
+ * What the study is as of, and whether that is current.
+ *
+ * A research page that prints a t-statistic without saying when it was
+ * measured is asking to be believed rather than checked. The numbers above
+ * come from a file; this says which file, off how many bars, how old — and,
+ * when the collector has stopped, says *that* rather than presenting a stale
+ * figure as a live one.
+ */
+function Freshness({ state }: { state: ReturnType<typeof useFreshness> }) {
+  if (state.status !== 'ready') {
+    // A clone that has never run the pipeline has no freshness file at all.
+    // Saying nothing is better than claiming a currency we cannot show.
+    return null;
+  }
+  const f = state.data;
+  const snapMs = Date.parse(f.snapshot);
+  const ageH = (Date.now() - snapMs) / 3_600_000;
+  // A collector that has not run for a day has left the study behind the
+  // market. Two days is the cadence the batch pipeline used to manage.
+  const behind = ageH > 24;
+  return (
+    <p className={s.freshness} data-behind={behind}>
+      Measured from <span className="num">{f.bars.toLocaleString()}</span> hourly closes
+      across <span className="num">{f.assets}</span> assets, the newest{' '}
+      <time dateTime={f.snapshot}>{ago(ageH)}</time>.
+      {behind
+        ? <> The collector has not run since then, so every figure below is as of that
+          bar and not as of now.</>
+        : <> Recomputed when a bar arrives, so the figures below are the ones the
+          data supports right now.</>}
+    </p>
+  );
+}
+
+/** Hours as something a person reads, erring shorter rather than rounding up. */
+function ago(hours: number): string {
+  if (hours < 1.5) return 'within the hour';
+  if (hours < 36) return `${Math.floor(hours)} hours ago`;
+  return `${Math.floor(hours / 24)} days ago`;
+}
+
+/**
+ * The rate the vault charges, beside the difference it is charging for.
+ *
+ * `k = 2,500 bps` capped at 50 bp a boundary are reasoned defaults, not fitted
+ * ones, and REBUILD §5.7 is blunt that only a live book calibrates them. The
+ * honest thing is to publish the prior and the outcome together and let the
+ * gap be visible, rather than print a funding rate as though somebody had
+ * already checked it.
+ */
+function FundingVsPrior({ study, funding }: {
+  study: StudyFile | null | undefined;
+  funding: ReturnType<typeof useFunding>;
+}) {
+  if (funding.status !== 'ready' || !study) return null;
+  const paid = funding.data.bells.filter(b => b.rateBps !== null);
+
+  // The study's own pooled per-hour figures; NIGHT minus DAY is the thing
+  // funding exists to price.
+  const pooled = study.pooled as { night?: { meanPerHour?: number }; day?: { meanPerHour?: number } } | undefined;
+  const nightBp = (pooled?.night?.meanPerHour ?? 0) * 1e4;
+  const dayBp = (pooled?.day?.meanPerHour ?? 0) * 1e4;
+  const spreadBp = nightBp - dayBp;
+
+  return (
+    <section className={`shell ${s.section}`} id="funding">
+      <Reveal>
+        <p className="eyebrow">Calibration</p>
+        <h2 className={`display ${s.h2}`}>What the vault charged, and what it was charging for.</h2>
+        <p className={`lead ${s.sectionLead}`}>
+          Funding prices <strong>crowding</strong>, not returns: the larger class pays the
+          smaller one to come back towards balance, whichever way the market happened to go.
+          So it will not track the study&rsquo;s measured spread and is not meant to. What the
+          study gives is a <strong>scale</strong> — across every asset and hour here, the two
+          sessions differed by <span className="num">{spreadBp.toFixed(2)}</span> bp an hour.
+          A funding rate far above that is charging more for balance than the sessions are
+          worth apart, which is the only way to tell that a coefficient nobody has fitted is
+          set too high.
+        </p>
+      </Reveal>
+
+      <Reveal delay={60}>
+        {paid.length === 0 ? (
+          <p className={s.fundingNote}>
+            No boundary has charged funding yet. It is zero while one class has no holders —
+            there is nobody to pay and nobody to pay them — which is not the same as a
+            balanced book, and the vault page says which it is.
+          </p>
+        ) : (
+          <table className={s.fundingTable}>
+            <thead>
+              <tr>
+                <th scope="col">Boundary</th>
+                <th scope="col">Settled</th>
+                <th scope="col">Payer</th>
+                <th scope="col" className={s.num}>Rate</th>
+                <th scope="col" className={s.num}>Per hour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paid.map(b => {
+                /* A boundary is roughly one session. Dividing the per-boundary
+                   rate by its hours is the only way to compare it with a
+                   study measured per hour. */
+                const hours = b.exposed === 'day' ? 6.5 : 17.5;
+                return (
+                  <tr key={b.boundary}>
+                    <th scope="row" className={s.num}>#{b.boundary}</th>
+                    <td>
+                      {b.bellTs
+                        ? new Date(b.bellTs * 1000).toISOString().slice(0, 16).replace('T', ' ')
+                        : <span title="the settlement event does not carry the bell it settled">
+                            cranked {new Date(b.crankedTs * 1000).toISOString().slice(0, 16).replace('T', ' ')}
+                          </span>}
+                    </td>
+                    <td>{b.payer === 'night' ? 'NIGHT pays DAY' : 'DAY pays NIGHT'}</td>
+                    <td className={s.num}>{(b.rateBps! / 100).toFixed(2)}%</td>
+                    <td className={s.num}>{(b.rateBps! / hours).toFixed(2)} bp</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Reveal>
+
+      <Reveal delay={100}>
+        <p className={s.fundingNote}>
+          One vault and {paid.length === 1 ? 'one boundary' : `${paid.length} boundaries`} is
+          not a calibration — it is the first point on a curve. The coefficient moves when
+          there are twenty live sessions to fit it against, through{' '}
+          <code className="mono">set_params</code> and within the caps the program already
+          enforces. Until then the rate is a reasoned default and this table is the evidence
+          against it, not for it.
+        </p>
+      </Reveal>
+    </section>
+  );
+}
+
 export default function Research() {
   const study = useStudy();
   const markets = useMarkets();
   const sim = useSimulation();
+  const fresh = useFreshness();
+  const funding = useFunding();
   const head = markets.data?.headline;
   const [sort, setSort] = useState<SortKey>('gap');
 
@@ -66,6 +212,8 @@ export default function Research() {
             ))}
           </dl>
         )}
+
+        <Freshness state={fresh} />
       </header>
 
       {/* ── the null result ─────────────────────────────────────────────── */}
@@ -272,6 +420,9 @@ export default function Research() {
           )}
         </div>
       </section>
+
+      {/* ── what the vault charged, against what the study measured ─────── */}
+      <FundingVsPrior study={study.data} funding={funding} />
 
       {/* ── method ──────────────────────────────────────────────────────── */}
       <section className={`shell ${s.section}`} id="method">
