@@ -52,3 +52,35 @@
 /* A sub-line describing something that stands in, rather than something that
    runs. Same treatment as the cluster chip, so the two read as one claim. */
 .sub[data-standin] { color: var(--warn-ink, var(--ink-3)); }
+
+/* ── the claim ────────────────────────────────────────────────────────────
+   The grade leads because it is the one thing a reader can act on without
+   reading the list below it. Colour is carried by the letter alone: a whole
+   card tinted red reads as an error state, and a C is a disclosure. */
+.claim {
+  margin-top: var(--sp-5); padding: var(--sp-4) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line); border-radius: var(--r-1);
+}
+.claimHead { display: flex; align-items: flex-start; gap: var(--sp-4); }
+.grade {
+  flex: none; display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: var(--r-1);
+  font-size: 19px; font-weight: 560; letter-spacing: -0.02em;
+  border: 1px solid var(--line-strong); color: var(--ink-2);
+}
+.claim[data-grade='A'] .grade { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.claim[data-grade='B'] .grade { color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, var(--line)); }
+.claim[data-grade='C'] .grade { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn-ink) 40%, var(--line)); }
+.claim[data-grade='D'] .grade { color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn-ink) 55%, var(--line)); }
+.claim[data-grade='F'] .grade { color: var(--crit-ink); border-color: color-mix(in srgb, var(--crit-ink) 55%, var(--line)); }
+
+.claimTitle { font-size: var(--t-sm); font-weight: 550; }
+.claimSummary { font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2); margin-top: 3px; }
+.claimWrapper { font-size: var(--t-xs); line-height: 1.7; color: var(--ink); margin-top: var(--sp-4); }
+.claimPause { font-size: var(--t-xs); line-height: 1.7; color: var(--ink-2); margin-top: var(--sp-3); }
+.claimMultiplier { font-size: var(--t-xs); line-height: 1.7; color: var(--warn-ink); margin-top: var(--sp-3); }
+.claimBlocked { font-size: var(--t-xs); line-height: 1.7; color: var(--crit-ink); margin-top: var(--sp-3); }
+.claimNote {
+  font-size: var(--t-micro); line-height: 1.7; color: var(--ink-3);
+  margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line);
+}

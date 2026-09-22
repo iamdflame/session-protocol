@@ -4,6 +4,7 @@
    disagree about the asset. */
 import { Link } from 'react-router-dom';
 import { issuerPowers, toUi } from '@sdk/issuer.ts';
+import { gradeOf, GRADE_SUMMARY } from '@sdk/claim.ts';
 import { SESSION_EVENT } from '@sdk/vault.ts';
 import { explorerAddr, short, type ChainVault as ChainState, type Devnet } from '@/lib/chain';
 import s from './Instrument.module.css';
@@ -21,6 +22,10 @@ export function Instrument({ m, d }: { m: Devnet; d: ChainState }) {
   const isEvent = v.sessionKind === SESSION_EVENT;
   const ud = v.underlyingDecimals;
   const powers = issuer ? issuerPowers(issuer) : [];
+  /* The same grade the curator refuses on, computed from the same bytes. If
+     the page and the desk could disagree about what a wrapper is, the letter
+     would be decoration. */
+  const claim = issuer ? gradeOf(issuer, d.fetchedAt) : null;
   const inventoryUi = toUi(v.ownedUnderlying, ud, d.uiMultiplier);
   const balanceUi = toUi(d.balanceUnderlying, ud, d.uiMultiplier);
   /* The program can catch a calendar that disagrees with the market, by
@@ -115,6 +120,56 @@ export function Instrument({ m, d }: { m: Devnet; d: ChainState }) {
           </dd>
         </div>
       </dl>
+
+      {claim && (
+        <div className={s.claim} data-grade={claim.grade}>
+          <div className={s.claimHead}>
+            <span className={s.grade} aria-hidden="true">{claim.grade}</span>
+            <div>
+              {/* The mint is the identity; the ticker is a label. Two wrappers
+                  of the same company are not the same claim, and a page that
+                  leads with the ticker invites treating them as if they were. */}
+              <h3 className={s.claimTitle}>
+                {m.realMint ? 'The claim this stands in for' : 'The claim'}
+              </h3>
+              <p className={s.claimSummary}>{GRADE_SUMMARY[claim.grade]}</p>
+            </div>
+          </div>
+
+          <p className={s.claimWrapper}>{claim.wrapper[0].toUpperCase() + claim.wrapper.slice(1)}.</p>
+          <p className={s.claimPause}>{claim.pause}</p>
+
+          {claim.multiplier.effective !== 1 && (
+            <p className={s.claimMultiplier}>
+              Balances read at <span className="num">×{claim.multiplier.effective}</span> the raw
+              amount. <strong>This program values raw atoms</strong>, so a dividend or split
+              applied this way would be mispriced with nothing failing — which is why a vault
+              in this state is not curated.
+            </p>
+          )}
+          {claim.multiplier.scheduled !== null && (
+            <p className={s.claimMultiplier}>
+              A multiplier of <span className="num">×{claim.multiplier.scheduled}</span> takes
+              effect {when(claim.multiplier.effectiveAt!)} — the adjacent field, not the one
+              a stale reader would take for current.
+            </p>
+          )}
+
+          {claim.blocking.length > 0 && (
+            <p className={s.claimBlocked}>
+              Not eligible to be shown by default: {claim.blocking.join('; ')}. It settles,
+              funds and redeems exactly the same — curation decides where a vault appears,
+              never whether it works.
+            </p>
+          )}
+
+          <p className={s.claimNote}>
+            Graded from powers the mint publishes, not from a rating anyone issued. It is a
+            summary of what the issuer kept, in one letter, so that &ldquo;curated&rdquo; means
+            something checkable. It is not advice and not a safety rating.
+          </p>
+        </div>
+      )}
 
       <div className={s.powers}>
         <h3 className={s.powersTitle}>What the issuer can do to this vault</h3>
