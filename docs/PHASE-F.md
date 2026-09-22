@@ -7,8 +7,11 @@ the list of things on the far side of that line, each with the number that
 puts it there.
 
 Prices below are live at the time of writing: **1 SOL ≈ $116.19**,
-**NVDAx ≈ $223.68**. The mainnet wallet holds **0.2508 SOL** (≈ $29), which is
-what remains after the `$BELL` launch. That figure is the whole reason this
+**NVDAx ≈ $223.68**. The mainnet wallet holds **0 SOL**. It held 0.2508 after
+the `$BELL` launch and holds nothing now, which does not change the argument
+— 0.25 SOL and 0 SOL are the same distance from the 11.90 this needs — but a
+document whose entire point is the gap between a balance and a cost should
+not be reporting the balance from memory. That figure is the whole reason this
 document exists rather than a deployment.
 
 ---
@@ -68,7 +71,8 @@ Not nothing — the line is at 1 SOL, not at zero.
 | Action | Cost |
 |---|---|
 | `$BELL` launched via Clawpump, curve denominated in **real NVDAx** | 0.009223 SOL |
-| Remaining balance | 0.2508 SOL |
+| Remaining balance, at the time this document was first written | 0.2508 SOL |
+| Remaining balance, checked again on 2026-09-22 | **0 SOL** |
 
 The `$BELL`/NVDAx DAMM v2 pool specified in the plan was **not** created, and
 the reason is in `docs/BOUNTIES.md`: the pump.fun bonding curve the launch

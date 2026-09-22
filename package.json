@@ -23,6 +23,7 @@
     "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts",
     "devnet:statement": "node --experimental-strip-types keeper/src/statement-check.ts",
     "build:program": "./scripts/build-sbf.sh",
+    "verify:deployed": "node scripts/verify-deployed.mjs",
     "test:validator": "node --experimental-strip-types keeper/src/validator-test.ts",
     "devnet:recap": "node --experimental-strip-types keeper/src/recap.ts",
     "gate:pool": "node --experimental-strip-types keeper/src/gate-token2022-pool.ts",

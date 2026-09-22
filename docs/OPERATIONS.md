@@ -115,11 +115,51 @@ solana program deploy target/deploy/session.so \
   --url <cluster> --keypair ~/.config/solana/id.json
 ```
 
-Costs the rent-exempt minimum for the program account (≈2.64 SOL for a 518 KB
-binary at current rent) plus fees; the deployer keypair becomes the upgrade
-authority. The program id is baked into the SDK (`sdk/src/vault.ts`) and the
+Costs the rent-exempt minimum for the program account — **≈5.95 SOL settled
+and ≈11.90 at the peak** for the current 854,600-byte artifact, because a
+deploy funds the buffer and the account at once — plus fees; the deployer
+keypair becomes the upgrade authority. (This said 2.64 SOL for a 518 KB binary
+until the artifact grew past it. `docs/PHASE-F.md` carries the working.) The program id is baked into the SDK (`sdk/src/vault.ts`) and the
 site's PDAs, so deploying under a *different* keypair means changing
 `declare_id!`, `Anchor.toml` and `PROGRAM_ID` together, then rebuilding.
+
+### Verifying what is actually deployed
+
+Two different questions, and only one of them can be answered from here.
+
+**Do the bytes on chain match the artifact in this tree?**
+
+```bash
+npm run verify:deployed                       # devnet, the program id in the SDK
+npm run verify:deployed -- --url <cluster> --program-id <id>
+```
+
+It dumps the program account, strips the trailing zeros a program account is
+padded with, and compares SHA-256 against `target/deploy/session.so`. This
+runs today and passes: the devnet deployment and the current tree hash to the
+same `486433da…`. It is the check that catches the mistake people actually
+make — deploying a build nobody kept, then changing the source.
+
+**Do the bytes on chain match a commit anyone can read?** That is
+`solana-verify`, and it is stronger: it rebuilds inside a pinned container so
+the answer does not depend on the toolchain on any one machine. It is
+UPGRADE-POLICY step 1 and it needs Docker and the tool, neither of which is on
+the machine this was written on:
+
+```bash
+cargo install solana-verify
+git tag -a v0.1.0 -m 'the commit the deployed bytes come from' && git push --tags
+solana-verify build --library-name session
+solana-verify get-executable-hash target/deploy/session.so
+solana-verify get-program-hash --url <cluster> 8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ
+solana-verify verify-from-repo --url <cluster> \
+  --program-id 8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ \
+  --library-name session https://github.com/iamdflame/session-protocol
+```
+
+**It has not been run.** Saying so is the point of writing it down: a
+verifiable build is worth nothing as an intention, and the hash check above is
+what exists in the meantime.
 
 ### Devnet
 
