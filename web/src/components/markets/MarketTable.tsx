@@ -41,9 +41,11 @@ function NextCell({ asset }: { asset: Asset }) {
   return <Countdown seconds={sess.until} className={s.countdown} />;
 }
 
-export function MarketTable({ assets, quotes, curves, vaults, favorites, onFavorite, sort, onSort, compact, caption }: {
+export function MarketTable({ assets, quotes, quotesSettled = true, curves, vaults, favorites, onFavorite, sort, onSort, compact, caption }: {
   assets: Asset[];
   quotes: Record<string, Quote>;
+  /** False while the first quote request is in flight: nothing is "missing" yet. */
+  quotesSettled?: boolean;
   curves?: Record<string, CurvePoint[]>;
   vaults: Map<string, VaultInfo>;
   favorites?: Set<string>;
@@ -124,9 +126,11 @@ export function MarketTable({ assets, quotes, curves, vaults, favorites, onFavor
                 )}
                 <td className={`${s.num} ${s.colPrice}`}>
                   <Price value={q?.price ?? a.price} />
-                  {!q && <span className={s.snap} title="No live quote; last close from the study data.">last close</span>}
+                  {!q && quotesSettled && <span className={s.snap} title="No live quote for this token; this is its last hourly close from the study data.">last close</span>}
                 </td>
-                <td className={`${s.num} ${s.colChange}`}><Delta value={a.change24h} /></td>
+                {/* Jupiter's live 24h change where it sends one; the study's
+                    close-to-close otherwise, which can be up to an hour old. */}
+                <td className={`${s.num} ${s.colChange}`}><Delta value={q?.change24h ?? a.change24h} flash /></td>
                 <td className={`${s.num} ${s.colDay}`} data-label="DAY"><Delta value={a.day?.cumulative ?? null} title="DAY sessions, compounded over the study window" /></td>
                 <td className={`${s.num} ${s.colNight}`} data-label="NIGHT"><Delta value={a.night?.cumulative ?? null} title="NIGHT sessions, compounded over the study window" /></td>
                 <td className={s.colSession}><SessionCell asset={a} /></td>

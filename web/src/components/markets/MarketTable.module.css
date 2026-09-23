@@ -1,7 +1,8 @@
 .wrap { width: 100%; overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+/* Not sticky: the wrapper's overflow-x makes it the scroll container, so a
+   sticky header here could never engage. The page's toolbar is what stays. */
 .table thead th {
-  position: sticky; top: 0; z-index: 1;
   text-align: left; font-weight: 540;
   font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint);
   padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg);

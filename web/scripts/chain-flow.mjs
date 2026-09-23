@@ -638,7 +638,7 @@ try {
          skeleton contains neither the new symbol nor the toggle, so asserting
          against it would pass for the wrong reason and then fail to click. */
       const scanned = await until(() => ev(
-        `!!document.querySelector('section[aria-label="Vaults on chain"] a[class*="item"], section[aria-label="Vaults on chain"] button')`),
+        `!!document.querySelector('section[aria-label="Vaults on chain"] [class*="item"], section[aria-label="Vaults on chain"] button')`),
         30000, 500);
       check('the catalog finished scanning the program', scanned);
       const curatedOnly = await ev(`document.querySelector('section[aria-label="Vaults on chain"]').innerText`);

@@ -249,8 +249,12 @@ try {
 
   const rows = await ev(`document.querySelectorAll('table tbody tr').length`);
   check('markets table lists every asset', rows === 26, `${rows} rows`);
-  check('filter to pre-IPO', await clickText('button[aria-pressed]', 'Pre-IPO'));
-  await wait(150);
+  // The kind filter is a radio group (role="radio"), and pre-IPO names sit in
+  // their own rail; both tables together still hold all 26 rows.
+  check('filter to pre-IPO', await clickText('[role="radio"]', 'Pre-IPO'));
+  // The filter goes through the URL, so it lands on the next render rather than
+  // synchronously; wait for the rows rather than for a guessed number of ms.
+  await until(`document.querySelectorAll('table tbody tr').length === 5`, 'pre-IPO rows').catch(() => {});
   const rows2 = await ev(`document.querySelectorAll('table tbody tr').length`);
   check('pre-IPO filter shows 5', rows2 === 5, `${rows2} rows`);
 

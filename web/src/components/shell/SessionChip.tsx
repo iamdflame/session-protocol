@@ -38,7 +38,7 @@ export function SessionChip({ compact = false }: { compact?: boolean }) {
   const why = sess.isOpen ? null : closureReason(sess.now);
   return (
     <div
-      className={s.chip} data-cls={cls} data-compact={compact || undefined}
+      className={s.chip} data-cls={cls} data-holder={cls} data-compact={compact || undefined}
       role="status" aria-live="off"
       title={`NYSE is ${sess.isOpen ? 'open' : 'closed'}${why ? ` (${why.toLowerCase()})` : ''}. ${sess.holder} carries the stock; ${sess.handsTo} takes it in the next handoff.`}
     >

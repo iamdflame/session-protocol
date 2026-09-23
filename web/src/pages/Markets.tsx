@@ -1,332 +1,275 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Markets — the explorer.
+
+   Every listed name shares one bell, so the table leads with the session they
+   are all in and then lets them differ on what they actually differ on: price,
+   the last 24 hours, and how each session has treated them. Pre-IPO names
+   have no exchange session at all; they get their own rail rather than a
+   countdown to a bell they do not trade on.
+
+   Search, filter and sort live in the URL, so a filtered view is a link.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { SessionClock } from '@/components/SessionClock';
-import { Spark } from '@/components/charts/Spark';
-import { PreLaunch } from '@/components/PreLaunch';
-import { Census } from '@/components/Census';
-import { useSession, useClockSize, countdown } from '@/lib/session';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useMarkets, useQuotes, load, type Asset, type CurveFile, type CurvePoint } from '@/lib/data';
 import { useDevnets } from '@/lib/chain';
-import {
-  useMarkets, useQuotes, load, fmtUsd, fmtCompact, fmtPct,
-  type Asset, type CurveFile, type CurvePoint,
-} from '@/lib/data';
+import { useSession } from '@/lib/session';
+import { SESSION_EVENT } from '@sdk/vault.ts';
+import { MarketTable, type SortKey, type VaultInfo } from '@/components/markets/MarketTable';
+import { Census } from '@/components/Census';
+import { MiniRail } from '@/components/session/SessionRail';
+import { Segmented } from '@/components/ui/Segmented';
+import { Source } from '@/components/ui/Source';
+import { Countdown } from '@/components/ui/Figures';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import s from './Markets.module.css';
 
-type Filter = 'all' | 'public' | 'private';
-type SortKey = 'liquidity' | 'symbol' | 'spread' | 'price';
-
-const FILTERS: { key: Filter; label: string; hint: string }[] = [
-  { key: 'all', label: 'All', hint: 'Every asset with enough history to decompose' },
-  { key: 'public', label: 'Public', hint: 'Tokenized shares of companies trading on a US exchange' },
-  { key: 'private', label: 'Pre-IPO', hint: 'Private companies — no NYSE session to arbitrage against' },
+type Filter = 'all' | 'equity' | 'etf' | 'preipo' | 'vaults' | 'favorites';
+const FILTERS: Filter[] = ['all', 'equity', 'etf', 'preipo', 'vaults', 'favorites'];
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'liquidity', label: 'Deepest pool' },
+  { key: 'change', label: '24h change' },
+  { key: 'gap', label: 'Widest DAY/NIGHT gap' },
+  { key: 'day', label: 'DAY return' },
+  { key: 'night', label: 'NIGHT return' },
+  { key: 'price', label: 'Price' },
+  { key: 'symbol', label: 'Ticker, A–Z' },
 ];
 
-/**
- * The only live sentence on this page.
- *
- * `useSession` ticks every second, so it lives in the leaf that shows the
- * time. At the page root it re-rendered twenty-six rows and twenty-six
- * sparklines once a second to move a countdown.
- */
-/**
- * Two corrections live in this paragraph, and both were the same mistake:
- * saying "every vault" about a table that is mostly not vaults.
- *
- * Of the assets below, two have a vault on chain. The rest have real history
- * and real prices and no vault at all — their pages run the same settlement
- * in the browser and say so. And of the two that exist, only the equity one
- * has a bell: OPENAI is a private company, its boundary is the next print or
- * a premium that runs, and "every vault hands over at once" was never true of
- * it. The countdown is an NYSE countdown, so it is described as one.
- */
-function LiveLead({ listed }: { listed: number }) {
+const FAV_KEY = 'session.favorites';
+function useFavorites(): [Set<string>, (sym: string) => void] {
+  const [favs, setFavs] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try { setFavs(new Set(JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]'))); } catch { /* blocked storage */ }
+  }, []);
+  const toggle = (sym: string) => setFavs(prev => {
+    const next = new Set(prev);
+    if (next.has(sym)) next.delete(sym); else next.add(sym);
+    try { localStorage.setItem(FAV_KEY, JSON.stringify([...next])); } catch { /* not worth failing over */ }
+    return next;
+  });
+  return [favs, toggle];
+}
+
+/* The one sentence about the market as a whole. `data-holder` is read by the
+   flow harness to check it agrees with the chip in the top bar. */
+function MarketState({ onBell }: { onBell: number }) {
   const sess = useSession();
-  const onTheBell = Math.max(0, listed - 1);   // the event vault keeps its own time
-  if (!sess) {
-    return (
-      <p className={`lead ${s.lead}`}>
-        Both classes of every asset, priced live, with the session each one is earning.
-      </p>
-    );
-  }
+  if (!sess) return <div className="skeleton" style={{ height: 20, width: 420 }} />;
+  const cls = sess.holder.toLowerCase();
   return (
-    <p className={`lead ${s.lead}`}>
-      <strong className={s.holderInline} data-holder={sess.holder.toLowerCase()}>
-        {sess.holder}
-      </strong>{' '}
-      is carrying the exposure across every asset on this exchange&rsquo;s clock right now.
-      In {countdown(sess.until)} it hands over —{' '}
-      {onTheBell === 1
-        ? <>one bell, and the one vault on chain that settles on it.</>
-        : <>one bell, and all {onTheBell} vaults on chain that settle on it at once.</>}{' '}
-      <Link className={s.leadLink} to="/markets/OPENAI">OPENAI keeps its own time</Link>, because
-      it has no exchange to keep.
-    </p>
+    <div className={s.state}>
+      <span className={s.stateDot} data-cls={cls} aria-hidden="true" />
+      <p className={s.stateText}>
+        <strong data-holder={cls} className={cls === 'day' ? 'day-ink' : 'night-ink'}>{sess.holder}</strong> is carrying every
+        listed name. {onBell === 1 ? 'The one vault on this clock hands over' : `All ${onBell} vaults on this clock hand over`} in{' '}
+        <Countdown seconds={sess.until} className={s.stateClock} />.
+      </p>
+      <MiniRail />
+    </div>
   );
 }
 
 export default function Markets() {
   const markets = useMarkets();
-  const allVaults = useDevnets();
-  // Which names have a vault at all. The table used to know about one, which
-  // was true until there were two, and a row showing no status is a row a
-  // reader has to guess about.
-  //
-  // This page used to poll the vault account every twenty seconds to fill a
-  // prop no cell ever read. On a rate-limited endpoint that is a request
-  // taken from whoever is trying to mint.
-  const listed = useMemo(() => new Set((allVaults ?? []).map(v => v.symbol)), [allVaults]);
-  // Vault address → the symbol this site has a page for. `NVDA` on chain is
-  // `NVDAx` here, so only the manifest knows which page a vault belongs to.
-  const pageForVault = useMemo(
-    () => new Map((allVaults ?? []).map(v => [v.vault, v.symbol])),
-    [allVaults],
-  );
-  const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<SortKey>('liquidity');
+  const devnets = useDevnets();
+  const [params, setParams] = useSearchParams();
+  const [favs, toggleFav] = useFavorites();
   const [curves, setCurves] = useState<Record<string, CurvePoint[]>>({});
-  const clockSize = useClockSize(188, 72);
+
+  const q = params.get('q') ?? '';
+  const filter = (FILTERS.includes(params.get('f') as Filter) ? params.get('f') : 'all') as Filter;
+  const sort = (SORTS.some(x => x.key === params.get('sort')) ? params.get('sort') : 'liquidity') as SortKey;
+  const set = (k: string, v: string, fallback: string) => {
+    const next = new URLSearchParams(params);
+    if (!v || v === fallback) next.delete(k); else next.set(k, v);
+    setParams(next, { replace: true });
+  };
 
   const assets = markets.data?.assets ?? [];
   const mints = useMemo(() => assets.map(a => a.mint).filter(Boolean), [assets]);
-  const { quotes, error: quoteError, stale } = useQuotes(mints);
+  const { quotes, stale, settled } = useQuotes(mints);
+  const noQuotes = settled && Object.keys(quotes).length === 0;
+  const newestQuote = Math.max(0, ...Object.values(quotes).map(x => x.at));
 
-  // Sparklines come from the per-asset curve files. Fetched after the table is
-  // already on screen and drawn in as they land, because a table of numbers a
-  // reader can use now beats a complete table a second later.
+  const vaults = useMemo(() => new Map<string, VaultInfo>((devnets ?? []).map(d => [
+    d.symbol, { kind: d.sessionKind === SESSION_EVENT ? 'event' : 'devnet' },
+  ])), [devnets]);
+  const pageForVault = useMemo(() => new Map((devnets ?? []).map(v => [v.vault, v.symbol])), [devnets]);
+  const onBell = (devnets ?? []).filter(d => d.sessionKind !== SESSION_EVENT).length;
+
+  // Sparklines land after the table is readable, not before it.
   useEffect(() => {
-    let live = true;
+    let on = true;
     for (const a of assets) {
       load<CurveFile>(`/data/curves/${encodeURIComponent(a.symbol)}.json`)
-        .then(c => { if (live) setCurves(prev => ({ ...prev, [c.symbol]: c.points })); })
-        .catch(() => { /* a missing sparkline is not worth an error state */ });
+        .then(c => { if (on) setCurves(p => ({ ...p, [c.symbol]: c.points })); })
+        .catch(() => { /* a missing sparkline is not an error state */ });
     }
-    return () => { live = false; };
+    return () => { on = false; };
   }, [assets]);
 
+  const count = (f: Filter) => assets.filter(a => matches(a, f)).length;
+  function matches(a: Asset, f: Filter) {
+    switch (f) {
+      case 'equity': return a.category === 'equity';
+      case 'etf': return a.category === 'etf';
+      case 'preipo': return a.category === 'preipo';
+      case 'vaults': return vaults.has(a.symbol);
+      case 'favorites': return favs.has(a.symbol);
+      default: return true;
+    }
+  }
+
   const rows = useMemo(() => {
-    const out = assets.filter(a => filter === 'all' || a.kind === filter);
-    const spread = (a: Asset) => a.endNight - a.endDay;
+    const needle = q.trim().toLowerCase().replace(/x$/, '');
+    const hit = (a: Asset) => !needle || [a.symbol, a.name, a.mint].some(v => v?.toLowerCase().includes(needle));
+    const price = (a: Asset) => quotes[a.mint]?.price ?? a.price;
+    const gap = (a: Asset) => Math.abs((a.night?.cumulative ?? 0) - (a.day?.cumulative ?? 0));
+    const out = assets.filter(a => matches(a, filter) && hit(a));
     out.sort((a, b) => {
       switch (sort) {
         case 'symbol': return a.symbol.localeCompare(b.symbol);
-        case 'spread': return Math.abs(spread(b)) - Math.abs(spread(a));
-        case 'price': return (quotes[b.mint]?.price ?? b.price) - (quotes[a.mint]?.price ?? a.price);
+        case 'price': return price(b) - price(a);
+        // The same figure the cell shows: Jupiter's live change, else the study's.
+        case 'change': return (quotes[b.mint]?.change24h ?? b.change24h ?? -Infinity) - (quotes[a.mint]?.change24h ?? a.change24h ?? -Infinity);
+        case 'day': return (b.day?.cumulative ?? -Infinity) - (a.day?.cumulative ?? -Infinity);
+        case 'night': return (b.night?.cumulative ?? -Infinity) - (a.night?.cumulative ?? -Infinity);
+        case 'gap': return gap(b) - gap(a);
         default: return b.liquidity - a.liquidity;
       }
     });
     return out;
-  }, [assets, filter, sort, quotes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, filter, sort, q, quotes, favs, vaults]);
+
+  const listed = rows.filter(a => a.category !== 'preipo');
+  const events = rows.filter(a => a.category === 'preipo');
 
   return (
     <div className={s.page}>
-      <header className={`shell ${s.head}`}>
-        <div className={s.headCopy}>
-          <p className="eyebrow">Markets</p>
-          <h1 className={`display ${s.title}`}>Every vault, and who holds it.</h1>
-          <LiveLead listed={listed.size} />
+      <header className={s.head}>
+        <div>
+          <h1 className={`display ${s.title}`}>Markets</h1>
+          <p className={s.sub}>
+            {assets.length || 26} tokenized assets. Live prices, and the DAY and NIGHT sessions measured apart.
+          </p>
         </div>
-        <SessionClock size={clockSize} compact />
+        <MarketState onBell={onBell} />
       </header>
 
-      <PreLaunch />
+      <div className={s.toolbar} role="search">
+        <label className={s.search}>
+          <Icon name="search" size={15} />
+          <span className="sr-only">Filter markets</span>
+          <input
+            value={q} onChange={e => set('q', e.target.value, '')}
+            placeholder="Ticker, company or mint" spellCheck={false} autoComplete="off"
+            onKeyDown={e => { if (e.key === 'Escape') set('q', '', ''); }}
+          />
+          {q && <button className={s.clear} onClick={() => set('q', '', '')} aria-label="Clear filter"><Icon name="close" size={13} /></button>}
+        </label>
 
-      <Census pages={pageForVault} />
-
-      <div className={`shell ${s.controls}`}>
-        <div className={s.filters} role="group" aria-label="Filter by asset type">
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              className={s.filter}
-              data-on={filter === f.key}
-              onClick={() => setFilter(f.key)}
-              title={f.hint}
-              aria-pressed={filter === f.key}
-            >
-              {f.label}
-              <span className={`num ${s.filterCount}`}>
-                {f.key === 'all' ? assets.length : assets.filter(a => a.kind === f.key).length}
-              </span>
-            </button>
-          ))}
+        <div className={s.filters}>
+          <Segmented<Filter>
+            label="Filter by kind"
+            value={filter}
+            onChange={v => set('f', v, 'all')}
+            items={[
+              { value: 'all', label: 'All', count: assets.length },
+              { value: 'equity', label: 'Equities', count: count('equity') },
+              { value: 'etf', label: 'ETFs', count: count('etf') },
+              { value: 'preipo', label: 'Pre-IPO', count: count('preipo') },
+              { value: 'vaults', label: 'Vaults', count: count('vaults'), hint: 'Names with a vault on chain (devnet)' },
+              { value: 'favorites', label: <><Icon name="star" size={12} /> Favorites</>, count: favs.size },
+            ]}
+          />
         </div>
 
         <label className={s.sort}>
-          <span className="sr-only">Sort by</span>
-          <select value={sort} onChange={e => setSort(e.target.value as SortKey)}>
-            <option value="liquidity">Deepest pool</option>
-            <option value="spread">Widest night–day gap</option>
-            <option value="price">Highest price</option>
-            <option value="symbol">Symbol, A–Z</option>
+          <span className={s.sortLabel}>Sort</span>
+          <select value={sort} onChange={e => set('sort', e.target.value, 'liquidity')}>
+            {SORTS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
-          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-            <path d="M4 6.5 8 10.5l4-4" fill="none" stroke="currentColor"
-                  strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <Icon name="chevronDown" size={13} />
         </label>
 
-        <p className={s.quoteState} data-stale={stale} data-error={!!quoteError && !Object.keys(quotes).length}>
-          {quoteError && !Object.keys(quotes).length
-            ? <>Live quotes unavailable · showing last measured price</>
-            : stale
-              ? <>Quotes stale · last good fill over a minute ago</>
-              : Object.keys(quotes).length
-                ? <><span className={s.liveDot} aria-hidden="true" />Live from Jupiter</>
-                : <>Fetching live quotes…</>}
-        </p>
+        <span className={s.src}>
+          <Source kind="jupiter" detail="Live prices from Jupiter, polled every 20 seconds" ageSec={newestQuote ? Math.floor(Date.now() / 1000) - newestQuote : null} staleAfter={60} />
+          {noQuotes ? <span className={s.stale} role="status">Live prices unavailable — showing last closes</span>
+            : stale ? <span className={s.stale} role="status">Live prices stalled — figures may be a minute old</span> : null}
+        </span>
       </div>
 
-      <div className="shell">
-        {markets.status === 'error' ? (
-          <div className={s.error} role="alert">
-            <h2>The market index could not be loaded.</h2>
-            <p>
-              Nothing on this page is live without it. The file is static, so a
-              reload almost always fixes it.
-            </p>
-            <button className={s.retry} onClick={() => window.location.reload()}>Reload</button>
-          </div>
-        ) : markets.status === 'loading' ? (
-          <Skeleton />
-        ) : rows.length === 0 ? (
-          <div className={s.empty}>
-            <p>No assets match that filter.</p>
-            <button className={s.retry} onClick={() => setFilter('all')}>Show all {assets.length}</button>
-          </div>
-        ) : (
-          <Table rows={rows} quotes={quotes} curves={curves} listed={listed} />
-        )}
-      </div>
+      <Census pages={pageForVault} />
 
-      <footer className={`shell ${s.noteWrap}`}>
-        <p className={s.note}>
-          Prices are the median across every Solana pool holding the asset, not a
-          single venue&rsquo;s quote — for the thinner names those disagree by more
-          than the spread being measured. Night and day figures are measured over{' '}
-          {markets.data ? Math.round(Math.max(...markets.data.assets.map(a => a.days))) : '—'} days
-          of real pool history, decomposed through the same calendar the program settles on.
-        </p>
-      </footer>
-    </div>
-  );
-}
-
-/* ── the table ───────────────────────────────────────────────────────────── */
-
-function Table({
-  rows, quotes, curves, listed,
-}: {
-  rows: Asset[];
-  quotes: Record<string, { price: number; at: number }>;
-  curves: Record<string, CurvePoint[]>;
-  /** Every symbol with a vault on chain. The rest are simulations and say so. */
-  listed: Set<string>;
-}) {
-  return (
-    <div className={s.tableWrap}>
-      <table className={s.table}>
-        <caption className="sr-only">
-          Tokenized assets, with the cumulative return earned in each session.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Asset</th>
-            <th scope="col" className={s.right}>Price</th>
-            <th scope="col" className={s.right}>NIGHT</th>
-            <th scope="col" className={s.right}>DAY</th>
-            <th scope="col" className={`${s.right} ${s.gap}`} title="Cumulative night return minus cumulative day return">
-              Night − Day
-            </th>
-            <th scope="col" className={s.sparkCol}>Since inception</th>
-            <th scope="col" className={`${s.right} ${s.pool}`}>Pool</th>
-            <th scope="col" className={s.open}><span className="sr-only">Open</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(a => {
-            const q = quotes[a.mint];
-            const gap = a.endNight - a.endDay;
-            const onChain = listed.has(a.symbol);
-            return (
-              <tr key={a.symbol} data-live={onChain}>
-                <th scope="row" className={s.asset}>
-                  <Link to={`/markets/${encodeURIComponent(a.symbol)}`} className={s.assetLink}>
-                    <span className={s.symbolRow}>
-                      <span className={`mono ${s.symbol}`}>{a.symbol}</span>
-                      {a.kind === 'private' && <span className={s.tag}>pre-IPO</span>}
-                      {onChain
-                        ? <span className={s.liveTag}><span className={s.liveTagDot} aria-hidden="true" />devnet</span>
-                        : <span className={s.simTag} title="No vault. This page runs the settlement code in your browser.">simulated</span>}
-                    </span>
-                    <span className={s.name}>{a.name}</span>
-                  </Link>
-                </th>
-
-                <td className={`num ${s.right}`}>
-                  <span className={s.price} data-live={!!q}>
-                    {fmtUsd(q?.price ?? a.price)}
-                  </span>
-                </td>
-
-                <td className={`num ${s.right}`}>
-                  <span className={s.nav} data-series="night" data-sign={a.endNight >= 1 ? 'up' : 'down'}>
-                    {fmtPct(a.endNight - 1, 1)}
-                  </span>
-                </td>
-
-                <td className={`num ${s.right}`}>
-                  <span className={s.nav} data-series="day" data-sign={a.endDay >= 1 ? 'up' : 'down'}>
-                    {fmtPct(a.endDay - 1, 1)}
-                  </span>
-                </td>
-
-                {/* Signed, so which session ran ahead survives without colour —
-                    positive means the night did. */}
-                <td className={`num ${s.right} ${s.gap}`} data-wider={gap >= 0 ? 'night' : 'day'}>
-                  {gap >= 0 ? '+' : '−'}{(Math.abs(gap) * 100).toFixed(1)}
-                  <span className={s.gapUnit}>pts</span>
-                </td>
-
-                <td className={s.sparkCol}>
-                  {curves[a.symbol]
-                    ? <Spark points={curves[a.symbol]} />
-                    : <div className="skeleton" style={{ width: 92, height: 28 }} />}
-                </td>
-
-                <td className={`num ${s.right} ${s.pool}`}>{fmtCompact(a.liquidity)}</td>
-
-                <td className={s.open}>
-                  <Link to={`/markets/${encodeURIComponent(a.symbol)}`} aria-label={`Open the ${a.symbol} vault`}>
-                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                      <path d="M3 8h9M8.5 4 12.5 8l-4 4" fill="none" stroke="currentColor"
-                            strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Skeleton() {
-  return (
-    <div className={s.tableWrap} aria-busy="true">
-      <div className={s.skelHead} />
-      {Array.from({ length: 10 }, (_, i) => (
-        <div key={i} className={s.skelRow} style={{ opacity: 1 - i * 0.07 }}>
-          <div className="skeleton" style={{ width: 132, height: 14 }} />
-          <div className="skeleton" style={{ width: 72, height: 14 }} />
-          <div className="skeleton" style={{ width: 56, height: 14 }} />
-          <div className="skeleton" style={{ width: 56, height: 14 }} />
-          <div className="skeleton" style={{ width: 92, height: 28 }} />
+      {markets.status === 'loading' ? (
+        <div className={s.skel}>{Array.from({ length: 8 }, (_, i) => <div key={i} className="skeleton" style={{ height: 46 }} />)}</div>
+      ) : markets.status === 'error' ? (
+        <div className={s.empty}>
+          <p className={s.emptyTitle}>The market list did not load.</p>
+          <p className={s.emptyBody}>Nothing below would be current, so nothing is shown. The data comes from this site&rsquo;s own build, so a reload usually fixes it.</p>
+          <Button variant="secondary" onClick={() => window.location.reload()}>Reload</Button>
         </div>
-      ))}
-      <span className="sr-only">Loading markets</span>
+      ) : rows.length === 0 ? (
+        <div className={s.empty}>
+          {filter === 'favorites' && !q ? (
+            <>
+              <p className={s.emptyTitle}>No favorites yet.</p>
+              <p className={s.emptyBody}>Star a market to keep it here. Favorites live in this browser only.</p>
+              <Button variant="secondary" onClick={() => set('f', 'all', 'all')}>Browse markets</Button>
+            </>
+          ) : (
+            <>
+              <p className={s.emptyTitle}>Nothing matches “{q}”.</p>
+              <p className={s.emptyBody}>Try a ticker like NVDA, a company like Tesla, or paste a mint.</p>
+              <Button variant="secondary" onClick={() => { const n = new URLSearchParams(); setParams(n, { replace: true }); }}>Clear filters</Button>
+            </>
+          )}
+        </div>
+      ) : (
+        <>
+          {listed.length > 0 && (
+            <section className={s.block} aria-labelledby="listed-h">
+              <div className={s.blockHead}>
+                <h2 id="listed-h" className={s.h2}>Listed names</h2>
+                <p className={s.blockSub}>One bell for all of them: 09:30 and 16:00 ET, from the calendar the program settles on.</p>
+              </div>
+              <MarketTable
+                assets={listed} quotes={quotes} quotesSettled={settled && !noQuotes} curves={curves} vaults={vaults}
+                favorites={favs} onFavorite={toggleFav}
+                sort={sort} onSort={k => set('sort', k, 'liquidity')}
+                caption="Listed tokenized equities and funds, with live price and measured DAY and NIGHT returns"
+              />
+            </section>
+          )}
+          {events.length > 0 && (
+            <section className={s.block} aria-labelledby="events-h">
+              <div className={s.blockHead}>
+                <h2 id="events-h" className={s.h2}>Pre-IPO · no exchange session</h2>
+                <p className={s.blockSub}>
+                  Private companies have no 09:30 and no close. Their boundary is the next print, or the moment the
+                  token&rsquo;s price runs from the issuer&rsquo;s mark. <Link to="/markets/OPENAI">How OPENAI settles</Link>
+                </p>
+              </div>
+              <MarketTable
+                assets={events} quotes={quotes} quotesSettled={settled && !noQuotes} curves={curves} vaults={vaults}
+                favorites={favs} onFavorite={toggleFav}
+                sort={sort} onSort={k => set('sort', k, 'liquidity')}
+                caption="Pre-IPO tokens, with live price and measured returns"
+              />
+            </section>
+          )}
+        </>
+      )}
+
+      <p className={s.foot}>
+        DAY and NIGHT columns are each session compounded over the study window, measured from real Solana pool history —
+        not a quote for a class. Only names marked <span className={s.vaultWord}>devnet vault</span> have a vault on chain; the
+        rest run the same settlement in your browser. <Link to="/list">Open a vault</Link>
+      </p>
     </div>
   );
 }

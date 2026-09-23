@@ -236,7 +236,13 @@ export interface SimReport {
 
 const JUP = 'https://lite-api.jup.ag/price/v3';
 
-export interface Quote { price: number; at: number }
+export interface Quote {
+  price: number;
+  /** Unix seconds when this price was received. */
+  at: number;
+  /** Jupiter's own 24h change, as a fraction (0.011 = +1.1%), when it sends one. */
+  change24h?: number;
+}
 
 /**
  * Live marks from Jupiter.
@@ -254,6 +260,10 @@ export function useQuotes(mints: string[], intervalMs = 20_000) {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [error, setError] = useState<Error | null>(null);
   const [stale, setStale] = useState(false);
+  /* True once the first request has answered — either way. Until then a row
+     without a quote is not "missing" a price, it is waiting for one, and
+     labelling all 26 of them "last close" for the first second is noise. */
+  const [settled, setSettled] = useState(false);
   const key = mints.join(',');
   const lastOk = useRef(0);
 
@@ -266,13 +276,17 @@ export function useQuotes(mints: string[], intervalMs = 20_000) {
       try {
         const r = await fetch(`${JUP}?ids=${key}`);
         if (!r.ok) throw new Error(`Jupiter — ${r.status}`);
-        const j = await r.json() as Record<string, { usdPrice?: number }>;
+        const j = await r.json() as Record<string, { usdPrice?: number; priceChange24h?: number }>;
         if (!live) return;
         const at = Math.floor(Date.now() / 1000);
         const next: Record<string, Quote> = {};
         for (const [mint, v] of Object.entries(j)) {
           if (typeof v?.usdPrice === 'number' && v.usdPrice > 0) {
-            next[mint] = { price: v.usdPrice, at };
+            next[mint] = {
+              price: v.usdPrice, at,
+              // Jupiter sends percent; everything here is a fraction.
+              change24h: typeof v.priceChange24h === 'number' && Number.isFinite(v.priceChange24h) ? v.priceChange24h / 100 : undefined,
+            };
           }
         }
         setQuotes(q => ({ ...q, ...next }));
@@ -286,7 +300,7 @@ export function useQuotes(mints: string[], intervalMs = 20_000) {
         // and the page has to stop implying otherwise.
         if (lastOk.current && Date.now() - lastOk.current > 60_000) setStale(true);
       } finally {
-        if (live) timer = setTimeout(tick, intervalMs);
+        if (live) { setSettled(true); timer = setTimeout(tick, intervalMs); }
       }
     };
 
@@ -294,7 +308,7 @@ export function useQuotes(mints: string[], intervalMs = 20_000) {
     return () => { live = false; clearTimeout(timer); };
   }, [key, intervalMs]);
 
-  return { quotes, error, stale };
+  return { quotes, error, stale, settled };
 }
 
 /* ── formatting ──────────────────────────────────────────────────────────── */

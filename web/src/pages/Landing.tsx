@@ -194,7 +194,7 @@ export default function Landing() {
     return pick.map(p => assets.find(a => a.symbol === p)).filter((a): a is NonNullable<typeof a> => !!a);
   }, [assets]);
   const mints = useMemo(() => preview.map(a => a.mint), [preview]);
-  const { quotes } = useQuotes(mints);
+  const { quotes, settled } = useQuotes(mints);
   const vaults = useMemo(() => new Map<string, VaultInfo>((devnets ?? []).map(d => [d.symbol, { kind: d.sessionKind === SESSION_EVENT ? 'event' : 'devnet' }])), [devnets]);
 
   const live = nvdaAsset ? quotes[nvdaAsset.mint]?.price ?? nvdaAsset.price : null;
@@ -230,7 +230,7 @@ export default function Landing() {
             SESSION splits the exposure: <b className="day-ink">DAY</b> carries the regular session, <b className="night-ink">NIGHT</b> the overnight gap.
           </p>
         </div>
-        <MarketModule parked={parked} halted={chain.data?.vault.halted ? String(chain.data.vault.haltReason) : null} asset={nvdaAsset ? { symbol: nvdaAsset.symbol, name: nvdaAsset.name, price: live, change: nvdaAsset.change24h } : null} />
+        <MarketModule parked={parked} halted={chain.data?.vault.halted ? String(chain.data.vault.haltReason) : null} asset={nvdaAsset ? { symbol: nvdaAsset.symbol, name: nvdaAsset.name, price: live, change: (nvdaAsset && quotes[nvdaAsset.mint]?.change24h) ?? nvdaAsset.change24h } : null} />
       </section>
 
       {/* ── the instrument ──────────────────────────────────────────────── */}
@@ -263,7 +263,7 @@ export default function Landing() {
           <Link to="/markets" className={s.more}>All {assets.length || 26} markets <Icon name="chevronRight" size={14} /></Link>
         </div>
         {preview.length ? (
-          <MarketTable assets={preview} quotes={quotes} curves={curves} vaults={vaults} compact caption="Six markets, with live price and measured DAY and NIGHT returns" />
+          <MarketTable assets={preview} quotes={quotes} quotesSettled={settled} curves={curves} vaults={vaults} compact caption="Six markets, with live price and measured DAY and NIGHT returns" />
         ) : <div className="skeleton" style={{ height: 300, borderRadius: 12 }} />}
       </section>
 
