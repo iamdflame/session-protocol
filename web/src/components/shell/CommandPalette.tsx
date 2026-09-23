@@ -12,11 +12,12 @@ import { Sheet } from '../ui/Sheet';
 import { Icon, type IconName } from '../ui/Icon';
 import { AssetAvatar } from '../ui/Avatar';
 import s from './Palette.module.css';
+import { useTour } from '../tour/Tour';
 
 const Ctx = createContext<{ open: () => void }>({ open: () => {} });
 export const usePalette = () => useContext(Ctx);
 
-interface Row { key: string; to: string; title: string; sub: string; icon?: IconName; symbol?: string; kind?: string; rank: number; badge?: string }
+interface Row { key: string; to: string; title: string; sub: string; icon?: IconName; symbol?: string; kind?: string; rank: number; badge?: string; tour?: boolean }
 
 const PAGES: Omit<Row, 'rank'>[] = [
   { key: 'p:trade', to: '/trade', title: 'Trade', sub: 'Mint or redeem the parked class', icon: 'trade' },
@@ -26,6 +27,8 @@ const PAGES: Omit<Row, 'rank'>[] = [
   { key: 'p:how', to: '/how-it-works', title: 'How it works', sub: 'The handoff, step by step', icon: 'how' },
   { key: 'p:bell', to: '/bell', title: 'Bell', sub: 'The next boundary, live', icon: 'bell' },
   { key: 'p:list', to: '/list', title: 'Open a vault', sub: 'initialize_vault from your wallet', icon: 'list' },
+  { key: 'p:demo', to: '/trade?demo=1', title: 'Explore the demo', sub: 'A sandbox copy of the NVDAx vault — no wallet, nothing sent', icon: 'play' },
+  { key: 'p:tour', to: '/', title: 'Take the 90-second tour', sub: 'Seven stops: the classes, the clock, the vault, the research', icon: 'play', tour: true },
 ];
 
 function score(q: string, fields: string[]): number {
@@ -44,6 +47,7 @@ function Palette({ onClose }: { onClose: () => void }) {
   const markets = useMarkets();
   const devnets = useDevnets();
   const nav = useNavigate();
+  const { start: startTour } = useTour();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -68,7 +72,7 @@ function Palette({ onClose }: { onClose: () => void }) {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${sel}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [sel]);
 
-  const go = (r: Row | undefined) => { if (!r) return; onClose(); nav(r.to); };
+  const go = (r: Row | undefined) => { if (!r) return; onClose(); if (r.tour) startTour(); else nav(r.to); };
 
   return (
     <div className={s.wrap}>

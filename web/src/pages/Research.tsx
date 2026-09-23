@@ -108,7 +108,7 @@ export default function Research() {
       </dl>
 
       {/* ── the finding and the risk ────────────────────────────────────── */}
-      <div className={s.findings}>
+      <div className={s.findings} data-tour="research">
         <section className={s.panel} aria-labelledby="finding-h">
           <span className={s.panelEyebrow}>Key finding</span>
           <h2 className={s.panelTitle} id="finding-h">NIGHT does not outperform DAY</h2>

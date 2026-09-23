@@ -14,7 +14,7 @@ import s from './Asset.module.css';
 
 type Cls = 'day' | 'night';
 
-export function Position({ names, words, held, nav, exposed, event, wallet, empty, preview }: {
+export function Position({ names, words, held, nav, exposed, event, wallet, empty, preview, bellAt }: {
   names: Record<Cls, string>;
   words: Record<Cls, string>;
   held: Record<Cls, number | null>;
@@ -27,6 +27,8 @@ export function Position({ names, words, held, nav, exposed, event, wallet, empt
   empty: React.ReactNode;
   /** The program's `settle()` run at the live mark: what the bell would do. */
   preview?: BellPreview | null;
+  /** A sandbox's own next bell, in place of the live calendar's (the demo). */
+  bellAt?: number | null;
 }) {
   const sess = useSession();
   if (wallet && !wallet.connected) {
@@ -76,7 +78,9 @@ export function Position({ names, words, held, nav, exposed, event, wallet, empt
                     after a bell. The handoff it owes is the same either way —
                     from the class the vault says is exposed — only the moment
                     differs, and the sentence says which. */}
-                <strong>{sess.holder.toLowerCase() !== exposed
+                <strong>{bellAt !== undefined
+                  ? <>At the sandbox&rsquo;s next bell{bellAt ? <>, {etClock(bellAt)} ET</> : ''}:</>
+                  : sess.holder.toLowerCase() !== exposed
                   ? 'When the crank settles the bell that just rang:'
                   : <>At the next bell, {etClock(sess.next ?? sess.now)} ET:</>}</strong>{' '}
                 {words[exposed]} hands the stock to {words[parked]}.{' '}
@@ -89,7 +93,7 @@ export function Position({ names, words, held, nav, exposed, event, wallet, empt
                 {preview && (() => {
                   const ch = holdingChange(preview, { day: held.day ?? 0, night: held.night ?? 0 });
                   const sign = ch.change > 0.004 ? '+' : ch.change < -0.004 ? '−' : '';
-                  return <> At the current mark it would settle your position at <span className="num">{fmtUsd(ch.after, 2)}</span> (<span className="num">{sign}{fmtUsd(Math.abs(ch.change), 2)}</span>), computed with the program&rsquo;s own <span className="mono">settle()</span>.</>;
+                  return <> At {bellAt !== undefined ? 'the mark you have set' : 'the current mark'} it would settle your position at <span className="num">{fmtUsd(ch.after, 2)}</span> (<span className="num">{sign}{fmtUsd(Math.abs(ch.change), 2)}</span>), computed with the program&rsquo;s own <span className="mono">settle()</span>.</>;
                 })()}
               </span>
             </p>

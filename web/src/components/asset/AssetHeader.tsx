@@ -66,7 +66,7 @@ export function AssetHeader({ asset, quote, quoteSettled, badges, meta, actions 
         </div>
       </div>
 
-      <div className={s.headFoot}>
+      <div className={s.headFoot} data-tour="chain">
         <div className={s.badges}>{badges}</div>
         {meta && <div className={s.meta}>{meta}</div>}
         {actions && <div className={s.actions}>{actions}</div>}

@@ -121,7 +121,9 @@ export function TradePanel({ engine, symbol, name, request, initialClass }: {
       setRaw('');
       toast({
         tone: 'ok',
-        title: live ? (mode === 'mint' ? 'Mint confirmed' : 'Redemption confirmed') : (mode === 'mint' ? 'Minted in the simulation' : 'Redeemed in the simulation'),
+        title: live ? (mode === 'mint' ? 'Mint confirmed' : 'Redemption confirmed')
+          : engine.kind === 'demo' ? (mode === 'mint' ? 'Minted in the demo' : 'Redeemed in the demo')
+          : (mode === 'mint' ? 'Minted in the simulation' : 'Redeemed in the simulation'),
         detail: r.detail,
         href: r.sig ? explorer(r.sig) : undefined,
       });
@@ -328,7 +330,11 @@ export function TradePanel({ engine, symbol, name, request, initialClass }: {
                 </a>
               )}
               {!result.sig && result.from === 'trade' && !live && (
-                <span className={s.doneDetail}>Applied to the simulation in this browser — nothing was sent to a chain.</span>
+                <span className={s.doneDetail}>
+                  {engine.kind === 'demo'
+                    ? 'Applied to the demo sandbox — nothing was signed or sent. On devnet this is a transaction your wallet signs.'
+                    : 'Applied to the simulation in this browser — nothing was sent to a chain.'}
+                </span>
               )}
             </span>
           </p>

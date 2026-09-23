@@ -13,12 +13,14 @@ import { SideRail } from './SideRail';
 import { TopBar } from './TopBar';
 import { BottomNav } from './BottomNav';
 import { PaletteProvider } from './CommandPalette';
+import { TourProvider } from '../tour/Tour';
 import { Footer } from '../Footer';
 import s from './Shell.module.css';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   return (
+    <TourProvider>
     <PaletteProvider>
       <div className={s.app}>
         <SideRail />
@@ -32,5 +34,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
       <BottomNav />
     </PaletteProvider>
+    </TourProvider>
   );
 }

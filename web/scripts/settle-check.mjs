@@ -150,6 +150,20 @@ try {
       const wd = V.derive(w, mark(1), tTueOpen);
       ok('health reports the halt as critical', wd.health.severity === 'critical', wd.health.severity);
 
+      // A halt is final for the walk. The program refuses to settle a halted
+      // vault, so a walk that crosses the halting bell and then two more must
+      // stop at the halt. Before this was checked, the next settle simply
+      // overwrote the flag with its own (zero) shortfall and un-halted it.
+      let h = V.freshVault('THINy', 8, 100, t0);
+      h = V.applyMint(h, 'day', V.toQuote(1000), V.planMint(h, 'day', V.toQuote(1000)).shares, t0);
+      h = V.advance(h, mark(100), tOpen);
+      h = V.applyMint(h, 'night', V.toQuote(10), V.planMint(h, 'night', V.toQuote(10)).shares, tOpen + 60);
+      h = V.advance(h, mark(100), tClose);
+      h = { ...h, ownedUnderlying: h.ownedUnderlying * 100n };
+      h = V.advance(h, mark(40), tTueOpen + 86400);         // Tuesday's open, close, and Wednesday's open
+      ok('a halt in the middle of a walk stays a halt', h.halted === true && h.lastBoundaryTs <= tTueOpen, String(h.halted) + ' at ' + h.lastBoundaryTs);
+      ok('a halted vault refuses redemption too, as check_live does', V.planRedeem(h, 'day', 1n).err === 'halted');
+
       // Idempotence: advancing again with no new boundary changes nothing.
       const snap = JSON.stringify(v, (k, x) => typeof x === 'bigint' ? x.toString() : x);
       const again = V.advance(v, mark(99), tTueOpen + 600);

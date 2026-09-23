@@ -45,6 +45,7 @@ const READY = arg('ready', null);
 const PAGES = [
   ['/', 'landing'],
   ['/trade', 'trade'],
+  ['/trade?demo=1', 'demo'],
   ['/portfolio', 'portfolio'],
   ['/markets', 'markets'],
   ['/markets/SPYx', 'vault'],

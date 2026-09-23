@@ -76,7 +76,7 @@ function whenNext(cls: Cls, exposed: Cls | null, now: number) {
   return next.find(b => (exposed === cls ? b.to !== cls.toUpperCase() : b.to === cls.toUpperCase())) ?? null;
 }
 
-export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compact, detailed, hinge }: {
+export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compact, detailed, hinge, virtual }: {
   asset: Asset | undefined;
   state: PairState | null;
   vaultSymbol: string;
@@ -89,6 +89,9 @@ export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compac
   detailed?: boolean;
   /** Replaces the calendar hinge — an event vault has no bell to count to. */
   hinge?: ReactNode;
+  /** A sandbox with its own clock (the demo): no comparison against the live
+      calendar, whose bells are not this vault's. */
+  virtual?: boolean;
 }) {
   const sess = useSession();
   const handoff = useHandoff();
@@ -100,14 +103,14 @@ export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compac
      the chain disagree about who holds the stock, and the chain is right until
      the settlement lands. Said plainly rather than papered over. An event
      vault has no calendar to disagree with. */
-  const settling = !!(!event && sess && exposed && sess.holder.toLowerCase() !== exposed);
+  const settling = !!(!event && !virtual && sess && exposed && sess.holder.toLowerCase() !== exposed);
 
   const card = (cls: Cls) => {
     const isExposed = exposed === cls;
     const parked = exposed !== null && !isExposed;
     const stats = cls === 'day' ? asset?.day : asset?.night;
     const word = WORDS[vocab][cls];
-    const next = sess && !event ? whenNext(cls, exposed, sess.now) : null;
+    const next = sess && !event && !virtual ? whenNext(cls, exposed, sess.now) : null;
     const nextAt = next ? `${etClock(next.at)} ET${next.label === 'Today' ? '' : ` · ${next.label}`}` : '—';
     const held = state ? state.held[cls] : null;
 
@@ -179,6 +182,7 @@ export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compac
             <Icon name="clock" size={13} />
             <span>
               {settling ? <>The bell has rung; the vault settles on the next crank.</>
+                : virtual ? (isExposed ? <>Hands the stock to {cls === 'day' ? 'NIGHT' : 'DAY'} at the sandbox&rsquo;s next bell</> : <>Takes the stock at the sandbox&rsquo;s next bell</>)
                 : isExposed ? <>Hands the stock to {cls === 'day' ? 'NIGHT' : 'DAY'} at <span className="num">{nextAt}</span></>
                 : <>Takes the stock at <span className="num">{nextAt}</span></>}
             </span>
@@ -199,6 +203,7 @@ export function ClassPair({ asset, state, vaultSymbol, tradeHref, onMint, compac
                 {halted ? 'The vault is halted; the program refuses mint and redeem until it resumes.'
                   : exposed === null ? 'Reading the vault…'
                   : event ? <>{word} is holding the token, so it cannot be issued until the boundary moves it back to quote.</>
+                  : virtual ? <>{word} holds the stock, so it cannot be issued until the next bell hands it back.</>
                   : <>{word} holds the stock, so it cannot be issued. Reopens at <span className="num">{next ? etClock(next.at) : '—'} ET</span>.</>}
               </p>
             </>

@@ -221,7 +221,7 @@ function Ready({ m, asset, d, refresh, initialClass }: {
           </section>
         </div>
 
-        <aside className={s.side} aria-label="Trade">
+        <aside className={s.side} aria-label="Trade" data-tour="vault">
           <TradeDock
             open={dock} onOpenChange={setDock} label={`Trade ${asset.symbol}`}
             bar={<><ClassTag cls={engine.parked} active>{engine.words[engine.parked]}</ClassTag><span>{engine.halted ? 'Vault halted' : `${engine.names[engine.parked]} open to mint`}</span></>}

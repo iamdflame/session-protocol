@@ -24,6 +24,7 @@ import { Countdown, Delta } from '@/components/ui/Figures';
 import { Icon } from '@/components/ui/Icon';
 import { Source } from '@/components/ui/Source';
 import s from './Landing.module.css';
+import { useTour } from '@/components/tour/Tour';
 
 /* What a minute on the rail means, in one sentence each. */
 function readout(sc: ScrubState | null, holder: 'DAY' | 'NIGHT' | null) {
@@ -46,6 +47,7 @@ function MarketModule({ parked, halted, asset }: {
 }) {
   const sess = useSession();
   const [scrub, setScrub] = useState<ScrubState | null>(null);
+  const { start: startTour } = useTour();
 
   if (!sess) {
     return <div className={s.module} aria-busy="true"><div className="skeleton" style={{ height: 240, borderRadius: 12 }} /></div>;
@@ -59,7 +61,7 @@ function MarketModule({ parked, halted, asset }: {
   const mintable = parked ?? (sess.handsTo.toLowerCase() as 'day' | 'night');
 
   return (
-    <div className={`${s.module} grid-bg`} data-cls={cls}>
+    <div className={`${s.module} grid-bg`} data-cls={cls} data-tour="clock">
       <div className={s.glow} aria-hidden="true" />
       <div className={s.modTop}>
         <div className={s.activeBlock}>
@@ -84,7 +86,7 @@ function MarketModule({ parked, halted, asset }: {
 
         <div className={s.actions}>
           {asset && (
-            <Link to="/markets/NVDAx" className={s.instr}>
+            <Link to="/markets/NVDAx" className={s.instr} data-tour="nvda">
               <span className={`mono ${s.instrSym}`}>{asset.symbol}</span>
               <span className={s.instrName}>{asset.name}</span>
               <span className={`num ${s.instrPrice}`}>{asset.price ? `$${asset.price.toFixed(2)}` : '—'}</span>
@@ -119,7 +121,7 @@ function MarketModule({ parked, halted, asset }: {
           )}
           <div className={s.secondary}>
             <Button to="/trade?demo=1" variant="secondary" size="sm">Explore demo</Button>
-            <Button to="/markets" variant="tertiary" size="sm">All markets</Button>
+            <Button variant="tertiary" size="sm" onClick={startTour}><Icon name="play" size={12} /> 90-sec tour</Button>
           </div>
         </div>
       </div>
@@ -216,7 +218,7 @@ export default function Landing() {
     <div className={s.page}>
       {/* ── the product, first ──────────────────────────────────────────── */}
       <section className={s.hero} aria-labelledby="hero-h">
-        <div className={s.heroTop}>
+        <div className={s.heroTop} data-tour="session">
           <div>
             <div className={s.statusLine}>
               <span className={s.brand}>SESSION</span>
@@ -234,7 +236,7 @@ export default function Landing() {
       </section>
 
       {/* ── the instrument ──────────────────────────────────────────────── */}
-      <section className={s.section} aria-labelledby="pair-h">
+      <section className={s.section} aria-labelledby="pair-h" data-tour="classes">
         <div className={s.secHead}>
           <div>
             <p className="eyebrow">Live instrument</p>

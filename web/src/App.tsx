@@ -22,7 +22,8 @@ const Portfolio = lazy(() => import('@/pages/Portfolio'));
    it, so a deep link to either lands on the same state. */
 function TradeRoute() {
   const [q] = useSearchParams();
-  return <Vault symbol={q.get('asset') ?? 'NVDAx'} />;
+  // ?demo=1 is the read-only sandbox; everything else is the live page.
+  return <Vault symbol={q.get('asset') ?? 'NVDAx'} demo={q.get('demo') === '1'} />;
 }
 
 /**

@@ -284,6 +284,68 @@ export function applyRedeem(v: LocalVault, c: ShareClass, shares: bigint, quote:
 }
 
 /**
+ * Settle one boundary at `mark`, stamped `ts` — exactly one step of the walk
+ * below, and the step the demo sandbox takes when a visitor rings the bell.
+ *
+ * The same `settle()` the program runs, then a filled handoff. After a
+ * boundary the exposed class is long the stock and everything else sits in
+ * quote: the vault buys exactly the atoms the exposed class's value warrants —
+ * floored, the way a fill is — and *keeps the rounding residual as quote*
+ * rather than dropping it. That is what the on-chain fill does
+ * (`owned_quote_after = owned_quote - quote_paid`), and it is why backing never
+ * dips below claims by a stray atom: the vault's assets are rearranged by a
+ * fill, never reduced by one.
+ *
+ * On chain a filler does this and is paid an incentive; here it is assumed
+ * filled at the mark, which is the optimistic case. The page says so.
+ */
+export function settleAt(cur: LocalVault, mark: bigint, ts: number, p = DEFAULT_FUNDING): LocalVault {
+  const state: NavState = {
+    nightSupply: cur.nightSupply,
+    daySupply: cur.daySupply,
+    ownedUnderlying: cur.ownedUnderlying,
+    nightNav: cur.nightNav,
+    dayNav: cur.dayNav,
+    exposed: cur.exposed,
+    lastMark: cur.lastMark,
+  };
+  const r = settle(state, mark, p);
+
+  // What the vault is worth at this mark, before the handoff. The fill
+  // below rearranges it between stock and quote; it must not change it.
+  const assets = mulDivFloor(cur.ownedUnderlying, mark, WAD) + cur.ownedQuote;
+
+  const next: LocalVault = {
+    ...cur,
+    nightNav: r.nightNav,
+    dayNav: r.dayNav,
+    exposed: r.exposed,
+    lastMark: mark,
+    lastBoundaryTs: ts,
+    pendingDelta: r.handoffDelta,
+    halted: r.shortfall > 0n,
+    haltReason: r.shortfall > 0n ? 'bad debt' : cur.haltReason,
+    history: [
+      {
+        ts, kind: 'settle' as const,
+        nightNav: r.nightNav, dayNav: r.dayNav,
+        funding: r.funding, handoffDelta: r.handoffDelta,
+      },
+      ...cur.history,
+    ].slice(0, 24),
+  };
+
+  if (!next.halted) {
+    const need = r.exposed === 'night' ? r.valueNight : r.valueDay;
+    next.ownedUnderlying = mulDivFloor(need, WAD, mark);
+    const inStock = mulDivFloor(next.ownedUnderlying, mark, WAD);
+    next.ownedQuote = assets > inStock ? assets - inStock : 0n;
+    next.pendingDelta = 0n;
+  }
+  return next;
+}
+
+/**
  * Run every boundary the vault has slept through, in order.
  *
  * This is the same walk the keeper does on chain, and it uses the same
@@ -299,59 +361,8 @@ export function advance(v: LocalVault, mark: bigint, now: number): LocalVault {
   while (guard++ < 40) {
     const b = nextBoundary(cur.lastBoundaryTs, 20);
     if (b === null || b > now) break;
-
-    const state: NavState = {
-      nightSupply: cur.nightSupply,
-      daySupply: cur.daySupply,
-      ownedUnderlying: cur.ownedUnderlying,
-      nightNav: cur.nightNav,
-      dayNav: cur.dayNav,
-      exposed: cur.exposed,
-      lastMark: cur.lastMark,
-    };
-    const r = settle(state, mark, DEFAULT_FUNDING);
-
-    // What the vault is worth at this mark, before the handoff. The fill
-    // below rearranges it between stock and quote; it must not change it.
-    const assets = mulDivFloor(cur.ownedUnderlying, mark, WAD) + cur.ownedQuote;
-
-    cur = {
-      ...cur,
-      nightNav: r.nightNav,
-      dayNav: r.dayNav,
-      exposed: r.exposed,
-      lastMark: mark,
-      lastBoundaryTs: b,
-      pendingDelta: r.handoffDelta,
-      halted: r.shortfall > 0n,
-      haltReason: r.shortfall > 0n ? 'bad debt' : cur.haltReason,
-      history: [
-        {
-          ts: b, kind: 'settle' as const,
-          nightNav: r.nightNav, dayNav: r.dayNav,
-          funding: r.funding, handoffDelta: r.handoffDelta,
-        },
-        ...cur.history,
-      ].slice(0, 24),
-    };
-
-    // A filled handoff. After a boundary the exposed class is long the stock
-    // and everything else sits in quote. The vault buys exactly the atoms the
-    // exposed class's value warrants — floored, the way a fill is — and *keeps
-    // the rounding residual as quote* rather than dropping it. That is what
-    // the on-chain fill does (`owned_quote_after = owned_quote - quote_paid`),
-    // and it is why backing never dips below claims by a stray atom: the
-    // vault's assets are rearranged by a fill, never reduced by one.
-    //
-    // On chain a filler does this and is paid an incentive; here it is assumed
-    // filled at the mark, which is the optimistic case. The page says so.
-    if (!cur.halted) {
-      const need = r.exposed === 'night' ? r.valueNight : r.valueDay;
-      cur.ownedUnderlying = mulDivFloor(need, WAD, mark);
-      const inStock = mulDivFloor(cur.ownedUnderlying, mark, WAD);
-      cur.ownedQuote = assets > inStock ? assets - inStock : 0n;
-      cur.pendingDelta = 0n;
-    }
+    cur = settleAt(cur, mark, b);
+    if (cur.halted) break;
   }
 
   return cur;

@@ -139,7 +139,11 @@ export function useLocalEngine(
   vault: LocalVault,
   onCommit: (v: LocalVault) => void,
   mark: { price: number; ageSec: number | null; live: boolean },
-  opts: { stem: string; demo?: boolean; reopens: string | null },
+  opts: {
+    stem: string; demo?: boolean; reopens: string | null;
+    /** What the mark is, when it is not the token's own price — the demo marks to the vault's feed. */
+    markInfo?: { label: string; source: 'pyth' | 'jupiter' | 'study'; detail: string; staleAfter?: number };
+  },
 ): TradeEngine {
   return useMemo((): TradeEngine => {
     const words = WORDS.equity;
@@ -167,11 +171,11 @@ export function useLocalEngine(
       if (p.kind === 'mint') {
         onCommit(applyMint(vault, cls, toQuote(amount), p.shares, now));
         const n = fromShares(p.shares);
-        return { ok: true, headline: `Minted ${qty(n)} ${names[cls]}`, detail: `+${qty(n)} ${names[cls]} · in this browser` };
+        return { ok: true, headline: `Minted ${qty(n)} ${names[cls]}`, detail: `+${qty(n)} ${names[cls]} · ${opts.demo ? 'in the demo sandbox' : 'in this browser'}` };
       }
       onCommit(applyRedeem(vault, cls, toShares(amount), p.quote, now));
       const q = fmtUsd(fromQuote(p.quote), 2);
-      return { ok: true, headline: `Redeemed for ${q}`, detail: `−${qty(amount)} ${names[cls]} · in this browser` };
+      return { ok: true, headline: `Redeemed for ${q}`, detail: `−${qty(amount)} ${names[cls]} · ${opts.demo ? 'in the demo sandbox' : 'in this browser'}` };
     };
 
     return {
@@ -182,16 +186,18 @@ export function useLocalEngine(
       held: { day: fromShares(vault.myDay), night: fromShares(vault.myNight) },
       preview, execute,
       wallet: { needed: false, connected: true, connect: () => {} },
-      mark: {
-        label: mark.live ? 'Jupiter · live price' : 'Last measured close',
-        value: mark.price || null,
-        source: mark.live ? 'jupiter' : 'study',
-        detail: mark.live ? 'Jupiter price of the token, marking the simulation' : 'Last hourly close in the study snapshot',
-        ageSec: mark.ageSec,
-      },
+      mark: opts.markInfo
+        ? { ...opts.markInfo, value: mark.price || null, ageSec: mark.ageSec }
+        : {
+            label: mark.live ? 'Jupiter · live price' : 'Last measured close',
+            value: mark.price || null,
+            source: mark.live ? 'jupiter' : 'study',
+            detail: mark.live ? 'Jupiter price of the token, marking the simulation' : 'Last hourly close in the study snapshot',
+            ageSec: mark.ageSec,
+          },
       fees: () => ({ network: 'None — nothing is sent', protocol: 'None — rounding floors in the vault’s favour' }),
       reopens: opts.reopens,
       quickMint: [100, 1_000, 10_000],
     };
-  }, [vault, onCommit, mark.price, mark.ageSec, mark.live, opts.stem, opts.demo, opts.reopens]);
+  }, [vault, onCommit, mark.price, mark.ageSec, mark.live, opts.stem, opts.demo, opts.reopens, opts.markInfo]);
 }

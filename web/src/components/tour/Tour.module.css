@@ -1,0 +1,30 @@
+/* The highlight dims everything but the stop and takes no clicks, so the page
+   underneath stays usable while the tour talks about it. */
+.ring {
+  position: fixed; z-index: 95; pointer-events: none;
+  border-radius: 14px; border: 2px solid var(--active-ink);
+  box-shadow: 0 0 0 9999px rgba(4, 5, 7, 0.58);
+  transition: top 280ms var(--ease-out), left 280ms var(--ease-out), width 280ms var(--ease-out), height 280ms var(--ease-out);
+}
+.card {
+  position: fixed; z-index: 96; width: min(340px, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 14px;
+  border-radius: var(--radius-md); border: 1px solid var(--border-strong);
+  background: var(--surface-raised); box-shadow: var(--shadow-3);
+  transition: top 280ms var(--ease-out), left 280ms var(--ease-out);
+}
+.head { display: flex; align-items: center; justify-content: space-between; }
+.count { font-size: var(--t-xs); color: var(--active-ink); }
+.close { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--text-faint); }
+.close:hover { color: var(--text); background: var(--surface-hover); }
+.title { font-size: var(--t-body); font-weight: 650; letter-spacing: -0.01em; }
+.body { font-size: var(--t-sm); line-height: 1.55; color: var(--text-muted); }
+.dots { display: flex; gap: 5px; }
+.dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.dots span[data-done] { background: var(--text-faint); }
+.dots span[data-on] { background: var(--active-ink); width: 16px; border-radius: 3px; }
+.actions { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring, .card { transition: none; }
+}

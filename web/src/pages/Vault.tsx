@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ChainVault, AssetSkeleton } from '@/components/ChainVault';
+import { DemoVault } from '@/components/DemoVault';
+import { SESSION_EVENT } from '@sdk/vault.ts';
 import { useDevnetVaultFor, useDevnets } from '@/lib/chain';
 import { useSessionMinute, etClock } from '@/lib/session';
 import { previewLocalBell } from '@/lib/bell';
@@ -42,7 +44,7 @@ import s from '@/components/asset/Asset.module.css';
 type Cls = 'day' | 'night';
 const asCls = (v: string | null): Cls | null => (v === 'day' || v === 'night' ? v : null);
 
-export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
+export default function Vault({ symbol: forced, demo = false }: { symbol?: string; demo?: boolean } = {}) {
   const params = useParams();
   const [search] = useSearchParams();
   const symbol = forced ?? params.symbol ?? '';
@@ -88,7 +90,10 @@ export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
     );
   }
 
-  // A symbol with a real vault on devnet renders the on-chain page.
+  // A symbol with a real vault on devnet renders the on-chain page — or, in
+  // demo mode, a sandbox copy of it. An event vault has no bells to ring, so
+  // its demo is the live page itself, which is already safe to read.
+  if (devnet && demo && devnet.sessionKind !== SESSION_EVENT) return <DemoVault m={devnet} asset={asset} />;
   if (devnet) return <ChainVault m={devnet} asset={asset} initialClass={initialClass} />;
   return <Simulated asset={asset} liveSymbols={(all ?? []).map(v => v.symbol)} initialClass={initialClass} />;
 }
