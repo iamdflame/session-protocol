@@ -169,6 +169,35 @@ export function useSession(): SessionState | null {
   return state;
 }
 
+/**
+ * The clock to the minute, plus the next boundary: a state that changes once a
+ * minute rather than once a second.
+ *
+ * For the roots of pages that only need to know which minute it is — a chart's
+ * "now" line, the time a class reopens — and must not reconcile a whole page
+ * every second to find out. It shares the one ticker and simply ignores the
+ * ticks that do not change its answer.
+ */
+export function useSessionMinute(): { minute: number; next: number | null; holder: 'DAY' | 'NIGHT' } | null {
+  const [state, setState] = useState<{ minute: number; next: number | null; holder: 'DAY' | 'NIGHT' } | null>(null);
+  useEffect(() => {
+    const fn = (s: SessionState) => {
+      const minute = s.now - (s.now % 60);
+      setState(prev => (prev && prev.minute === minute && prev.next === s.next && prev.holder === s.holder
+        ? prev
+        : { minute, next: s.next, holder: s.holder }));
+    };
+    listeners.add(fn);
+    if (!ticker) { tick(); ticker = setInterval(tick, 1000); }
+    else fn(current ?? compute(Math.floor(Date.now() / 1000)));
+    return () => {
+      listeners.delete(fn);
+      if (!listeners.size && ticker) { clearInterval(ticker); ticker = null; }
+    };
+  }, []);
+  return state;
+}
+
 const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /**

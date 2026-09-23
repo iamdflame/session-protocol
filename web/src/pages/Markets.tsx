@@ -25,6 +25,7 @@ import { Countdown } from '@/components/ui/Figures';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import s from './Markets.module.css';
+import { useFavorites } from '@/lib/favorites';
 
 type Filter = 'all' | 'equity' | 'etf' | 'preipo' | 'vaults' | 'favorites';
 const FILTERS: Filter[] = ['all', 'equity', 'etf', 'preipo', 'vaults', 'favorites'];
@@ -38,20 +39,6 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'symbol', label: 'Ticker, A–Z' },
 ];
 
-const FAV_KEY = 'session.favorites';
-function useFavorites(): [Set<string>, (sym: string) => void] {
-  const [favs, setFavs] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    try { setFavs(new Set(JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]'))); } catch { /* blocked storage */ }
-  }, []);
-  const toggle = (sym: string) => setFavs(prev => {
-    const next = new Set(prev);
-    if (next.has(sym)) next.delete(sym); else next.add(sym);
-    try { localStorage.setItem(FAV_KEY, JSON.stringify([...next])); } catch { /* not worth failing over */ }
-    return next;
-  });
-  return [favs, toggle];
-}
 
 /* The one sentence about the market as a whole. `data-holder` is read by the
    flow harness to check it agrees with the chip in the top bar. */

@@ -1,0 +1,123 @@
+.page { padding: 24px var(--gutter) 56px; max-width: var(--measure); margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.title { font-size: var(--t-h1); letter-spacing: -0.03em; }
+.sub { margin-top: 6px; font-size: var(--t-sm); color: var(--text-muted); }
+.sub a { color: var(--text); display: inline-flex; align-items: center; gap: 4px; }
+.badges { display: flex; gap: 8px; align-items: center; }
+
+/* ── not connected ───────────────────────────────────────────────────────── */
+.empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  padding: 32px 28px; border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-strong); background: var(--surface);
+}
+.empty > svg { color: var(--text-faint); }
+.emptyTitle { font-size: var(--t-h2); letter-spacing: -0.02em; }
+.emptyBody { font-size: var(--t-sm); line-height: 1.6; color: var(--text-muted); max-width: 62ch; }
+.emptyActions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.error {
+  font-size: var(--t-xs); line-height: 1.55; color: var(--text-muted); padding: 10px 14px; border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border)); background: color-mix(in srgb, var(--warn) 6%, transparent);
+}
+.error strong { color: var(--text); font-weight: 600; }
+
+/* ── summary ─────────────────────────────────────────────────────────────── */
+/* auto-fit cannot share a template with a flexible track, so the lead tile
+   spans two of the repeated ones instead of being a wider track of its own. */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.summary > [data-lead] { grid-column: span 2; }
+.tile {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: 14px 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--surface);
+}
+.tile[data-lead] { border-color: var(--border-strong); }
+.tile[data-cls='day'] { box-shadow: inset 0 2px 0 var(--day-line); }
+.tile[data-cls='night'] { box-shadow: inset 0 2px 0 var(--night-line); }
+.label { font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 560; display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.big { font-size: var(--t-price); font-size: clamp(1.9rem, 1.4rem + 1.6vw, 2.6rem); letter-spacing: -0.035em; line-height: 1; }
+.mid { font-size: var(--t-h2); letter-spacing: -0.03em; line-height: 1; color: var(--text); }
+.note { font-size: var(--t-xs); color: var(--text-faint); }
+.note [data-sign='pos'], .table [data-sign='pos'], .bellText [data-sign='pos'], .bell [data-sign='pos'] { color: var(--positive); }
+.note [data-sign='neg'], .table [data-sign='neg'], .bellText [data-sign='neg'], .bell [data-sign='neg'] { color: var(--negative); }
+
+.split { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; }
+.split span[data-cls='day'] { background: var(--day); }
+.split span[data-cls='night'] { background: var(--night); }
+.split span[data-cls='event'] { background: var(--text-faint); }
+
+/* ── the next bell ───────────────────────────────────────────────────────── */
+.bellCard {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 18px; border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong); background: var(--surface);
+  position: relative; overflow: hidden; isolation: isolate;
+}
+.bellCard::before {
+  content: ''; position: absolute; z-index: -1; right: -10%; top: -70%; width: 50%; height: 180%;
+  background: radial-gradient(closest-side, var(--active-glow), transparent); opacity: 0.5; pointer-events: none;
+}
+.eyebrow { font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--active-ink); font-weight: 600; }
+.bellClock { font-size: var(--t-h2); letter-spacing: -0.03em; color: var(--text); }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.side { display: flex; flex-direction: column; gap: 8px; }
+.sideLabel { font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 560; }
+.slot {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline;
+  padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-sunken);
+}
+.slot[data-on][data-cls='day'] { border-color: var(--day-line); background: var(--day-soft); }
+.slot[data-on][data-cls='night'] { border-color: var(--night-line); background: var(--night-soft); }
+.slotRole { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.slot[data-on] .slotRole { color: var(--positive); }
+.slotName { grid-column: 1; font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600; }
+.slot[data-cls='day'] .slotName { color: var(--day-ink); }
+.slot[data-cls='night'] .slotName { color: var(--night-ink); }
+.slotVal { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: var(--t-body); color: var(--text); }
+.slotNav { grid-column: 1 / -1; font-size: 11px; color: var(--text-faint); }
+.arrow { display: grid; place-items: center; color: var(--text-faint); padding-top: 22px; }
+.bellText { font-size: var(--t-sm); line-height: 1.6; color: var(--text-muted); max-width: 90ch; }
+.bellText strong { color: var(--text); font-weight: 600; }
+.bellFoot { font-size: var(--t-micro); line-height: 1.55; color: var(--text-faint); }
+
+/* ── positions ───────────────────────────────────────────────────────────── */
+.card { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface); }
+.cardHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+.cardTitle { font-size: var(--t-body); font-weight: 620; letter-spacing: -0.01em; margin-top: 4px; }
+.tableWrap { overflow-x: auto; margin: 0 -18px; padding: 0 18px; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); min-width: 760px; }
+.table th, .table td { padding: 11px 10px; text-align: right; border-bottom: 1px solid var(--border); font-weight: 400; white-space: nowrap; }
+.table th:first-child, .table td:nth-child(2) { text-align: left; }
+.table th:first-child { padding-left: 0; }
+.table thead th { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.table tbody tr:hover { background: var(--surface-hover); }
+.asset { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 560; }
+.cls { font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600; }
+.cls[data-class='day'] { color: var(--day-ink); }
+.cls[data-class='night'] { color: var(--night-ink); }
+.state { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.state[data-on] { color: var(--positive); }
+.bell { font-size: var(--t-xs); color: var(--text-muted); }
+.none { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; font-size: var(--t-sm); color: var(--text-muted); }
+.none strong { color: var(--text); font-weight: 600; }
+.foot { font-size: var(--t-micro); line-height: 1.6; color: var(--text-faint); max-width: 100ch; }
+
+/* ── simulated ───────────────────────────────────────────────────────────── */
+.simList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.simList li { display: grid; grid-template-columns: 140px 1fr auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: var(--t-sm); }
+.simHold { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-muted); }
+.simWhen { font-size: var(--t-xs); color: var(--text-faint); }
+
+.skel { display: flex; flex-direction: column; gap: 14px; }
+
+@media (max-width: 900px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary > [data-lead] { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .page { padding-top: 16px; }
+  .flow { grid-template-columns: 1fr; }
+  .arrow { padding: 0; transform: rotate(90deg); }
+  .simList li { grid-template-columns: 1fr; gap: 4px; }
+}

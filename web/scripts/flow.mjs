@@ -82,7 +82,10 @@ try {
       await wait(100);
     }
   };
-  const rendered = () => until(`!!document.querySelector('main h1')?.textContent`, 'vault page painted');
+  /* The loading skeleton carries the page's h1 too — a screen reader should
+     land on a heading while the vault loads — so a heading alone does not mean
+     the page is ready. The trade form does. */
+  const rendered = () => until(`!!document.querySelector('main h1')?.textContent && !!document.querySelector('main form input[inputmode="decimal"]')`, 'vault page painted');
 
   /* React-controlled inputs ignore a plain `.value =`; set it through the
      native setter and dispatch an input event, which is what typing does. */
@@ -154,11 +157,14 @@ try {
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
   check('mint confirmation shown', /Minted 1,000/.test(flash), `status was "${flash}"`);
 
-  const after = await ev(`(() => {
-    const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)});
-    const dd = [...card.querySelectorAll('dl dd')].map(d => d.textContent.trim());
-    return { supply: dd[0], value: dd[1], mine: dd[2] };
+  /* The class cards name their figures (`data-field`) rather than relying on
+     the order of a list, so a card that gains a figure does not move this. */
+  const fields = cls => ev(`(() => {
+    const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(cls)});
+    const f = k => card?.querySelector('[data-field="' + k + '"]')?.textContent.trim() ?? null;
+    return { supply: f('supply'), value: f('value'), mine: f('held') };
   })()`);
+  const after = await fields(parked);
   check('parked class supply is 1,000', after.supply === '1,000', `supply "${after.supply}"`);
   check('parked class value is $1,000.00', after.value === '$1,000.00', `value "${after.value}"`);
   check('you hold 1,000', after.mine === '1,000', `mine "${after.mine}"`);
@@ -200,12 +206,9 @@ try {
   check('click redeem', await click('form button[type="submit"]'));
   await wait(300);
 
-  const zero = await ev(`(() => {
-    const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)});
-    return [...card.querySelectorAll('dl dd')].map(d => d.textContent.trim());
-  })()`);
-  check('supply back to 0 after redeem', zero[0] === '0', `supply "${zero[0]}"`);
-  check('you hold 0 after redeem', zero[2] === '0', `mine "${zero[2]}"`);
+  const zero = await fields(parked);
+  check('supply back to 0 after redeem', zero.supply === '0', `supply "${zero.supply}"`);
+  check('you hold 0 after redeem', zero.mine === '0', `mine "${zero.mine}"`);
 
   const ledger2 = await ev(`[...document.querySelectorAll('ol li[data-kind]')].map(l => l.dataset.kind)`);
   check('ledger records redeem then mint', ledger2[0] === 'redeem' && ledger2[1] === 'mint', JSON.stringify(ledger2));
@@ -225,19 +228,13 @@ try {
   await wait(300);
   await send('Page.navigate', { url: `${BASE}/markets/${SYMBOL}` });
   await rendered();
-  const persisted = await ev(`(() => {
-    const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)});
-    return [...card.querySelectorAll('dl dd')].map(d => d.textContent.trim())[2];
-  })()`);
+  const persisted = (await fields(parked)).mine;
   check('position survives a reload', persisted === '250', `held "${persisted}"`);
 
   /* ── 7. reset ────────────────────────────────────────────────────────── */
   check('reset the vault', await clickText('button', 'Reset this vault'));
   await wait(300);
-  const reset = await ev(`(() => {
-    const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)});
-    return [...card.querySelectorAll('dl dd')].map(d => d.textContent.trim())[2];
-  })()`);
+  const reset = (await fields(parked)).mine;
   check('reset returns to zero', reset === '0', `held "${reset}"`);
 
   /* ── 8. the markets table and the nav still agree on the session ────── */

@@ -250,8 +250,10 @@ export interface ChainVault {
   boundaryDue: boolean;
   slot: number;
   fetchedAt: number;
-  /** The connected wallet's balances, when one is connected. */
-  me: { quote: bigint; night: bigint; day: bigint } | null;
+  /** The connected wallet's balances, when one is connected. `has` says which
+      token accounts exist: a trade into a class the wallet has never held
+      opens its account first, and that costs rent the fee line should name. */
+  me: { quote: bigint; night: bigint; day: bigint; has: { quote: boolean; night: boolean; day: boolean } } | null;
   /** The issuer's powers over the underlying, read off the mint. */
   issuer: IssuerState | null;
   /** The vault's own underlying token account is frozen. */
@@ -446,7 +448,10 @@ export async function readChainVault(conn: Connection, m: Devnet, me: PublicKey 
     nextBoundaryTs: isEvent ? eventNext : next,
     boundaryDue: isEvent ? eventDue : (next !== null && now >= next),
     slot: context.slot, fetchedAt: now,
-    me: me ? { quote: u64At(meQ?.data, 64), night: u64At(meN?.data, 64), day: u64At(meD?.data, 64) } : null,
+    me: me ? {
+      quote: u64At(meQ?.data, 64), night: u64At(meN?.data, 64), day: u64At(meD?.data, 64),
+      has: { quote: !!meQ, night: !!meN, day: !!meD },
+    } : null,
     issuer, vaultFrozen,
     uiMultiplier: issuer ? uiMultiplier(issuer, now) : 1,
     epoch,
@@ -517,21 +522,37 @@ export function useChainVault(m: Devnet | null | undefined, intervalMs = 12_000)
 
 export type TxResult = { ok: true; signature: string } | { ok: false; error: string };
 
+/** Where a transaction is, for a progress display that says what is happening. */
+export type TxStage = 'wallet' | 'submitting' | 'confirming';
+
 /**
- * Sign and send through the connected wallet, then wait for confirmation.
- * The wallet adapter's `sendTransaction` is used rather than `signTransaction`
- * plus a manual send, because some wallets only implement the former.
+ * Sign, submit and confirm — and say which of those is happening.
+ *
+ * When the wallet can sign without sending, the three are separate steps and
+ * `onStage` reports each: waiting on the wallet's approval, handing the signed
+ * transaction to the network, waiting for it to be confirmed. A wallet that can
+ * only sign-and-send gets the combined path, reported as the wallet stage and
+ * then confirming. Either way the button never turns into a bare spinner.
  */
 export function useSendTx() {
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
 
-  return useCallback(async (ixs: TransactionInstruction[]): Promise<TxResult> => {
+  return useCallback(async (ixs: TransactionInstruction[], onStage?: (s: TxStage) => void): Promise<TxResult> => {
     if (!publicKey) return { ok: false, error: 'Connect a wallet first.' };
     try {
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       const tx = new Transaction({ feePayer: publicKey, blockhash, lastValidBlockHeight }).add(...ixs);
-      const signature = await sendTransaction(tx, connection, { preflightCommitment: 'confirmed' });
+      let signature: string;
+      onStage?.('wallet');
+      if (signTransaction) {
+        const signed = await signTransaction(tx);
+        onStage?.('submitting');
+        signature = await connection.sendRawTransaction(signed.serialize(), { preflightCommitment: 'confirmed' });
+      } else {
+        signature = await sendTransaction(tx, connection, { preflightCommitment: 'confirmed' });
+      }
+      onStage?.('confirming');
       const conf = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
       if (conf.value.err) {
         // Pull the program's own message out of the logs; a bare error code
@@ -541,13 +562,13 @@ export function useSendTx() {
       }
       return { ok: true, signature };
     } catch (e) {
-      const err = e as { message?: string; logs?: string[] };
-      const msg = explainProgramError(err.logs) ?? err.message ?? String(e);
+      const err = e as { message?: string; logs?: string[]; transactionLogs?: string[] };
+      const msg = explainProgramError(err.logs ?? err.transactionLogs) ?? err.message ?? String(e);
       // Wallets phrase a rejection a dozen ways; the person knows what they did.
       if (/reject|denied|cancel/i.test(msg)) return { ok: false, error: 'Cancelled in the wallet.' };
       return { ok: false, error: msg };
     }
-  }, [connection, publicKey, sendTransaction]);
+  }, [connection, publicKey, sendTransaction, signTransaction]);
 }
 
 const tradeAccounts = (m: Devnet, user: PublicKey, cls: ShareClass) => {

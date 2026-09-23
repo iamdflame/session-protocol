@@ -92,7 +92,7 @@ export const OP_MESSAGE: Record<OpError, string> = {
   'too-small': 'Too small to round to a whole share at the current NAV.',
   'insufficient-free-quote': 'The vault has quote committed to an outstanding handoff. Redeeming it would leave the handoff unfillable.',
   'insufficient-shares': 'You do not hold that many shares.',
-  halted: 'This vault is halted. Redemption is the only operation available.',
+  halted: 'This vault is halted. The program refuses mint and redeem alike until the missed bells are replayed and the vault is resumed.',
 };
 
 /* ── the mark ────────────────────────────────────────────────────────────── */
@@ -246,6 +246,9 @@ export function planMint(v: LocalVault, c: ShareClass, quote: bigint): MintPlan 
 }
 
 export function planRedeem(v: LocalVault, c: ShareClass, shares: bigint): RedeemPlan {
+  // `check_live` runs before either operation on chain, so a halted vault
+  // refuses a redemption exactly as it refuses a mint.
+  if (v.halted) return { ok: false, err: 'halted' };
   if (shares <= 0n) return { ok: false, err: 'zero' };
   if (!isParked(v, c)) return { ok: false, err: 'not-parked' };
   const held = c === 'night' ? v.myNight : v.myDay;

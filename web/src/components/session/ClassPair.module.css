@@ -25,16 +25,26 @@
 .role { font-size: var(--t-xs); color: var(--text-muted); margin-top: -6px; }
 .state { min-height: 22px; }
 
-.figs { display: grid; grid-template-columns: repeat(3, auto); gap: 18px 26px; margin: 4px 0 0; justify-content: start; }
-.pair[data-compact] .figs { grid-template-columns: repeat(2, auto); }
-.fig { display: flex; flex-direction: column; gap: 4px; margin: 0; align-items: flex-start; }
-.fig dt { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); font-weight: 540; }
-.fig dd { margin: 0; font-size: var(--t-data); line-height: 1.05; color: var(--text); }
-.nav { font-size: var(--t-data); letter-spacing: -0.03em; }
+.navBlock { display: flex; flex-direction: column; gap: 6px; }
+.navLabel { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); font-weight: 540; }
+.navLine { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nav { font-size: var(--t-data); letter-spacing: -0.03em; line-height: 1.05; color: var(--text); }
 .unit { font-size: 10.5px; letter-spacing: 0.02em; text-transform: none; color: var(--text-faint); font-family: var(--font-sans); font-weight: 400; }
+
+.rows { display: flex; flex-direction: column; margin: 0; border-top: 1px solid var(--border); }
+.rows > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.rows dt { font-size: var(--t-xs); color: var(--text-faint); white-space: nowrap; }
+.rows dd { margin: 0; display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; flex-wrap: wrap; font-size: var(--t-sm); color: var(--text); text-align: right; }
+.subVal { font-size: var(--t-xs); color: var(--text-faint); }
+.card[data-class='day'] .rows dd[data-mine] > span:first-child { color: var(--day-ink); }
+.card[data-class='night'] .rows dd[data-mine] > span:first-child { color: var(--night-ink); }
 .sub { font-size: var(--t-micro); color: var(--text-faint); }
 
-.next { display: flex; align-items: center; gap: 7px; font-size: var(--t-xs); color: var(--text-muted); margin-top: auto; }
+.next { display: flex; align-items: flex-start; gap: 7px; font-size: var(--t-xs); line-height: 1.5; color: var(--text-muted); margin-top: auto; }
+.next svg { flex: none; margin-top: 2px; }
 .act { display: flex; flex-direction: column; gap: 6px; }
 .why { font-size: var(--t-micro); color: var(--text-faint); line-height: 1.5; }
 
@@ -57,5 +67,4 @@
   .hinge { width: auto; flex-direction: row; padding: 0 20px; }
   .hingeLine { height: 1px; width: auto; }
   .hingeBox { margin: 0 12px; flex-direction: row; gap: 10px; width: auto; padding: 8px 12px; }
-  .figs { grid-template-columns: repeat(2, auto); }
 }

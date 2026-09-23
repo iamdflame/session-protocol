@@ -2,7 +2,10 @@
 .app { display: flex; min-height: 100dvh; background: var(--bg); }
 .column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .main { flex: 1; min-width: 0; }
-.route { animation: route-in 180ms var(--ease-out) both; }
+/* `backwards`, not `both`: a transform animation that keeps filling after it
+   ends leaves the wrapper a containing block for every `position: fixed`
+   descendant, and the phone trade bar and sheet would scroll with the page. */
+.route { animation: route-in 180ms var(--ease-out) backwards; }
 @keyframes route-in { from { opacity: 0; transform: translateY(4px); } }
 
 /* ── side rail ───────────────────────────────────────────────────────────── */

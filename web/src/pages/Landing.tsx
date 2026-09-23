@@ -16,7 +16,7 @@ import { useMarkets, useQuotes, load, type CurveFile, type CurvePoint } from '@/
 import { useChainVault, useDevnetVaultFor, useDevnets } from '@/lib/chain';
 import { SESSION_EVENT } from '@sdk/vault.ts';
 import { SessionRail, type ScrubState } from '@/components/session/SessionRail';
-import { ClassPair } from '@/components/session/ClassPair';
+import { ClassPair, pairFromChain } from '@/components/session/ClassPair';
 import { MarketTable, type VaultInfo } from '@/components/markets/MarketTable';
 import { Button } from '@/components/ui/Button';
 import { Status } from '@/components/ui/Status';
@@ -246,7 +246,7 @@ export default function Landing() {
             <Source kind="jupiter" detail="NVDAx on mainnet, via Jupiter" ageSec={nvdaAsset && quotes[nvdaAsset.mint] ? Math.max(0, Math.floor(Date.now() / 1000) - quotes[nvdaAsset.mint].at) : undefined} />
           </div>
         </div>
-        <ClassPair asset={nvdaAsset} chain={chain.data} vaultSymbol="NVDA" tradeHref="/trade?asset=NVDAx" />
+        <ClassPair asset={nvdaAsset} state={chain.data ? pairFromChain(chain.data, 'NVDA vault account, devnet') : null} vaultSymbol="NVDA" tradeHref="/trade?asset=NVDAx" />
         <p className={s.honest}>
           <Status kind="devnet" /> The vault runs on devnet with a stand-in mint marked by Pyth <span className="mono">Crypto.SOL/USD</span>, so its NAV follows that feed, not NVDA.
           The price above is real NVDAx on mainnet. <Link to="/how-it-works#status">What is live</Link>

@@ -1,22 +1,24 @@
 .wrap {
-  display: flex; flex-direction: column; gap: 3px;
-  --side: var(--ink-3);
+  display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 14px;
+  --side: var(--text-muted);
 }
 .wrap[data-side='night'] { --side: var(--night-ink); }
 .wrap[data-side='day'] { --side: var(--day-ink); }
-.wrap[data-side='then'] { --side: var(--night-ink); }
-.wrap[data-side='now'] { --side: var(--day-ink); }
-.wrap[data-flat='true'] { --side: var(--ink-3); }
+.wrap[data-flat='true'] { --side: var(--text-muted); }
 
-.label { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
-.value { font-size: clamp(20px, 2.6vw, 27px); font-weight: 440; letter-spacing: -0.02em; color: var(--side); }
-.unit { font-size: 0.6em; margin-left: 1px; color: var(--ink-3); }
+.label { grid-column: 1 / -1; font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 560; }
+.value { font-size: var(--t-data); letter-spacing: -0.03em; line-height: 1; color: var(--side); }
+.unit { font-size: 0.6em; margin-left: 1px; color: var(--text-faint); }
 
-.flow { font-size: var(--t-xs); color: var(--ink-2); }
-.flow strong { color: var(--ink); font-weight: 550; }
-.amount { color: var(--ink-3); }
+.flow { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--text-muted); }
+.flow svg { color: var(--text-faint); }
+.flow strong { font-weight: 620; letter-spacing: 0.03em; font-size: 11px; }
+.flow strong[data-cls='night'] { color: var(--night-ink); }
+.flow strong[data-cls='day'] { color: var(--day-ink); }
+.amount { color: var(--text-faint); margin-left: 4px; }
 
-.note { font-size: var(--t-micro); line-height: 1.55; color: var(--ink-3); margin-top: 2px; max-width: 46ch; }
+.note { grid-column: 1 / -1; font-size: var(--t-xs); line-height: 1.55; color: var(--text-faint); margin-top: 4px; max-width: 62ch; }
+.note strong { color: var(--text-muted); font-weight: 600; }
 
-.compact .value { font-size: var(--t-body); }
-.compact .note { display: none; }
+.wrap[data-compact] .value { font-size: var(--t-body); }
+.wrap[data-compact] .note { display: none; }

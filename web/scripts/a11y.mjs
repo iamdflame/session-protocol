@@ -22,7 +22,7 @@ const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i
 const BASE = arg('base', 'http://localhost:3100');
 const GROUND = arg('ground', null);
 
-const PAGES = ['/', '/markets', '/markets/SPYx', '/markets/NVDAx', '/markets/OPENAI', '/research',
+const PAGES = ['/', '/trade', '/portfolio', '/markets', '/markets/SPYx', '/markets/NVDAx', '/markets/OPENAI', '/research',
   '/how-it-works', '/bell', '/list', '/nope'];
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
 /* Chrome writes ~90MB of profile per run and never cleans it up; a few
@@ -269,7 +269,7 @@ try {
     const want = JSON.stringify(GROUND ?? null);
     const t0 = Date.now();
     let ready = false;
-    while (Date.now() - t0 < 25000) {
+    while (Date.now() - t0 < 90000) {
       let ok = false;
       try {
         // Evaluating while the document is being swapped throws; that just
@@ -287,6 +287,11 @@ try {
           if (${want} && g !== ${want}) return false;
           if (document.readyState !== 'complete') return false;
           if (document.querySelector('main [role="status"][aria-label="Loading"]')) return false;
+          /* A page that reads the chain shows its own skeleton, marked
+             aria-busy, until the read lands. Auditing that measures the
+             placeholder, not the page — the /trade pass once reported one
+             heading and a clean bill for exactly that reason. */
+          if (document.querySelector('main [aria-busy="true"]:not(button)')) return false;
           return !!document.querySelector('main *');
         })()`);
       } catch { /* mid-navigation */ }

@@ -15,6 +15,7 @@ const HowItWorks = lazy(() => import('@/pages/HowItWorks'));
 const Bell = lazy(() => import('@/pages/Bell'));
 const List = lazy(() => import('@/pages/List'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
+const Portfolio = lazy(() => import('@/pages/Portfolio'));
 
 /* /trade is the trading screen for one instrument: NVDAx unless ?asset= names
    another. It is the asset page in its trade-first form, not a second copy of
@@ -92,6 +93,7 @@ export function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/trade" element={<TradeRoute />} />
+              <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/markets" element={<Markets />} />
               <Route path="/markets/:symbol" element={<Vault />} />
               <Route path="/research" element={<Research />} />

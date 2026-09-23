@@ -18,7 +18,7 @@
 
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { WebSocket } from 'ws';
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
@@ -381,7 +381,17 @@ try {
   /* ── 3. mint into the parked class ───────────────────────────────────── */
   const parked = await ev(`document.querySelector('label[data-open="true"]')?.dataset.class`);
   check('a parked class is offered', parked === 'day' || parked === 'night', String(parked));
-  const beforeHeld = await ev(`(() => { const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)}); return [...card.querySelectorAll('dl dd')][2].textContent.trim(); })()`);
+  const heldOf = cls => `(() => { const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(cls)}); return card?.querySelector('[data-field="held"]')?.textContent.trim() ?? null; })()`;
+  const beforeHeld = await ev(heldOf(parked));
+  /* The NAV the mint will be priced at, read off the panel before it moves.
+     "Minted 100" was only ever true while that NAV sat below 1.0 — 100 of
+     quote at 1.0023 is 99.77 shares — so the check is the arithmetic, not a
+     literal. */
+  const navNow = () => ev(`(() => {
+    const dt = [...document.querySelectorAll('form dt')].find(d => /NAV per share/i.test(d.textContent));
+    return dt && dt.nextElementSibling ? Number(dt.nextElementSibling.textContent.trim()) : NaN;
+  })()`);
+  const mintNav = await navNow();
 
   check('enter 100', await type('form input[inputmode="decimal"]', '100'));
   // Wait for the preview to be computed rather than guessing at a delay. The
@@ -400,9 +410,12 @@ try {
 
   // Scoped to the form. The ledger below now describes past mints in the
   // same words, so a body-wide search matches history rather than this one.
-  const minted = await until(() => ev(`/Minted 100/.test(document.querySelector('form')?.innerText ?? '')`), 60000, 600);
+  const minted = await until(() => ev(`/Minted [\\d,.]+ /.test(document.querySelector('form')?.innerText ?? '')`), 60000, 600);
   const flash = await ev(`[...document.querySelectorAll('form p[role="status"]')].map(p => p.textContent).join(' | ')`);
-  check('mint confirmed on chain with a signature link', minted && /view transaction/.test(flash), flash.slice(0, 160));
+  check('mint confirmed on chain with a signature link', minted && /view transaction/i.test(flash), flash.slice(0, 160));
+  const mintedShares = Number((flash.match(/Minted ([\d,.]+) /) ?? [0, 'NaN'])[1].replace(/,/g, ''));
+  check(`and it minted 100 of quote's worth at the NAV of ${mintNav}`,
+    Number.isFinite(mintNav) && Math.abs(mintedShares * mintNav - 100) < 0.01, `${mintedShares} shares`);
   const sig1 = await ev(`document.querySelector('form p[role="status"] a[href*="solscan.io/tx/"]')?.href.match(/tx\\/([1-9A-HJ-NP-Za-km-z]+)/)?.[1] ?? null`);
   /* The page is backfilling its ledger over the same public endpoint, so this
      one competes for the per-IP budget. A 429 here says nothing about the
@@ -421,7 +434,7 @@ try {
   if (throttled) skip('signature is a real devnet transaction', 'the endpoint refused six times; the page confirmed it, this could not re-read it');
   else check('signature is a real devnet transaction', !!sig1 && !!tx1, String(sig1));
 
-  const heldUpdated = await until(() => ev(`(() => { const card = [...document.querySelectorAll('article[data-class]')].find(a => a.dataset.class === ${JSON.stringify(parked)}); return [...card.querySelectorAll('dl dd')][2].textContent.trim() !== ${JSON.stringify(beforeHeld)}; })()`), 30000, 700);
+  const heldUpdated = await until(async () => (await ev(heldOf(parked))) !== beforeHeld, 30000, 700);
   check('"You hold" re-read from chain after the mint', heldUpdated);
 
   /* ── 4. the exposed class is refused by the page before the wallet ───── */
@@ -649,6 +662,34 @@ try {
         `document.querySelector('section[aria-label="Vaults on chain"]').innerText.includes(${JSON.stringify(listSymbol)})`), 10000);
       check('and then it is listed, marked uncurated', all);
     }
+  }
+
+  /* ── 7b. the portfolio sees the same position ────────────────────────── */
+  /* Client-side navigation, so the wallet stays connected: the rail's own
+     link, the way a person would get there. The wallet now holds the class
+     this run minted into, so the page must list it, value it at the NAV the
+     vault carries, and preview what the next bell does to it. */
+  check('open the portfolio from the rail', await clickText('nav a', 'Portfolio'));
+  const listed = await until(() => ev(`(() => {
+    const t = document.querySelector('section[aria-label="Positions"] tbody');
+    return !!t && [...t.querySelectorAll('tr')].some(r => r.textContent.includes(${JSON.stringify('.' + (parked === 'day' ? 'DAY' : 'NIGHT'))}));
+  })()`), 90000, 800);
+  check(`portfolio lists the ${parked.toUpperCase()} position from chain`, listed,
+    (await ev(`document.querySelector('main')?.innerText.slice(0, 300) ?? ''`)).replace(/\n/g, ' | '));
+  const bell = await ev(`document.querySelector('section[aria-label$="at the next bell"]')?.innerText ?? ''`);
+  check('and previews the next bell for it', /At the current mark|cannot be previewed|halted/.test(bell), bell.slice(0, 200).replace(/\n/g, ' | '));
+  /* --shot <file>: keep a picture of the connected portfolio. No other
+     harness can show it — a screenshot run has no wallet to connect. */
+  const SHOT = arg('shot', null);
+  if (SHOT) {
+    await wait(1500);
+    const { cssContentSize } = await send('Page.getLayoutMetrics');
+    const img = await send('Page.captureScreenshot', {
+      format: 'png', captureBeyondViewport: true,
+      clip: { x: 0, y: 0, width: 1440, height: Math.ceil(cssContentSize.height), scale: 1 },
+    });
+    writeFileSync(SHOT, Buffer.from(img.data, 'base64'));
+    console.log(`   portfolio captured: ${SHOT}`);
   }
 
   /* ── 8. disconnect ───────────────────────────────────────────────────── */

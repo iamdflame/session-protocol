@@ -37,6 +37,10 @@ const FULL = flag('full');
 const GROUND = arg('ground', null);          // 'day' | 'night' | null = live
 const ONLY_PAGE = arg('page', null);
 const ONLY_W = arg('w', null);
+/* A page that reads a public RPC never goes quiet on the network, so "settled"
+   can land on its loading skeleton. `--ready <css>` waits (up to a minute) for
+   an element that only exists once the real content is on screen. */
+const READY = arg('ready', null);
 
 const PAGES = [
   ['/', 'landing'],
@@ -216,6 +220,13 @@ try {
         setTimeout(r, 12000);
       });
       await settle();
+      if (READY) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 60000 && !(await cdp.eval(`!!document.querySelector(${JSON.stringify(READY)})`))) {
+          await new Promise(r => setTimeout(r, 250));
+        }
+        await settle(700, 4000);
+      }
 
       // Fire every scroll reveal, then come back.
       //

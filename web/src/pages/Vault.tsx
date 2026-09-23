@@ -1,82 +1,118 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   /markets/:symbol and /trade — the instrument page.
+
+   A symbol with a vault on devnet renders the on-chain page. Every other
+   symbol renders the same layout over a simulation: the program's `settle()`
+   running in this browser against the token's live price, with balances kept
+   in local storage. The simulation is labelled as such on every surface that
+   could be mistaken for the real thing, and nothing on it says "confirmed".
+   ─────────────────────────────────────────────────────────────────────────── */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CurveChart } from '@/components/charts/CurveChart';
-import { SessionClock } from '@/components/SessionClock';
-import { NotListed } from '@/components/NotListed';
-import { Trade } from '@/components/Trade';
-import { HealthPanel } from '@/components/HealthPanel';
-import { ChainVault } from '@/components/ChainVault';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ChainVault, AssetSkeleton } from '@/components/ChainVault';
 import { useDevnetVaultFor, useDevnets } from '@/lib/chain';
-import { useSession, useClockSize, countdown, etClock, etDate, Session } from '@/lib/session';
-import { sessionAt } from '@sdk/calendar.ts';
-import { useCurve, useMarkets, useQuotes, fmtUsd, fmtPct, type Asset } from '@/lib/data';
+import { useSessionMinute, etClock } from '@/lib/session';
+import { previewLocalBell } from '@/lib/bell';
+import { useCurve, useMarkets, useQuotes, type Asset, type Quote } from '@/lib/data';
 import {
   advance, derive, freshVault, loadVault, saveVault, clearVault, markFromPrice,
-  fromQuote, fromShares, navToNumber,
-  type LocalVault, type ShareClass,
+  fromQuote, fromShares, navToNumber, type LocalVault,
 } from '@/lib/localVault';
-import s from './Vault.module.css';
+import { CurveChart } from '@/components/charts/CurveChart';
+import { SessionPriceChart } from '@/components/charts/SessionPriceChart';
+import { fundingFromLocal } from '@/components/FundingRate';
+import { ClassPair, type PairState } from '@/components/session/ClassPair';
+import { TradePanel, TradeDock, type TradeRequest } from '@/components/trade/TradePanel';
+import { useLocalEngine, classStem } from '@/components/trade/engines';
+import { AssetHeader } from '@/components/asset/AssetHeader';
+import { SessionStrip } from '@/components/asset/SessionStrip';
+import { HealthCard } from '@/components/asset/HealthCard';
+import { Position } from '@/components/asset/Position';
+import { Compare } from '@/components/asset/Compare';
+import { LocalActivity } from '@/components/asset/Activity';
+import { Signals } from '@/components/asset/ProtocolDetails';
+import { Status, ClassTag } from '@/components/ui/Status';
+import { Source } from '@/components/ui/Source';
+import { Button } from '@/components/ui/Button';
+import { Sheet } from '@/components/ui/Sheet';
+import { Icon } from '@/components/ui/Icon';
+import s from '@/components/asset/Asset.module.css';
 
-
-/**
- * What to do with an empty vault.
- *
- * Every figure on a fresh vault is zero, which is true and unhelpful. This
- * says which class is open right now, and what the next bell will do with a
- * position opened in it — both read from the calendar, not written here.
- */
-function EmptyHint({ symbol, parked }: { symbol: string; parked: ShareClass }) {
-  const sess = useSession();
-  if (!sess) return null;
-  const opensInto = parked === 'day' ? 'the regular session' : 'the overnight stretch';
-  return (
-    <div className={`shell ${s.emptyWrap}`}>
-      <p className={s.empty} role="note">
-        <strong>Nothing minted in this browser yet.</strong>{' '}
-        <span className="mono" data-class={parked}>{symbol}.{parked.toUpperCase()}</span> is
-        the class that is open — it is parked in quote until the bell in{' '}
-        <span className="num">{countdown(sess.until)}</span>, when the vault hands it the
-        stock for {opensInto}. Mint into it below to watch that happen.
-      </p>
-    </div>
-  );
-}
-
-/** The one line on this page that ticks. Kept out of the page root so the
-    chart, the ledger and both class cards are not reconciled every second. */
-function ClockNote({ exposed }: { exposed: ShareClass }) {
-  const sess = useSession();
-  if (!sess) return <p className={s.clockNote}>Reading the session clock…</p>;
-  return (
-    <p className={s.clockNote}>
-      <strong data-holder={exposed}>{exposed.toUpperCase()}</strong> holds this
-      vault&rsquo;s stock. Handover in <span className="num">{countdown(sess.until)}</span>.
-    </p>
-  );
-}
+type Cls = 'day' | 'night';
+const asCls = (v: string | null): Cls | null => (v === 'day' || v === 'night' ? v : null);
 
 export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
   const params = useParams();
+  const [search] = useSearchParams();
   const symbol = forced ?? params.symbol ?? '';
+  const initialClass = asCls(search.get('class'));
   const markets = useMarkets();
-  const curve = useCurve(symbol);
-
   const asset: Asset | undefined = markets.data?.assets.find(a => a.symbol === symbol);
-  const { quotes, stale } = useQuotes(asset ? [asset.mint] : []);
-  const live = asset ? quotes[asset.mint]?.price : undefined;
-  const price = live ?? asset?.price ?? 0;
+  // undefined while the manifests load; null when this symbol has no vault on chain.
+  const devnet = useDevnetVaultFor(symbol);
+  const all = useDevnets();
+
+  if (markets.status === 'loading' || (asset && all === undefined)) return <AssetSkeleton symbol={symbol} />;
+
+  if (markets.status === 'error') {
+    return (
+      <div className={s.gate}>
+        <Status kind="stale" label="Unavailable" />
+        <h1 className={s.gateTitle}>The market index did not load.</h1>
+        <p className={s.gateBody}>
+          Without it there is no way to know what {symbol || 'this symbol'} is or what it is worth, and an
+          instrument page that guesses is worse than one that stops.
+        </p>
+        <div className={s.gateActions}>
+          <Button onClick={() => window.location.reload()}>Reload</Button>
+          <Button variant="secondary" to="/markets">Back to markets</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!asset) {
+    return (
+      <div className={s.gate}>
+        <Status kind="closed" label="Not found" />
+        <h1 className={s.gateTitle}>No market for “{symbol}”.</h1>
+        <p className={s.gateBody}>
+          {markets.data?.assets.length ?? 0} assets have enough pool history to decompose into a session
+          pair. This is not one of them.
+        </p>
+        <div className={s.gateActions}>
+          <Button to="/markets">Browse markets</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // A symbol with a real vault on devnet renders the on-chain page.
+  if (devnet) return <ChainVault m={devnet} asset={asset} initialClass={initialClass} />;
+  return <Simulated asset={asset} liveSymbols={(all ?? []).map(v => v.symbol)} initialClass={initialClass} />;
+}
+
+function Simulated({ asset, liveSymbols, initialClass }: { asset: Asset; liveSymbols: string[]; initialClass: Cls | null }) {
+  const curve = useCurve(asset.symbol);
+  const { quotes, stale, settled: quoteSettled } = useQuotes([asset.mint]);
+  const quote = quotes[asset.mint];
+  const price = quote?.price ?? asset.price;
+  // To the minute: this is the page root, and a per-second clock here would
+  // reconcile every chart and card on the page once a second.
+  const clock = useSessionMinute();
+  const minute = clock?.minute ?? Math.floor(Date.now() / 60_000) * 60;
 
   const [vault, setVault] = useState<LocalVault | null>(null);
-  const clockSize = useClockSize(196, 72);
-  // undefined while the manifest loads; null when this symbol has no vault on chain.
-  const devnet = useDevnetVaultFor(symbol);
-  const allVaults = useDevnets();
+  const [details, setDetails] = useState(false);
+  const [dock, setDock] = useState(false);
+  const [request, setRequest] = useState<TradeRequest | null>(null);
 
   // Restore or open the vault, then run every boundary it slept through. A
   // browser that was closed over a weekend comes back to three settlements,
   // not to a stale screen.
   useEffect(() => {
-    if (!asset || !price) return;
+    if (!price) return;
     const now = Math.floor(Date.now() / 1000);
     const stored = loadVault(asset.symbol);
     const base = stored ?? freshVault(asset.symbol, asset.decimals, price, now);
@@ -85,13 +121,8 @@ export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
     if (caught !== base || !stored) saveVault(caught);
   }, [asset, price]);
 
-  const commit = useCallback((next: LocalVault) => {
-    setVault(next);
-    saveVault(next);
-  }, []);
-
+  const commit = useCallback((next: LocalVault) => { setVault(next); saveVault(next); }, []);
   const reset = useCallback(() => {
-    if (!asset || !price) return;
     clearVault(asset.symbol);
     const fresh = freshVault(asset.symbol, asset.decimals, price, Math.floor(Date.now() / 1000));
     setVault(fresh);
@@ -99,270 +130,205 @@ export default function Vault({ symbol: forced }: { symbol?: string } = {}) {
   }, [asset, price]);
 
   const d = useMemo(
-    () => (vault && asset && price
-      ? derive(vault, markFromPrice(price, asset.decimals), Math.floor(Date.now() / 1000))
-      : null),
+    () => (vault && price ? derive(vault, markFromPrice(price, asset.decimals), Math.floor(Date.now() / 1000)) : null),
     [vault, asset, price],
   );
 
-  /* ── states before the vault exists ──────────────────────────────────── */
+  const stem = classStem(asset.symbol);
+  const reopens = clock?.next ? `${etClock(clock.next)} ET` : null;
+  const markAge = quote ? Math.max(0, minute - quote.at) : null;
 
-  if (markets.status === 'loading') return <VaultSkeleton />;
-
-  if (markets.status === 'error') {
-    return (
-      <div className={`shell ${s.gate}`}>
-        <p className="eyebrow">Unavailable</p>
-        <h1 className={`display ${s.gateTitle}`}>The market index did not load.</h1>
-        <p className={`lead ${s.gateBody}`}>
-          Without it there is no way to know what this symbol is worth, and a
-          vault page that guesses is worse than one that stops.
-        </p>
-        <div className={s.gateActions}>
-          <button className={s.primary} onClick={() => window.location.reload()}>Reload</button>
-          <Link to="/markets" className={s.secondary}>Back to markets</Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!asset) {
-    return (
-      <div className={`shell ${s.gate}`}>
-        <p className="eyebrow">Not found</p>
-        <h1 className={`display ${s.gateTitle}`}>No vault for “{symbol}”.</h1>
-        <p className={`lead ${s.gateBody}`}>
-          {markets.data?.assets.length ?? 0} assets have enough pool history to
-          decompose into a session pair. This is not one of them.
-        </p>
-        <div className={s.gateActions}>
-          <Link to="/markets" className={s.primary}>See every vault</Link>
-        </div>
-      </div>
-    );
-  }
-
-  // A symbol with a real vault on devnet renders the on-chain page instead of
-  // the local simulation. Everything below this line is the simulation.
-  if (devnet) return <ChainVault m={devnet} asset={asset} />;
-
-  const exposed = vault?.exposed ?? (sessionAt(Math.floor(Date.now() / 1000)) === Session.Open ? 'day' : 'night');
-
+  if (!vault || !d) return <AssetSkeleton symbol={asset.symbol} />;
   return (
-    <div className={s.page}>
-      {/* ── header ──────────────────────────────────────────────────────── */}
-      <header className={`shell ${s.head}`}>
-        <div className={s.crumbs}>
-          <Link to="/markets">Markets</Link>
-          <span aria-hidden="true">/</span>
-          <span className="mono">{asset.symbol}</span>
-        </div>
-
-        <div className={s.headMain}>
-          <div className={s.identity}>
-            <h1 className={`mono ${s.symbol}`}>{asset.symbol}</h1>
-            <p className={s.name}>
-              {asset.name}
-              {asset.kind === 'private' && <span className={s.tag}>pre-IPO</span>}
-            </p>
-
-            <div className={s.priceRow}>
-              <span className={`num ${s.price}`}>{fmtUsd(price)}</span>
-              <span className={s.priceMeta} data-stale={stale} data-live={!!live}>
-                {stale ? 'quote stale'
-                  : live ? 'live · Jupiter'
-                  : 'last measured'}
-              </span>
-            </div>
-
-            <dl className={s.quickFacts}>
-              <div>
-                <dt>Pool depth</dt>
-                <dd className="num">{fmtUsd(asset.liquidity, 0)}</dd>
-              </div>
-              <div>
-                <dt>Measured over</dt>
-                <dd className="num">{Math.round(asset.days)} days</dd>
-              </div>
-              <div>
-                <dt>Sessions</dt>
-                <dd className="num">{asset.sessions.nights + asset.sessions.days}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className={s.clockCol}>
-            <SessionClock size={clockSize} compact />
-            <ClockNote exposed={exposed} />
-          </div>
-        </div>
-      </header>
-
-      <NotListed symbol={asset.symbol} liveSymbols={(allVaults ?? []).map(v => v.symbol)} />
-
-
-      {/* ── the two classes ─────────────────────────────────────────────── */}
-      <section className={`shell ${s.classes}`} aria-label="Share classes">
-        {(['night', 'day'] as ShareClass[]).map(c => {
-          const nav = vault ? navToNumber(c === 'night' ? vault.nightNav : vault.dayNav) : 1;
-          const supply = vault ? fromShares(c === 'night' ? vault.nightSupply : vault.daySupply) : 0;
-          const mine = vault ? fromShares(c === 'night' ? vault.myNight : vault.myDay) : 0;
-          const value = d ? fromQuote(c === 'night' ? d.valueNight : d.valueDay) : 0;
-          const isExposed = exposed === c;
-          const study = c === 'night' ? asset.night : asset.day;
-
-          return (
-            <article key={c} className={s.classCard} data-class={c} data-exposed={isExposed}>
-              <header className={s.classHead}>
-                <div>
-                  <span className={s.classTag}>{asset.symbol}.{c.toUpperCase()}</span>
-                  <p className={s.classState}>
-                    {isExposed ? 'Holding the stock' : 'Flat — parked in quote'}
-                  </p>
-                </div>
-                <span className={s.classBadge} data-on={isExposed}>
-                  {isExposed ? 'exposed' : 'parked'}
-                </span>
-              </header>
-
-              <div className={s.navRow}>
-                <span className={`num ${s.navValue}`}>{nav.toFixed(4)}</span>
-                <span className={s.navUnit}>NAV per share</span>
-              </div>
-
-              <dl className={s.classStats}>
-                <div><dt>Supply</dt><dd className="num">{supply.toLocaleString('en-US', { maximumFractionDigits: 2 })}</dd></div>
-                <div><dt>Class value</dt><dd className="num">{fmtUsd(value, 2)}</dd></div>
-                <div><dt>You hold</dt><dd className="num" data-mine={mine > 0}>{mine.toLocaleString('en-US', { maximumFractionDigits: 2 })}</dd></div>
-              </dl>
-
-              {study && (
-                <footer className={s.classStudy}>
-                  <span>Measured, {Math.round(asset.days)}d</span>
-                  <span className={`num ${s.classCum}`} data-sign={study.cumulative >= 0 ? 'up' : 'down'}>
-                    {fmtPct(study.cumulative, 1)}
-                  </span>
-                  <span className={s.classT}>
-                    σ <span className="num">{(study.stdev * 100).toFixed(2)}%</span>
-                    {' · '}t <span className="num">{study.t.toFixed(2)}</span>
-                  </span>
-                </footer>
-              )}
-            </article>
-          );
-        })}
-      </section>
-
-      {vault && vault.nightSupply === 0n && vault.daySupply === 0n && (
-        <EmptyHint symbol={asset.symbol} parked={exposed === 'night' ? 'day' : 'night'} />
-      )}
-
-      {/* ── chart + trade ───────────────────────────────────────────────── */}
-      <section className={`shell ${s.body}`}>
-        <div className={`card ${s.chartCard}`}>
-          <header className={s.cardHead}>
-            <div>
-              <h2 className={s.cardTitle}>Decomposed since inception</h2>
-              <p className={s.cardSub}>
-                Each series compounds only the returns earned inside its own
-                session. The vertical gap is what owning one instead of the other
-                would have been worth.
-              </p>
-            </div>
-          </header>
-          {curve.status === 'ready' ? (
-            <CurveChart points={curve.data.points} height={330}
-                        label={`${asset.symbol}, night versus day cumulative return`} />
-          ) : curve.status === 'error' ? (
-            <p className={s.cardError}>
-              The history for {asset.symbol} could not be loaded. Everything else
-              on this page is unaffected.
-            </p>
-          ) : (
-            <div className="skeleton" style={{ width: '100%', height: 330 }} />
-          )}
-        </div>
-
-        <div className={s.side}>
-          {vault && d ? (
-            <Trade vault={vault} price={price} onCommit={commit} />
-          ) : (
-            <div className={`card ${s.tradeSkeleton}`} aria-busy="true">
-              <div className="skeleton" style={{ width: '60%', height: 16 }} />
-              <div className="skeleton" style={{ width: '100%', height: 44 }} />
-              <div className="skeleton" style={{ width: '100%', height: 96 }} />
-              <div className="skeleton" style={{ width: '100%', height: 44 }} />
-            </div>
-          )}
-
-          {vault && d && <HealthPanel vault={vault} derived={d} onReset={reset} />}
-        </div>
-      </section>
-
-      {/* ── activity ────────────────────────────────────────────────────── */}
-      {vault && vault.history.length > 0 && (
-        <section className={`shell ${s.activity}`}>
-          <h2 className={s.cardTitle}>This vault&rsquo;s ledger</h2>
-          <p className={s.cardSub}>
-            Every boundary it has settled and every operation you have run, in
-            order. Settlements are produced by the same <code className="mono">settle()</code>{' '}
-            the program calls.
-          </p>
-          <ol className={s.events}>
-            {vault.history.map((e, i) => (
-              <li key={`${e.ts}-${i}`} className={s.event} data-kind={e.kind}>
-                <span className={s.eventKind}>{e.kind}</span>
-                <span className={s.eventWhen}>
-                  <span className="num">{etClock(e.ts)}</span>
-                  <span className={s.eventDate}>{etDate(e.ts)}</span>
-                </span>
-                <span className={s.eventDetail}>
-                  {e.kind === 'settle' ? (
-                    <>
-                      NAV <span className="num">{navToNumber(e.nightNav).toFixed(4)}</span>
-                      {' / '}
-                      <span className="num">{navToNumber(e.dayNav).toFixed(4)}</span>
-                      {e.funding !== undefined && e.funding !== 0n && (
-                        <span className={s.eventFunding}>
-                          funding {e.funding > 0n ? 'night→day' : 'day→night'}{' '}
-                          <span className="num">{fmtUsd(Math.abs(fromQuote(e.funding)), 2)}</span>
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className={s.eventClass} data-class={e.cls}>{e.cls?.toUpperCase()}</span>
-                      <span className="num">{fromShares(e.shares ?? 0n).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
-                      {' shares · '}
-                      <span className="num">{fmtUsd(fromQuote(e.quote ?? 0n), 2)}</span>
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-    </div>
+    <SimulatedReady
+      asset={asset} vault={vault} d={d} stem={stem} price={price} quote={quote} quoteSettled={quoteSettled} stale={stale}
+      markAge={markAge} reopens={reopens} commit={commit} reset={reset} curve={curve} minute={minute}
+      liveSymbols={liveSymbols} initialClass={initialClass}
+      ui={{ details, setDetails, dock, setDock, request, setRequest }}
+    />
   );
 }
 
-function VaultSkeleton() {
+function SimulatedReady({ asset, vault, d, stem, price, quote, quoteSettled, stale, markAge, reopens, commit, reset, curve, minute, liveSymbols, initialClass, ui }: {
+  asset: Asset;
+  vault: LocalVault;
+  d: ReturnType<typeof derive>;
+  stem: string;
+  price: number;
+  quote: Quote | undefined;
+  quoteSettled: boolean;
+  stale: boolean;
+  markAge: number | null;
+  reopens: string | null;
+  commit: (v: LocalVault) => void;
+  reset: () => void;
+  curve: ReturnType<typeof useCurve>;
+  minute: number;
+  liveSymbols: string[];
+  initialClass: Cls | null;
+  ui: {
+    details: boolean; setDetails: (v: boolean) => void;
+    dock: boolean; setDock: (v: boolean) => void;
+    request: TradeRequest | null; setRequest: (r: TradeRequest) => void;
+  };
+}) {
+  const engine = useLocalEngine(vault, commit, { price, ageSec: markAge, live: !!quote && !stale }, { stem, reopens });
+  const mint = (cls: Cls) => { ui.setRequest({ cls, mode: 'mint', n: Date.now() }); ui.setDock(true); };
+  const pair: PairState = {
+    exposed: vault.exposed,
+    halted: vault.halted,
+    event: false,
+    nav: { day: navToNumber(vault.dayNav), night: navToNumber(vault.nightNav) },
+    supply: { day: fromShares(vault.daySupply), night: fromShares(vault.nightSupply) },
+    value: { day: fromQuote(d.valueDay), night: fromQuote(d.valueNight) },
+    held: { day: fromShares(vault.myDay), night: fromShares(vault.myNight) },
+    source: { kind: 'simulated', detail: 'The simulation in this browser', ageSec: null },
+  };
+  const parked: Cls = vault.exposed === 'night' ? 'day' : 'night';
+  const empty = vault.nightSupply === 0n && vault.daySupply === 0n;
+
   return (
-    <div className={s.page} aria-busy="true">
-      <div className={`shell ${s.head}`}>
-        <div className="skeleton" style={{ width: 160, height: 12 }} />
-        <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="skeleton" style={{ width: 180, height: 38 }} />
-          <div className="skeleton" style={{ width: 120, height: 14 }} />
-          <div className="skeleton" style={{ width: 220, height: 30 }} />
+    <div className={s.page}>
+      <AssetHeader
+        asset={asset} quote={quote} quoteSettled={quoteSettled}
+        badges={<>
+          <Status kind="simulated" label="Simulated vault" />
+          <Status kind="closed" label="Not on chain" bare />
+        </>}
+        meta={<span>Runs the program&rsquo;s <span className="mono">settle()</span> in this browser, on the live price</span>}
+        actions={<Button variant="secondary" size="sm" onClick={() => ui.setDetails(true)}><Icon name="layers" size={14} /> How this works</Button>}
+      />
+
+      <p className={s.honest} role="note">
+        <Icon name="info" size={14} />
+        <span>
+          <strong>{asset.symbol} has no vault on chain.</strong> Its history on this page is real — measured from its own
+          pool, hour by hour. The vault is a simulation: the same settlement code the program runs, on the live price,
+          written to this browser&rsquo;s storage. Nothing is minted or owned.
+          {liveSymbols.length > 0 && <> On chain: {liveSymbols.map((sym, i) => <span key={sym}>{i ? ', ' : ''}<Link to={`/markets/${sym}`}>{sym}</Link></span>)}.</>}
+        </span>
+      </p>
+
+      <div className={s.grid}>
+        <div className={s.main}>
+          <div className={s.first}><SessionStrip symbol={stem} exposed={vault.exposed} /></div>
+          <div className={s.second}>
+            <ClassPair asset={asset} detailed vaultSymbol={stem} onMint={mint} state={pair} />
+          </div>
+
+          <Compare asset={asset} funding={fundingFromLocal(d.valueNight, d.valueDay, d.skew, 6)} event={false} />
+
+          <section className={s.card} aria-label="Price over the sessions">
+            <header className={s.cardHead}>
+              <h2 className={s.cardTitle}>What you are exposed to</h2>
+              <Source kind="study" detail="Hourly pool closes from GeckoTerminal, in the study snapshot" />
+            </header>
+            <p className={s.cardSub}>
+              The token&rsquo;s hourly price over the sessions a vault settles on. {vault.exposed.toUpperCase()} holds the
+              stock in the shaded stretch it names; the other class sits in quote.
+            </p>
+            {curve.status === 'ready' && curve.data.recent
+              ? <SessionPriceChart recent={curve.data.recent} live={quote ? { price: quote.price, at: quote.at } : null} now={minute} symbol={asset.symbol} />
+              : curve.status === 'error'
+                ? <p className={s.note}>The recent history for {asset.symbol} could not be loaded. Everything else on this page is unaffected.</p>
+                : <div className="skeleton" style={{ width: '100%', height: 280 }} />}
+          </section>
+
+          <Position
+            names={engine.names} words={engine.words} held={engine.held} nav={engine.nav}
+            exposed={vault.exposed} event={false}
+            preview={previewLocalBell(vault, markFromPrice(price, asset.decimals))}
+            empty={empty
+              ? <><strong>Nothing minted in this browser yet.</strong> <span className="mono">{engine.names[parked]}</span> is the class that is open — it is parked in quote until the bell{reopens ? <> at <span className="num">{reopens}</span></> : ''}, when the vault hands it the stock for {parked === 'day' ? 'the regular session' : 'the overnight stretch'}. Mint into it to watch that happen.</>
+              : <>You hold neither class. <strong>{engine.names[parked]}</strong> is open.</>}
+          />
+
+          <section className={s.card} aria-label="Recent activity">
+            <header className={s.cardHead}>
+              <h2 className={s.cardTitle}>This vault&rsquo;s ledger</h2>
+              <Status kind="simulated" label="In this browser" bare />
+            </header>
+            <LocalActivity history={vault.history} stem={stem} />
+          </section>
+
+          <HealthCard
+            health={d.health}
+            backing={fromQuote(d.backing)} claims={fromQuote(d.totalClaims)} margin={fromQuote(d.margin)}
+            skew={Number(d.skew) / 1e18}
+            halted={vault.halted ? (vault.haltReason || 'halted') : null}
+            onMore={() => ui.setDetails(true)}
+            foot={<>This vault&rsquo;s balances live in this browser. Everything derived from them — NAV, funding, the handoff, these signals — runs the same code the program does.</>}
+            action={<Button variant="tertiary" size="sm" onClick={reset}>Reset this vault</Button>}
+          />
+
+          <section className={s.card} aria-label="Measured history">
+            <header className={s.cardHead}>
+              <h2 className={s.cardTitle}>Decomposed since inception</h2>
+              <Source kind="study" detail={`${Math.round(asset.days)} days of hourly closes`} />
+            </header>
+            <p className={s.cardSub}>
+              Each line compounds only the returns earned inside its own session. The gap between them is what owning
+              one instead of the other would have been worth.
+            </p>
+            {curve.status === 'ready'
+              ? <CurveChart points={curve.data.points} height={260} label={`${asset.symbol}, night versus day cumulative return`} />
+              : curve.status === 'error'
+                ? <p className={s.note}>The history for {asset.symbol} could not be loaded.</p>
+                : <div className="skeleton" style={{ width: '100%', height: 260 }} />}
+          </section>
         </div>
+
+        <aside className={s.side} aria-label="Trade">
+          <TradeDock
+            open={ui.dock} onOpenChange={ui.setDock} label={`Trade ${asset.symbol}`}
+            bar={<><ClassTag cls={parked} active>{engine.words[parked]}</ClassTag><span>{engine.names[parked]} open · simulated</span></>}
+          >
+            <TradePanel engine={engine} symbol={asset.symbol} name={asset.name} request={ui.request} initialClass={initialClass} />
+          </TradeDock>
+          <p className={s.note}>
+            Want the real thing? <Link to="/markets/NVDAx">NVDAx</Link> has a vault on devnet.
+          </p>
+        </aside>
       </div>
-      <div className={`shell ${s.classes}`}>
-        <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
-        <div className="skeleton" style={{ height: 210, borderRadius: 20 }} />
-      </div>
-      <span className="sr-only">Loading vault</span>
+
+      <Sheet open={ui.details} onClose={() => ui.setDetails(false)} kind="drawer" title="How this simulation works">
+        <div className={s.details}>
+          <section className={s.dSection}>
+            <h3 className={s.dTitle}>What runs here</h3>
+            <p className={s.dText}>
+              The vault is the program&rsquo;s own arithmetic — <span className="mono">settle()</span>,{' '}
+              <span className="mono">plan_mint</span>, <span className="mono">plan_redeem</span> — run in this browser
+              against the live price of {asset.symbol}. When the page opens it settles every bell the vault slept
+              through, in order.
+            </p>
+            <p className={s.dText}>
+              Two things are simpler than on chain, and both are stated rather than hidden: missed bells settle at the
+              current price, because a browser has no record of the price at each one; and the handoff is assumed
+              filled at the mark, which is the optimistic case — on chain a filler does it and is paid for it.
+            </p>
+          </section>
+          <section className={s.dSection}>
+            <h3 className={s.dTitle}>Health signals</h3>
+            <Signals health={d.health} />
+          </section>
+          <section className={s.dSection}>
+            <h3 className={s.dTitle}>State</h3>
+            <dl className={s.kv}>
+              <div><dt>Exposed class</dt><dd>{vault.exposed.toUpperCase()}</dd></div>
+              <div><dt>Last settled</dt><dd className="num">{etClock(vault.lastBoundaryTs)} ET</dd></div>
+              <div><dt>Inventory</dt><dd className="num">{(Number(vault.ownedUnderlying) / 10 ** asset.decimals).toLocaleString('en-US', { maximumFractionDigits: 6 })} {asset.symbol}</dd></div>
+              <div><dt>Quote held</dt><dd className="num">{fromQuote(vault.ownedQuote).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</dd></div>
+            </dl>
+          </section>
+          <section className={s.dSection}>
+            <h3 className={s.dTitle}>The real one</h3>
+            <p className={s.dText}>
+              The same program runs on devnet for <Link to="/markets/NVDAx">NVDAx</Link> and{' '}
+              <Link to="/markets/OPENAI">OPENAI</Link>, with real transactions and a ledger anyone can read.
+            </p>
+          </section>
+        </div>
+      </Sheet>
     </div>
   );
 }
