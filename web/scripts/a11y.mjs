@@ -256,7 +256,9 @@ try {
   }
 
   let total = 0;
-  for (const path of PAGES) {
+  // --page /research: one route, for checking a page while it is being built.
+  const ONLY = arg('page', null);
+  for (const path of ONLY ? PAGES.filter(p => p === ONLY) : PAGES) {
     await send('Page.navigate', { url: BASE + path });
 
     // Wait for the ground to settle before measuring anything.

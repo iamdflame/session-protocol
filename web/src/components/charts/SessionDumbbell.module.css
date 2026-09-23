@@ -1,0 +1,68 @@
+.figure { margin: 0; display: flex; flex-direction: column; gap: 10px; --cols: 84px minmax(0, 1fr) 70px; }
+
+.legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--text-muted); }
+.legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.unit { margin-left: auto; color: var(--text-faint); font-size: var(--t-micro); }
+.key { display: inline-block; width: 10px; height: 10px; }
+.key[data-cls='day'] { border-radius: 50%; background: var(--day); }
+.key[data-cls='night'] { background: var(--night); transform: rotate(45deg) scale(0.86); border-radius: 1.5px; }
+
+.axis { display: grid; grid-template-columns: var(--cols); gap: 12px; align-items: end; height: 18px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.ticks { position: relative; height: 12px; }
+.ticks > span {
+  position: absolute; transform: translateX(-50%); top: 0;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); white-space: nowrap;
+}
+.diffHead { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); text-align: right; }
+
+.body { display: flex; flex-direction: column; }
+.group { font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 560; padding: 12px 0 4px; }
+.group b { font-size: var(--t-sm); letter-spacing: 0; margin-right: 4px; }
+.group[data-cls='night'] b { color: var(--night-ink); }
+.group[data-cls='day'] b { color: var(--day-ink); }
+.list { list-style: none; margin: 0; padding: 0; }
+
+.row {
+  position: relative; display: grid; grid-template-columns: var(--cols); gap: 12px; align-items: center;
+  height: 28px; border-radius: 6px; outline: none; cursor: default;
+}
+.row[data-on] { background: var(--surface-hover); z-index: 3; }
+.row:focus-visible { box-shadow: 0 0 0 2px var(--border-focus); }
+.sym { font-size: var(--t-xs); color: var(--text-muted); padding-left: 6px; }
+.row[data-on] .sym { color: var(--text); }
+
+/* The track carries the zero line, so it runs down the whole chart. */
+.track { position: relative; height: 100%; }
+.track::before { content: ''; position: absolute; left: var(--zero); top: 0; bottom: 0; width: 1px; background: var(--border-strong); }
+.bar { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: var(--text-faint); opacity: 0.55; border-radius: 1px; }
+.mark { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; box-shadow: 0 0 0 2px var(--surface); }
+.mark[data-cls='day'] { border-radius: 50%; background: var(--day); }
+.mark[data-cls='night'] { background: var(--night); transform: rotate(45deg) scale(0.86); border-radius: 1.5px; }
+.row[data-on] .mark { box-shadow: 0 0 0 2px var(--surface-hover); }
+
+.diff { font-size: var(--t-xs); text-align: right; padding-right: 6px; }
+.diff[data-sign='night'] { color: var(--night-ink); }
+.diff[data-sign='day'] { color: var(--day-ink); }
+
+.tip {
+  position: absolute; top: calc(100% + 4px); width: 224px; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: column; gap: 5px; padding: 10px 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+  background: var(--surface-raised); box-shadow: var(--shadow-2);
+  font-size: var(--t-xs); color: var(--text-muted);
+}
+.tipHead { display: flex; justify-content: space-between; gap: 8px; color: var(--text-faint); font-size: 10.5px; }
+.tipHead .mono { color: var(--text); font-size: var(--t-xs); font-weight: 600; }
+.tipRow { display: grid; grid-template-columns: 12px 44px 1fr auto; align-items: center; gap: 6px; }
+.tipRow i { width: 8px; height: 8px; display: inline-block; }
+.tipRow i[data-cls='day'] { border-radius: 50%; background: var(--day); }
+.tipRow i[data-cls='night'] { background: var(--night); transform: rotate(45deg) scale(0.86); }
+.tipRow b { color: var(--text); font-weight: 560; text-align: right; }
+.tipRow em { font-style: normal; color: var(--text-faint); font-size: 10.5px; }
+.tipDiff { display: flex; justify-content: space-between; padding-top: 5px; border-top: 1px solid var(--border); }
+.tipDiff b { color: var(--text); font-weight: 600; }
+
+@media (max-width: 520px) {
+  .figure { --cols: 64px minmax(0, 1fr) 54px; }
+  .unit { margin-left: 0; width: 100%; }
+}
