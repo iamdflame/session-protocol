@@ -1,0 +1,61 @@
+.pair {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); overflow: hidden;
+}
+.card {
+  position: relative; display: flex; flex-direction: column; gap: 14px;
+  padding: 22px 24px 22px;
+  transition: background-color var(--dur-session) var(--ease);
+}
+/* DAY: cool, exact — a single hairline of its colour along the top edge */
+.card[data-class='day'] { box-shadow: inset 0 2px 0 var(--day-line); }
+/* NIGHT: warmer, longer — a faint warm field, because it carries the gap */
+.card[data-class='night'] {
+  box-shadow: inset 0 2px 0 var(--night-line);
+  background: linear-gradient(180deg, rgba(255, 155, 61, 0.045), transparent 55%);
+}
+.card[data-exposed][data-class='day'] { background: linear-gradient(180deg, var(--day-soft), transparent 70%); }
+.card[data-exposed][data-class='night'] { background: linear-gradient(180deg, rgba(255, 155, 61, 0.09), transparent 70%); }
+.card[data-handoff] { animation: card-handoff var(--dur-session) var(--ease-out); }
+@keyframes card-handoff { 0% { filter: brightness(1); } 30% { filter: brightness(1.25); } 100% { filter: brightness(1); } }
+
+.head { display: flex; align-items: center; gap: 10px; }
+.ticker { font-size: var(--t-body); font-weight: 600; letter-spacing: -0.01em; }
+.role { font-size: var(--t-xs); color: var(--text-muted); margin-top: -6px; }
+.state { min-height: 22px; }
+
+.figs { display: grid; grid-template-columns: repeat(3, auto); gap: 18px 26px; margin: 4px 0 0; justify-content: start; }
+.pair[data-compact] .figs { grid-template-columns: repeat(2, auto); }
+.fig { display: flex; flex-direction: column; gap: 4px; margin: 0; align-items: flex-start; }
+.fig dt { font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); font-weight: 540; }
+.fig dd { margin: 0; font-size: var(--t-data); line-height: 1.05; color: var(--text); }
+.nav { font-size: var(--t-data); letter-spacing: -0.03em; }
+.unit { font-size: 10.5px; letter-spacing: 0.02em; text-transform: none; color: var(--text-faint); font-family: var(--font-sans); font-weight: 400; }
+.sub { font-size: var(--t-micro); color: var(--text-faint); }
+
+.next { display: flex; align-items: center; gap: 7px; font-size: var(--t-xs); color: var(--text-muted); margin-top: auto; }
+.act { display: flex; flex-direction: column; gap: 6px; }
+.why { font-size: var(--t-micro); color: var(--text-faint); line-height: 1.5; }
+
+/* the hinge: the handoff between the halves */
+.hinge { display: flex; flex-direction: column; align-items: center; width: 150px; padding: 18px 0; }
+.hingeLine { flex: 1; width: 1px; background: var(--border-strong); }
+.hingeBox {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  margin: 10px 0; padding: 12px 10px; border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong); background: var(--surface-raised); width: 128px;
+}
+.hingeBox[data-to='day'] { box-shadow: 0 0 0 4px var(--day-soft); }
+.hingeBox[data-to='night'] { box-shadow: 0 0 0 4px var(--night-soft); }
+.hingeLabel { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 560; }
+.hingeTime { font-size: 18px; color: var(--text); }
+.hingeTo { font-size: var(--t-micro); color: var(--text-muted); white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .pair { grid-template-columns: 1fr; }
+  .hinge { width: auto; flex-direction: row; padding: 0 20px; }
+  .hingeLine { height: 1px; width: auto; }
+  .hingeBox { margin: 0 12px; flex-direction: row; gap: 10px; width: auto; padding: 8px 12px; }
+  .figs { grid-template-columns: repeat(2, auto); }
+}

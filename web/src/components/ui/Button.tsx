@@ -39,7 +39,7 @@ function body(p: Common) {
   return (
     <>
       {p.loading && <span className={s.spinner} aria-hidden="true" />}
-      <span>{p.children}</span>
+      <span className={s.label}>{p.children}</span>
       {p.loading && p.progress && <span className={s.sub}>{p.progress}</span>}
     </>
   );

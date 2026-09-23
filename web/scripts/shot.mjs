@@ -245,7 +245,9 @@ try {
         const invisible = [...document.querySelectorAll('main *')]
           .filter(e => {
             const st = getComputedStyle(e);
-            return st.opacity === '0' && e.getBoundingClientRect().height > 40;
+            // A tooltip or closed menu is hidden on purpose; this hunts for
+            // content an entrance animation forgot to finish.
+            return st.opacity === '0' && st.visibility !== 'hidden' && e.getBoundingClientRect().height > 40;
           }).length;
         if (invisible) throw new Error(invisible + ' visible-height elements are at opacity 0');
       })()`);

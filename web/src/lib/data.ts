@@ -27,6 +27,10 @@ export interface Asset {
   symbol: string;
   name: string;
   kind: 'public' | 'private';
+  /** For the markets filters: a listed equity, a fund, or a pre-IPO token. */
+  category: 'equity' | 'etf' | 'preipo';
+  /** Newest close against the close 24h earlier; null when no close sits near that mark. */
+  change24h: number | null;
   mint: string;
   decimals: number;
   /** Last measured price from the history file — a starting point, not a quote. */
@@ -63,6 +67,10 @@ export interface Headline {
   significant: number;
   spikesDropped: number;
   barsTotal: number;
+  /** Pooled per-hour return, NIGHT minus DAY, in basis points. */
+  spreadBpPerHour: number;
+  /** Equities where NIGHT's per-hour return beat DAY's. */
+  nightWins: number;
 }
 
 export interface MarketsFile {
@@ -73,7 +81,12 @@ export interface MarketsFile {
 }
 
 export interface CurvePoint { t: number; n: number; d: number }
-export interface CurveFile { symbol: string; points: CurvePoint[] }
+export interface CurveFile {
+  symbol: string;
+  points: CurvePoint[];
+  /** The last 72 hours of real closes, [unix seconds, price]. */
+  recent?: [number, number][];
+}
 
 /* ── async state ─────────────────────────────────────────────────────────── */
 

@@ -46,6 +46,9 @@
 }
 .tertiary:disabled { background: transparent; border-color: transparent; }
 
+/* The label and any icon inside it sit on one centre line. */
+.label { display: inline-flex; align-items: center; gap: 6px; }
+
 /* Loading keeps the label and adds progress beside it, never instead of it. */
 .spinner {
   width: 14px; height: 14px; border-radius: 50%;

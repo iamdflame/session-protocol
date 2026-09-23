@@ -8,7 +8,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   sessionAt, nextBoundary, Session, isDST, civilFromDays, weekdayFromDays,
   holidays, earlyCloses, SEC_PER_DAY,
@@ -258,6 +258,33 @@ export function useClockSize(preferred: number, inset = 96): number {
   const vw = useViewport();
   if (!vw) return preferred;
   return Math.round(Math.max(200, Math.min(preferred, vw - inset)));
+}
+
+/**
+ * True for the length of the handoff sequence after the live holder changes.
+ *
+ * Every surface that reacts to the bell — the rail, the chip, the class
+ * cards, the call to act, the portfolio — reads this one flag, so the handoff
+ * happens as one coordinated motion rather than seven animations that happen
+ * to start near the same second.
+ */
+export function useHandoff(ms = 1200): { active: boolean; to: 'DAY' | 'NIGHT' | null } {
+  const sess = useSession();
+  const holder = sess?.holder ?? null;
+  // A ref, not state: updating it must not re-run the effect, or the cleanup
+  // of that re-run would cancel the timer and the flag would never clear.
+  const prev = useRef<'DAY' | 'NIGHT' | null>(null);
+  const [state, setState] = useState<{ active: boolean; to: 'DAY' | 'NIGHT' | null }>({ active: false, to: null });
+  useEffect(() => {
+    if (!holder) return;
+    const was = prev.current;
+    prev.current = holder;
+    if (!was || was === holder) return;
+    setState({ active: true, to: holder });
+    const t = setTimeout(() => setState(s => ({ ...s, active: false })), ms);
+    return () => clearTimeout(t);
+  }, [holder, ms]);
+  return state;
 }
 
 export const SESSION_HOURS = { day: 6.5, night: 17.5 };

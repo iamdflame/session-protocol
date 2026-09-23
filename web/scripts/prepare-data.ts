@@ -106,6 +106,35 @@ const universe = JSON.parse(readFileSync(`${ROOT}/universe.json`, 'utf8'));
 const exec = JSON.parse(readFileSync(`${ROOT}/executability.json`, 'utf8'));
 
 const meta = new Map<string, any>(universe.assets.map((a: any) => [a.symbol, a]));
+
+/* What kind of instrument each is, for the markets filters. The universe file
+   only distinguishes listed from private; the four funds are named here
+   because nothing upstream classifies them. */
+const ETF = new Set(['SPYx', 'QQQx', 'TQQQx', 'GLDx']);
+const category = (symbol: string, kind: string) =>
+  kind === 'private' ? 'preipo' : ETF.has(symbol) ? 'etf' : 'equity';
+
+/* Two assets come back from the token search with no company name, only the
+   ticker again. A row that says "QQQx — QQQx" tells a reader nothing. */
+const NAME_FIX: Record<string, string> = { CRCLx: 'Circle', QQQx: 'Nasdaq-100' };
+
+/**
+ * Change over the last 24 hours, or null.
+ *
+ * Taken from the newest close and the latest close at least 24h before it —
+ * and only if that close is within two hours of the 24h mark. A thin pool that
+ * last printed three days ago does not have a 24h change, and a figure
+ * computed across the gap would be a three-day change wearing the wrong label.
+ */
+function change24h(rows: Row[]): number | null {
+  if (rows.length < 2) return null;
+  const [tEnd, cEnd] = rows[rows.length - 1];
+  const target = tEnd - 86_400;
+  let ref: Row | null = null;
+  for (let i = rows.length - 1; i >= 0; i--) { if (rows[i][0] <= target) { ref = rows[i]; break; } }
+  if (!ref || target - ref[0] > 7_200 || ref[1] <= 0) return null;
+  return cEnd / ref[1] - 1;
+}
 const stat = new Map<string, any>(
   [...study.equities, ...study.controls].map((e: any) => [e.symbol, e]),
 );
@@ -119,10 +148,18 @@ const assets = hourly.assets
     if (points.length < 40) return null;
     const m = meta.get(a.symbol);
     const s = stat.get(a.symbol);
+    const name = m?.co && m.co !== a.symbol ? m.co : NAME_FIX[a.symbol] ?? m?.co ?? a.symbol;
+    const lastT = rows.at(-1)![0];
     return {
       symbol: a.symbol,
-      name: m?.co ?? a.symbol,
+      name,
       kind: a.kind,
+      category: category(a.symbol, a.kind),
+      change24h: change24h(rows),
+      /* The last 72 hours of real closes, for the asset page's session chart.
+         Shipped in the curve file, not the index, so the markets table stays
+         small. */
+      recent: rows.filter(r => r[0] > lastT - 72 * 3600).map(r => [r[0], +r[1].toPrecision(7)]),
       mint: a.mint,
       decimals: m?.decimals ?? 8,
       price: m?.price ?? rows.at(-1)![1],
@@ -170,6 +207,11 @@ function headline() {
     ),
     spikesDropped: study.spikesDropped ?? 0,
     barsTotal: study.barsTotal ?? 0,
+    /* The comparison the study is about: return per hour of each session,
+       NIGHT minus DAY, pooled — and how many of the equities NIGHT beat DAY
+       on that measure. */
+    spreadBpPerHour: (study.pooled.night.meanPerHour - study.pooled.day.meanPerHour) * 1e4,
+    nightWins: eq.filter(e => e.night.perHour > e.day.perHour).length,
   };
 }
 
@@ -178,7 +220,7 @@ mkdirSync(`${OUT}/curves`, { recursive: true });
 
 // The list page needs summaries; only a detail page needs a curve. Shipping
 // both together would make every visitor pay for 26 curves to see a table.
-const index = assets.map(({ points, ...rest }: any) => ({
+const index = assets.map(({ points, recent, ...rest }: any) => ({
   ...rest,
   endNight: points.at(-1)?.n ?? 1,
   endDay: points.at(-1)?.d ?? 1,
@@ -194,7 +236,7 @@ writeFileSync(`${OUT}/markets.json`, JSON.stringify({
 }));
 for (const a of assets as any[]) {
   writeFileSync(`${OUT}/curves/${a.symbol}.json`,
-    JSON.stringify({ symbol: a.symbol, points: a.points }));
+    JSON.stringify({ symbol: a.symbol, points: a.points, recent: a.recent }));
 }
 
 writeFileSync(`${OUT}/study.json`, JSON.stringify(study));

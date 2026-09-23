@@ -1,0 +1,78 @@
+.wrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.table thead th {
+  position: sticky; top: 0; z-index: 1;
+  text-align: left; font-weight: 540;
+  font-size: var(--t-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint);
+  padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg);
+  white-space: nowrap;
+}
+.sortBtn { display: inline-flex; align-items: center; gap: 4px; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; min-height: 24px; }
+.sortBtn:hover, .sortBtn[data-on] { color: var(--text); }
+.table .num { text-align: right; }
+.table thead .num .sortBtn { flex-direction: row-reverse; }
+.colDay { color: var(--day-ink); }
+.colNight { color: var(--night-ink); }
+.table thead .colDay { color: var(--day-ink); }
+.table thead .colNight { color: var(--night-ink); }
+
+.row { cursor: pointer; transition: background-color var(--dur-micro) var(--ease); }
+.row td, .row th { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+.row:hover { background: var(--surface); }
+.row:hover .assetLink { transform: translateX(2px); }
+.row:focus-within { background: var(--surface); }
+
+.colAsset { min-width: 200px; font-weight: 400; text-align: left; }
+.assetLink { display: flex; align-items: center; gap: 12px; transition: transform var(--dur-micro) var(--ease); border-radius: var(--r-1); }
+.assetText { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.sym { font-size: var(--t-sm); font-weight: 600; color: var(--text); }
+.name { font-size: var(--t-xs); color: var(--text-muted); }
+.colSpark { width: 100px; }
+.sparkSkel { display: block; width: 84px; height: 26px; border-radius: 4px; background: var(--surface); }
+.snap { display: block; font-size: 10px; color: var(--text-faint); letter-spacing: 0.04em; }
+
+.sess { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-micro); font-weight: 620; letter-spacing: 0.07em; }
+.sess[data-cls='day'] { color: var(--day-ink); }
+.sess[data-cls='night'] { color: var(--night-ink); }
+.sessDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.none { font-size: var(--t-xs); color: var(--text-faint); }
+.countdown { font-size: var(--t-xs); color: var(--text-muted); }
+
+.vault { font-size: var(--t-micro); font-weight: 560; letter-spacing: 0.05em; text-transform: uppercase; color: #B98CF0; }
+.sim { font-size: var(--t-micro); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); }
+.colFav { width: 44px; }
+.fav { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--icon-faint); }
+.fav:hover { color: var(--text-muted); background: var(--surface-raised); }
+.fav[data-on] { color: var(--warn); }
+.fav[data-on] svg { fill: currentColor; }
+
+/* Compact: the home preview drops the spark, vault and favorite columns. */
+.wrap[data-compact] .row td, .wrap[data-compact] .row th { padding-block: 9px; }
+
+/* Tablet: drop the lowest-value columns first. */
+@media (max-width: 1180px) { .colSpark, .colVault { display: none; } }
+@media (max-width: 900px) { .colSession { display: none; } }
+
+/* Phone: each row becomes a two-line smart row — asset and price on the left
+   and right, the session returns beneath. */
+@media (max-width: 640px) {
+  .table thead { display: none; }
+  .table, .table tbody { display: block; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto;
+    grid-template-areas: 'asset price' 'asset change' 'day night';
+    gap: 2px 12px; padding: 12px 2px; border-bottom: 1px solid var(--border);
+  }
+  .row td, .row th { padding: 0; border: 0; }
+  .row .colAsset { grid-area: asset; min-width: 0; }
+  .row .colPrice { grid-area: price; }
+  .row .colChange { grid-area: change; }
+  .row .colDay { grid-area: day; text-align: left; margin-top: 8px; }
+  .row .colNight { grid-area: night; margin-top: 8px; }
+  /* the column header is gone, so each figure names itself */
+  .row .colDay::before, .row .colNight::before {
+    content: attr(data-label); margin-right: 6px;
+    font-size: 10px; font-weight: 620; letter-spacing: 0.08em;
+  }
+  .row .colSession, .row .colNext, .colFav, .colSpark, .colVault { display: none; }
+}
