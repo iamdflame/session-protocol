@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Reveal } from '@/components/Reveal';
 import { BoundaryWalk } from '@/components/BoundaryWalk';
+import { Mechanism } from '@/components/how/Mechanism';
+import { SessionRail, type ScrubState } from '@/components/session/SessionRail';
 import { useSession, upcoming, etClock, closureReason, countdown } from '@/lib/session';
 import { useMarkets } from '@/lib/data';
+import { useDevnets, explorerAddr } from '@/lib/chain';
+import { Icon } from '@/components/ui/Icon';
 import s from './HowItWorks.module.css';
+
+const PROGRAM = '8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ';
 
 const FAQ = [
   {
@@ -55,150 +60,114 @@ const FAQ = [
 export default function HowItWorks() {
   const sess = useSession();
   const markets = useMarkets();
+  const vaults = useDevnets();
   const head = markets.data?.headline;
   const [open, setOpen] = useState<number | null>(0);
+  const [scrub, setScrub] = useState<ScrubState | null>(null);
   const next = sess ? upcoming(sess.now, 6) : [];
+  const simulated = head && vaults ? head.assets - vaults.length : null;
 
   return (
     <div className={s.page}>
-      <header className={`shell ${s.head}`}>
-        <p className="eyebrow">How it works</p>
-        <h1 className={`display ${s.title}`}>
-          One vault, two claims, and a bell.
-        </h1>
-        <p className={`lead ${s.lead}`}>
-          Everything below happens inside a single program account. There is no
-          leverage, no synthetic exposure, and no counterparty other than the vault
-          itself — which either holds the stock or holds the quote, and at any
-          instant you can check which.
+      <header className={s.head}>
+        <span className={s.eyebrow}>How it works</span>
+        <h1 className={s.title}>One vault, two claims, and a bell.</h1>
+        <p className={s.lead}>
+          A single program account holds the stock or the quote — never neither, never borrowed. DAY owns the regular
+          session, NIGHT everything else, and at every bell the exposure moves from one to the other.
         </p>
       </header>
 
-      {/* ── the cycle ───────────────────────────────────────────────────── */}
-      <section className={`shell ${s.section}`} id="cycle">
-        <Reveal>
-          <p className="eyebrow">The cycle</p>
-          <h2 className={`display ${s.h2}`}>What happens at a bell.</h2>
-        </Reveal>
+      <Mechanism />
 
-        <ol className={s.steps}>
+      {/* ── the exact order ─────────────────────────────────────────────── */}
+      <section className={s.section} id="cycle" aria-labelledby="cycle-h">
+        <div className={s.secHead}>
+          <span className={s.eyebrow}>At every bell</span>
+          <h2 className={s.h2} id="cycle-h">The exact order, inside one transaction</h2>
+        </div>
+        <ol className={s.cycle}>
           {[
-            {
-              n: 'Roll',
-              t: 'The exposed class earns its session',
-              b: <>NAV moves by the return on the inventory the vault <em>actually held</em>,
-                  not by the price ratio. Those agree while the book is hedged and diverge
-                  the instant a handoff goes unfilled — rolling by the ratio would credit a
-                  return the vault never made. Gains round down, losses round up, so claims
-                  can never outrun the assets behind them.</>,
-            },
-            {
-              n: 'Fund',
-              t: 'The larger side pays the smaller',
-              b: <>If one class is worth much more than the other, the vault is structurally
-                  long that side&rsquo;s risk. A funding transfer proportional to the skew
-                  moves value from the crowded class to the thin one, capped so it can never
-                  become the dominant term. It is the price of carrying the gap, quoted
-                  continuously — which nobody has been able to do before, because nobody
-                  could hold either side alone.</>,
-            },
-            {
-              n: 'Hand over',
-              t: 'Exposure flips, and only the difference trades',
-              b: <>The class that was flat becomes exposed. The vault sizes the difference
-                  between what the incoming class is owed and what the outgoing class held,
-                  and that difference — not the whole position — is what a filler trades.
-                  When the two sides are close, almost nothing touches a market.</>,
-            },
-            {
-              n: 'Check',
-              t: 'Solvency, or a halt',
-              b: <>Every settlement is followed by the invariant that backing is at least
-                  claims. If a loss would exceed the exposed class entirely, the excess is
-                  reported as a shortfall and the settlement is <strong>not applied</strong>.
-                  The vault stops instead of writing the error into the other class.</>,
-            },
-          ].map((step, i) => (
-            <Reveal key={step.n} as="li" delay={i * 60}>
-              <div className={s.step}>
-                <span className={s.stepNum} aria-hidden="true">{i + 1}</span>
-                <div className={s.stepBody}>
-                  <p className={s.stepName}>{step.n}</p>
-                  <h3 className={s.stepTitle}>{step.t}</h3>
-                  <p className={s.stepText}>{step.b}</p>
-                </div>
-              </div>
-            </Reveal>
+            { n: 'Roll', t: 'The exposed class earns its session', b: <>NAV moves by the return on the inventory the vault <em>actually held</em>, not the price ratio — so an unfilled handoff is never credited a return the vault did not make. Gains round down, losses round up.</> },
+            { n: 'Fund', t: 'The larger side pays the smaller', b: <>A transfer proportional to the skew moves value from the crowded class to the thin one, capped so it never becomes the dominant term.</> },
+            { n: 'Hand over', t: 'Exposure flips; only the difference trades', b: <>The flat class becomes exposed. What a filler trades is the gap between what the incoming class is owed and what the outgoing class held — not the whole position.</> },
+            { n: 'Check', t: 'Solvency, or a halt', b: <>Backing must cover claims. A loss beyond the exposed class is reported as a shortfall and the settlement is <strong>not applied</strong>: the vault stops instead of writing it into the other class.</> },
+          ].map((st, i) => (
+            <li key={st.n} className={s.cycleItem}>
+              <span className={`num ${s.cycleN}`}>{i + 1}</span>
+              <span className={s.cycleName}>{st.n}</span>
+              <h3 className={s.cycleTitle}>{st.t}</h3>
+              <p className={s.cycleText}>{st.b}</p>
+            </li>
           ))}
         </ol>
       </section>
 
       {/* ── the calendar ────────────────────────────────────────────────── */}
-      <section className={`${s.section} ${s.sunken}`} id="calendar">
-        <div className="shell">
-          <Reveal>
-            <p className="eyebrow">The calendar</p>
-            <h2 className={`display ${s.h2}`}>The bell is not a guess.</h2>
-            <p className={`lead ${s.sectionLead}`}>
-              Everything on this site — the clock in the corner, the countdown, which
-              class is parked, when a vault reopens — comes from one module of integer
-              date arithmetic, pinned to the on-chain program by 4,734 shared vectors.
-              It handles DST, every NYSE holiday, and the 13:00 early closes, and it
-              knows that when New Year&rsquo;s Day falls on a Saturday the Exchange does
-              not close the Friday before.
-            </p>
-          </Reveal>
+      <section className={s.section} id="calendar" aria-labelledby="cal-h">
+        <div className={s.secHead}>
+          <span className={s.eyebrow}>The calendar</span>
+          <h2 className={s.h2} id="cal-h">The bell is not a guess</h2>
+          <p className={s.secLead}>
+            The clock in the corner, every countdown, which class is parked and when a vault reopens all come from one module
+            of integer date arithmetic, pinned to the on-chain program by 4,734 shared vectors — DST, every NYSE holiday and the
+            13:00 early closes included.
+          </p>
+        </div>
 
-          <Reveal delay={60}><BoundaryWalk /></Reveal>
+        <div className={s.card}>
+          <div className={s.cardHead}>
+            <h3 className={s.cardTitle}>Today, as the program sees it</h3>
+            <span className={s.scrubOut} aria-live="polite">
+              {scrub
+                ? <>At <span className="num">{etClock(scrub.t)} ET</span>, <b data-cls={scrub.cls}>{scrub.cls.toUpperCase()}</b> holds the stock{scrub.handoff ? <> · {scrub.handoff.label}</> : null}</>
+                : 'Drag across the day, or tab to it and use the arrow keys'}
+            </span>
+          </div>
+          <SessionRail interactive size="md" onScrub={setScrub} label="Today's sessions, draggable" />
+        </div>
 
-          <Reveal delay={100}>
-            <div className={s.upcoming}>
-              <h3 className={s.upcomingTitle}>The next six boundaries, live</h3>
-              <ol className={s.boundaryList}>
-                {next.length ? next.map(b => {
-                  const reason = closureReason(b.at - 60);
-                  return (
-                    <li key={b.at}>
-                      <span className={s.bTo} data-holder={b.to.toLowerCase()}>{b.to} takes over</span>
-                      <span className={s.bWhen}>{b.label}</span>
-                      <span className={`num ${s.bTime}`}>{etClock(b.at)} ET</span>
-                      <span className={s.bSpan}>
-                        after <span className="num">{countdown(b.span)}</span>
-                        {reason && <span className={s.bReason}>{reason}</span>}
-                      </span>
-                    </li>
-                  );
-                }) : Array.from({ length: 6 }, (_, i) => (
-                  <li key={i}>
-                    <span className="skeleton" style={{ width: 120, height: 11 }} />
-                    <span className="skeleton" style={{ width: 70, height: 11 }} />
-                    <span className="skeleton" style={{ width: 64, height: 11 }} />
-                    <span className="skeleton" style={{ width: 90, height: 11 }} />
+        <div className={s.calGrid}>
+          <div className={s.card}><BoundaryWalk /></div>
+          <div className={s.card}>
+            <h3 className={s.cardTitle}>The next six boundaries</h3>
+            <ol className={s.boundaryList}>
+              {next.length ? next.map(b => {
+                const reason = closureReason(b.at - 60);
+                return (
+                  <li key={b.at}>
+                    <span className={s.bTo} data-holder={b.to.toLowerCase()}>{b.to} takes over</span>
+                    <span className={s.bWhen}>{b.label}</span>
+                    <span className={`num ${s.bTime}`}>{etClock(b.at)} ET</span>
+                    <span className={s.bSpan}>
+                      after <span className="num">{countdown(b.span)}</span>
+                      {reason && <span className={s.bReason}>{reason}</span>}
+                    </span>
                   </li>
-                ))}
-              </ol>
-            </div>
-          </Reveal>
+                );
+              }) : Array.from({ length: 6 }, (_, i) => (
+                <li key={i}><span className="skeleton" style={{ width: '100%', height: 12 }} /></li>
+              ))}
+            </ol>
+          </div>
         </div>
       </section>
 
       {/* ── status ──────────────────────────────────────────────────────── */}
-      <section className={`shell ${s.section}`} id="status">
-        <Reveal>
-          <p className="eyebrow">Status</p>
-          <h2 className={`display ${s.h2}`}>What is live, and what is not.</h2>
-          <p className={`lead ${s.sectionLead}`}>
+      <section className={s.section} id="status" aria-labelledby="status-h">
+        <div className={s.secHead}>
+          <span className={s.eyebrow}>Status</span>
+          <h2 className={s.h2} id="status-h">What is live, and what is not</h2>
+          <p className={s.secLead}>
             The program is deployed on Solana devnet as{' '}
-            <a className={s.statusLink} href="https://explorer.solana.com/address/8gWC37AFvgnPMAZSqiimbkpqPVhF3PrA1rao5agVKqKZ?cluster=devnet" target="_blank" rel="noreferrer">
-              <span className="mono">8gWC37…KqKZ</span> ↗
-            </a>, and one token is live on <strong>mainnet</strong>. What stands in
-            on devnet is about what devnet does not have, and nothing else. Here
-            is the line.
+            <a className={s.statusLink} href={explorerAddr(PROGRAM)} target="_blank" rel="noreferrer">
+              <span className="mono">8gWC37…KqKZ</span> <Icon name="external" size={11} />
+            </a>, and one token is live on <strong>mainnet</strong>. What stands in on devnet is about what devnet does not
+            have, and nothing else.
           </p>
-        </Reveal>
+        </div>
 
         <div className={s.statusGrid}>
-          <Reveal>
             <div className={s.statusCol} data-on="true">
               <h3 className={s.statusTitle}>
                 <span className={s.statusDot} data-on="true" aria-hidden="true" />
@@ -208,9 +177,9 @@ export default function HowItWorks() {
                 <li>The program itself, on devnet — every instruction, every check</li>
                 <li>
                   <strong>Two vaults.</strong>{' '}
-                  <a className={s.statusLink} href="/markets/NVDAx">NVDAx</a> settles on
+                  <Link className={s.statusLink} to="/markets/NVDAx">NVDAx</Link> settles on
                   NYSE hours;{' '}
-                  <a className={s.statusLink} href="/markets/OPENAI">OPENAI</a> has no
+                  <Link className={s.statusLink} to="/markets/OPENAI">OPENAI</Link> has no
                   exchange session at all and settles on the next print or a premium that
                   runs. Mint and redeem from your wallet, funding, the handoff, a halt on
                   bad debt — the same program for both.
@@ -230,13 +199,13 @@ export default function HowItWorks() {
                 <li>
                   <strong>Anyone can open one.</strong>{' '}
                   <code className="mono">initialize_vault</code> takes no permission, and{' '}
-                  <a className={s.statusLink} href="/list">/list</a> is that instruction from
+                  <Link className={s.statusLink} to="/list">/list</Link> is that instruction from
                   your own wallet. The catalog finds new vaults by scanning the program.
                 </li>
                 <li>
                   <strong><code className="mono">$BELL</code>, on mainnet</strong> — the
                   keeper&rsquo;s token, quoted in real NVDAx rather than SOL.{' '}
-                  <a className={s.statusLink} href="/bell">What it cannot do</a> is the half
+                  <Link className={s.statusLink} to="/bell">What it cannot do</Link> is the half
                   worth reading.
                 </li>
                 <li>
@@ -261,9 +230,7 @@ export default function HowItWorks() {
                 <li>Mint and redeem policy, including the parked-class rule and rounding direction</li>
               </ul>
             </div>
-          </Reveal>
 
-          <Reveal delay={60}>
             <div className={s.statusCol}>
               <h3 className={s.statusTitle}>
                 <span className={s.statusDot} aria-hidden="true" />
@@ -300,7 +267,7 @@ export default function HowItWorks() {
                   inventory. On mainnet that is anyone who wants the incentive.
                 </li>
                 <li>
-                  The other 25 assets have no vault on chain. Their pages run the same
+                  The other {simulated ?? 'listed'} assets have no vault on chain. Their pages run the same
                   settlement code locally, with balances in your browser, and say so.
                 </li>
               </ul>
@@ -310,54 +277,42 @@ export default function HowItWorks() {
                 program account alone is 5.95 SOL settled, 11.9 at the peak of an upgrade.
               </p>
             </div>
-          </Reveal>
         </div>
       </section>
 
-      {/* ── faq ─────────────────────────────────────────────────────────── */}
-      <section className={`${s.section} ${s.sunken}`} id="failure">
-        <div className="shell">
-          <Reveal>
-            <p className="eyebrow">Failure modes</p>
-            <h2 className={`display ${s.h2}`}>What breaks, and what happens then.</h2>
-          </Reveal>
-
-          <div className={s.faq}>
-            {FAQ.map((f, i) => (
-              <Reveal key={f.q} delay={i * 30}>
-                <div className={s.faqItem} data-open={open === i}>
-                  <h3>
-                    <button
-                      className={s.faqQ}
-                      onClick={() => setOpen(open === i ? null : i)}
-                      aria-expanded={open === i}
-                      aria-controls={`faq-${i}`}
-                    >
-                      <span>{f.q}</span>
-                      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                        <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor"
-                              strokeWidth="1.6" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </h3>
-                  <div className={s.faqA} id={`faq-${i}`} hidden={open !== i}>
-                    <p>{f.a}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal>
-            <p className={s.faqFoot}>
-              These are not hypotheticals. Each one was found by an adversarial
-              simulation that ran randomised year-long lifecycles and checked solvency
-              after every operation — three of them were silent insolvency paths that
-              passed the unit tests.{' '}
-              <Link to="/research#method" className={s.faqLink}>The method, in full</Link>
-            </p>
-          </Reveal>
+      {/* ── failure modes ───────────────────────────────────────────────── */}
+      <section className={s.section} id="failure" aria-labelledby="fail-h">
+        <div className={s.secHead}>
+          <span className={s.eyebrow}>Failure modes</span>
+          <h2 className={s.h2} id="fail-h">What breaks, and what happens then</h2>
         </div>
+
+        <div className={s.faq}>
+          {FAQ.map((f, i) => (
+            <div key={f.q} className={s.faqItem} data-open={open === i}>
+              <h3>
+                <button
+                  className={s.faqQ}
+                  onClick={() => setOpen(open === i ? null : i)}
+                  aria-expanded={open === i}
+                  aria-controls={`faq-${i}`}
+                >
+                  <span>{f.q}</span>
+                  <Icon name="chevronDown" size={16} aria-hidden="true" />
+                </button>
+              </h3>
+              <div className={s.faqA} id={`faq-${i}`} hidden={open !== i}>
+                <p>{f.a}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className={s.faqFoot}>
+          These are not hypotheticals. Each was found by an adversarial simulation that ran randomised year-long
+          lifecycles and checked solvency after every operation — three were silent insolvency paths that passed the unit
+          tests. <Link to="/research#method" className={s.faqLink}>The method, in full</Link>
+        </p>
       </section>
     </div>
   );
