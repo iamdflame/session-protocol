@@ -282,13 +282,6 @@ export function useViewport(): number {
   return w;
 }
 
-/** The largest clock that fits, never bigger than the design size. */
-export function useClockSize(preferred: number, inset = 96): number {
-  const vw = useViewport();
-  if (!vw) return preferred;
-  return Math.round(Math.max(200, Math.min(preferred, vw - inset)));
-}
-
 /**
  * True for the length of the handoff sequence after the live holder changes.
  *

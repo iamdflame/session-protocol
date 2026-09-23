@@ -15,9 +15,11 @@
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDevnets, useLedger, explorer, explorerAddr, short } from '@/lib/chain';
+import { useDevnets, useLedger, useChainVault, explorer, explorerAddr, short } from '@/lib/chain';
 import { describe, kindOf } from '@sdk/events.ts';
 import { etClock, etDate } from '@/lib/session';
+import { Heartbeat } from '@/components/bell/Heartbeat';
+import { Icon } from '@/components/ui/Icon';
 import s from './Bell.module.css';
 
 interface BellRecord {
@@ -49,6 +51,7 @@ export default function Bell() {
   const event = devnets?.[1] ?? null;
   const eqLedger = useLedger(equity?.vault ?? null, 12);
   const evLedger = useLedger(event?.vault ?? null, 12);
+  const eqVault = useChainVault(equity);
 
   useEffect(() => {
     fetch('/bell.json').then(r => (r.ok ? r.json() : null)).then(setRec).catch(() => setRec(null));
@@ -67,27 +70,28 @@ export default function Bell() {
 
   return (
     <div className={s.page}>
-      <header className={`shell ${s.head}`}>
-        <p className="eyebrow">The keeper</p>
-        <h1 className={`display ${s.title}`}>Somebody has to ring the bell.</h1>
-        <p className={`lead ${s.lead}`}>
-          A vault that nobody cranks drifts. SESSION&rsquo;s answer is that cranking is
-          permissionless — the program refuses to settle unless exactly one boundary has
-          elapsed, so a keeper that is late, absent or hostile can only cause delay, never
-          loss. <strong>Bell</strong> is the agent that does it anyway.
+      <Heartbeat vault={eqVault.data} ledger={eqLedger.rows} />
+
+      <header className={s.head}>
+        <span className={s.eyebrow}>The keeper</span>
+        <h2 className={s.title}>Somebody has to ring the bell</h2>
+        <p className={s.lead}>
+          A vault that nobody cranks drifts. Cranking is permissionless — the program refuses to settle unless exactly one
+          boundary has elapsed, so a keeper that is late, absent or hostile can only cause delay, never loss.{' '}
+          <strong>Bell</strong> is the agent that does it anyway.
         </p>
       </header>
 
       {rec === undefined ? (
-        <div className={`shell ${s.body}`}><div className="skeleton" style={{ height: 220, borderRadius: 20 }} /></div>
+        <div className={s.body}><div className="skeleton" style={{ height: 220, borderRadius: 16 }} /></div>
       ) : rec === null ? (
-        <div className={`shell ${s.body}`}>
+        <div className={s.body}>
           <p className={s.empty}>No agent has been launched yet.</p>
         </div>
       ) : (
-        <div className={`shell ${s.body}`}>
+        <div className={s.body}>
           {/* ── the token ───────────────────────────────────────────────── */}
-          <section className={`card ${s.card}`} aria-label="The token">
+          <section className={s.card} aria-label="The token">
             <header className={s.cardHead}>
               <div className={s.tokenId}>
                 <img src="/bell.png" alt="" width={44} height={44} className={s.tokenImg} />
@@ -109,19 +113,19 @@ export default function Bell() {
             <dl className={s.rows}>
               <div>
                 <dt>Mint</dt>
-                <dd><a className={`num ${s.addr}`} href={solscan('token', rec.mint)} target="_blank" rel="noreferrer">{short(rec.mint, 6)} ↗</a></dd>
+                <dd><a className={`num ${s.addr}`} href={solscan('token', rec.mint)} target="_blank" rel="noreferrer">{short(rec.mint, 6)} <Icon name="external" size={11} /></a></dd>
               </div>
               <div>
                 <dt>Quoted in</dt>
                 <dd>
-                  <a className={`num ${s.addr}`} href={solscan('token', rec.quote.mint)} target="_blank" rel="noreferrer">{short(rec.quote.mint, 6)} ↗</a>
+                  <a className={`num ${s.addr}`} href={solscan('token', rec.quote.mint)} target="_blank" rel="noreferrer">{short(rec.quote.mint, 6)} <Icon name="external" size={11} /></a>
                   <span className={s.sub}>the real NVDAx · Token-2022 · {rec.quote.decimals} dp</span>
                 </dd>
               </div>
               <div>
                 <dt>Launch</dt>
                 <dd>
-                  <a className={`num ${s.addr}`} href={solscan('tx', rec.launchTx)} target="_blank" rel="noreferrer">{short(rec.launchTx, 6)} ↗</a>
+                  <a className={`num ${s.addr}`} href={solscan('tx', rec.launchTx)} target="_blank" rel="noreferrer">{short(rec.launchTx, 6)} <Icon name="external" size={11} /></a>
                   <span className={s.sub}>through Clawpump, on a pump.fun curve</span>
                 </dd>
               </div>
@@ -129,27 +133,27 @@ export default function Bell() {
                 <dt>Cost</dt>
                 <dd>
                   <span className="num">{rec.paidSol} SOL</span>
-                  <span className={s.sub}>paid in <a className={s.addr} href={solscan('tx', rec.paymentTx)} target="_blank" rel="noreferrer">{short(rec.paymentTx, 4)} ↗</a>{rec.feeShare ? ` · ${rec.feeShare} of trading fees to the agent` : ''}</span>
+                  <span className={s.sub}>paid in <a className={s.addr} href={solscan('tx', rec.paymentTx)} target="_blank" rel="noreferrer">{short(rec.paymentTx, 4)} <Icon name="external" size={11} /></a>{rec.feeShare ? ` · ${rec.feeShare} of trading fees to the agent` : ''}</span>
                 </dd>
               </div>
               <div>
                 <dt>Agent wallet</dt>
                 <dd>
-                  <a className={`num ${s.addr}`} href={solscan('account', rec.agent.wallet)} target="_blank" rel="noreferrer">{short(rec.agent.wallet, 6)} ↗</a>
+                  <a className={`num ${s.addr}`} href={solscan('account', rec.agent.wallet)} target="_blank" rel="noreferrer">{short(rec.agent.wallet, 6)} <Icon name="external" size={11} /></a>
                   <span className={s.sub}>its own key, not the operator&rsquo;s</span>
                 </dd>
               </div>
               {rec.pumpUrl && (
                 <div>
                   <dt>Curve</dt>
-                  <dd><a className={s.addr} href={rec.pumpUrl} target="_blank" rel="noreferrer">pump.fun ↗</a></dd>
+                  <dd><a className={s.addr} href={rec.pumpUrl} target="_blank" rel="noreferrer">pump.fun <Icon name="external" size={11} /></a></dd>
                 </div>
               )}
             </dl>
           </section>
 
           {/* ── what it is trusted with ─────────────────────────────────── */}
-          <section className={`card ${s.card}`} aria-label="What the keeper can do">
+          <section className={s.card} aria-label="What the keeper can do">
             <h2 className={s.cardTitle}>What it can and cannot do</h2>
             <p className={s.cardSub}>
               The interesting half of a keeper is the half it is not allowed to touch.
@@ -170,13 +174,13 @@ export default function Bell() {
           </section>
 
           {/* ── what it has done ────────────────────────────────────────── */}
-          <section className={`card ${s.card}`} aria-label="What the keeper has done">
+          <section className={s.card} aria-label="What the keeper has done">
             <h2 className={s.cardTitle}>What it has actually done</h2>
             <p className={s.cardSub}>
               Settlements, fills, auctions and detector postings across both vaults —{' '}
-              {equity ? <a className={s.addr} href={explorerAddr(equity.vault)} target="_blank" rel="noreferrer">{short(equity.vault, 4)} ↗</a> : 'the equity vault'}
+              {equity ? <a className={s.addr} href={explorerAddr(equity.vault)} target="_blank" rel="noreferrer">{short(equity.vault, 4)} <Icon name="external" size={11} /></a> : 'the equity vault'}
               {' '}and{' '}
-              {event ? <a className={s.addr} href={explorerAddr(event.vault)} target="_blank" rel="noreferrer">{short(event.vault, 4)} ↗</a> : 'the event vault'}.
+              {event ? <a className={s.addr} href={explorerAddr(event.vault)} target="_blank" rel="noreferrer">{short(event.vault, 4)} <Icon name="external" size={11} /></a> : 'the event vault'}.
               Read from the chain, not from a log this site keeps.
             </p>
             {/* The wallet named above is the token's identity on mainnet. The key
@@ -187,7 +191,7 @@ export default function Bell() {
               <p className={s.note}>
                 Signed on devnet by the operator key{' '}
                 <a className={`mono ${s.addr}`} href={explorerAddr(equity.operator)} target="_blank" rel="noreferrer">
-                  {short(equity.operator, 4)} ↗
+                  {short(equity.operator, 4)} <Icon name="external" size={11} />
                 </a>, not by the mainnet wallet above — <code className="mono">$BELL</code> is the
                 token, and this is the cluster its vaults are on. Settlement takes no signer at
                 all, so any of these could have been sent by anyone; the fills could not, because
@@ -196,6 +200,12 @@ export default function Bell() {
             )}
             {rows === null ? (
               <div className={s.skel}>{Array.from({ length: 3 }, (_, i) => <div key={i} className="skeleton" style={{ height: 30 }} />)}</div>
+            ) : keeperRows.length === 0 && (rows ?? []).some(r => !r.decoded && !r.failed) ? (
+              <p className={s.note}>
+                Reading the vaults&rsquo; recent transactions from devnet — the public endpoint is slow
+                to serve their details, and a row is listed only once the program&rsquo;s own events have
+                been read, never guessed from the signature alone.
+              </p>
             ) : keeperRows.length === 0 ? (
               <p className={s.note}>
                 Nothing yet on either vault in the last few transactions. Settlement is
@@ -212,7 +222,7 @@ export default function Bell() {
                     </span>
                     <span className={s.actText}>
                       {describe(e, 6)}
-                      <a className={`mono ${s.sig}`} href={explorer(r.signature)} target="_blank" rel="noreferrer"> {short(r.signature, 4)} ↗</a>
+                      <a className={`mono ${s.sig}`} href={explorer(r.signature)} target="_blank" rel="noreferrer"> {short(r.signature, 4)} <Icon name="external" size={11} /></a>
                     </span>
                   </li>
                 )))}
