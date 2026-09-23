@@ -243,35 +243,43 @@ in `docs/OPERATIONS.md`.
 ## The site
 
 [session-roan.vercel.app](https://session-roan.vercel.app). The session is the
-interface: the page is in its night state because the market is shut, not
-because someone picked a theme, and every countdown, arc and "which class is
-parked" on it comes from the same calendar module the program settles on.
+interface: which class is active, when the next bell rings and which class is
+open to mint are on every page, drawn from the same calendar module the program
+settles on. DAY is blue and NIGHT amber wherever they appear, and every figure
+says where it came from — **Live** for the chain, **Devnet** for test funds,
+**Simulated** for the in-browser vaults, **Demo** for the sandbox.
 
-- **Landing** — a live 24-hour session clock, the split, an interactive handoff
-  you can drag, the finding told honestly, and what it costs us.
-- **Markets** — all 26 assets, live Jupiter prices, both class returns, and
-  above them the vaults that exist, found by scanning the program rather than
-  by a list this repository keeps. Curated ones show by default; the rest are
-  one click away and settle identically.
-- **Vault** — for NVDAx, the real thing on devnet: connect a wallet, get test
-  quote from the faucet, mint into the parked class, watch the health panel run
-  the SDK's `evaluate()` on chain state, and read your statement against what
-  the same money would have made held undivided. For OPENAI, the same program
-  on an asset with no exchange session at all. For the other 25, the same
-  settlement code running locally, and it says so.
-- **List** — open a vault yourself. `initialize_vault` takes no permission; the
-  page is that instruction from your own wallet.
-- **Keeper** — `$BELL` on mainnet, quoted in real NVDAx, and the ledger of what
-  it has actually done on both vaults. The half worth reading is what it cannot
-  do.
-- **Research** — the study as a research house would present it, including the
-  40-seeded-year adversarial simulation and the halt rate it produced.
-- **How it works** — the cycle, a six-week calendar drawn from the real holiday
-  rules, the status line between real and simulated, the failure modes.
+- **Home** — the product first: which class holds NVDA right now, the countdown
+  to the handoff, a draggable 24-hour rail, NVDA.DAY and NVDA.NIGHT with their
+  on-chain NAVs, and a mint button that names the class it can actually issue.
+- **Trade / NVDAx** (`/trade`, `/markets/NVDAx`) — the real vault on devnet:
+  connect a wallet, get test quote from the faucet, mint or redeem the parked
+  class with a five-stage transaction flow, see what you are exposed to over the
+  last three days of sessions, and your position with what the next bell does to
+  it (the program's `settle()` run at the live mark). Oracle, settlement,
+  instrument, full ledger and every account are in a Protocol details drawer.
+- **Demo** (`/trade?demo=1`) — a sandbox copy of the NVDAx vault, seeded from
+  devnet: mint, set where the mark is, ring the bell and watch exposure and
+  funding move. Nothing is signed or sent, and it says so on every surface.
+- **Portfolio** — every position the connected wallet holds, valued at NAV, with
+  P&L from its own trades and a before/after of the next bell.
+- **Markets** — all 26 assets with live Jupiter prices and both class returns,
+  and the vaults that exist, found by scanning the program. OPENAI runs the same
+  program on an asset with no exchange session; the other 24 run the settlement
+  code locally, labelled Simulated.
+- **Research** — the question, the four numbers that bound it, the finding and
+  the risk as figures, DAY against NIGHT for every asset, and the method,
+  controls, stress test and limitations a click away.
+- **How it works** — the mechanism as seven steps you can play, the calendar,
+  what is live and what is not, and the failure modes.
+- **Bell** — the next bell as the protocol's heartbeat, whether the vault has
+  settled it, and the keeper: `$BELL` on mainnet and what it cannot do.
+- **List** — open a vault yourself; `initialize_vault` takes no permission.
 
-No chart library, no UI kit. Two validated colour poles (blue↔orange, CVD
-ΔE 26.8) rather than the category's one accent. 0.0% main thread at rest
-under 4× CPU throttle. Zero contrast failures on either ground.
+A 90-second tour walks the seven things worth seeing. No chart library, no UI
+kit. The DAY/NIGHT pair is validated for colour-vision deficiency (ΔE 27.6
+between the marks under simulation, 31.1 in normal vision), and the
+accessibility harness finds no problems on any route with either session active.
 
 ## Layout
 

@@ -75,7 +75,7 @@
 .slot[data-cls='day'] .slotName { color: var(--day-ink); }
 .slot[data-cls='night'] .slotName { color: var(--night-ink); }
 .slotVal { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: var(--t-body); color: var(--text); }
-.slotNav { grid-column: 1 / -1; font-size: 11px; color: var(--text-faint); }
+.slotNav { grid-column: 1 / -1; font-size: 11px; color: var(--text-muted); }
 .arrow { display: grid; place-items: center; color: var(--text-faint); padding-top: 22px; }
 .bellText { font-size: var(--t-sm); line-height: 1.6; color: var(--text-muted); max-width: 90ch; }
 .bellText strong { color: var(--text); font-weight: 600; }

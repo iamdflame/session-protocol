@@ -1,20 +1,25 @@
 .wrap { position: relative; display: inline-flex; }
 .tip {
+  --tx: -50%;
   position: absolute; z-index: 60; left: 50%; bottom: calc(100% + 8px);
-  transform: translate(-50%, 2px);
-  width: max-content; max-width: 280px;
+  width: max-content; max-width: min(280px, calc(100vw - 24px));
   padding: 8px 10px; border-radius: 8px;
   background: #1A1F26; border: 1px solid var(--border-strong);
   color: var(--text); font-size: var(--t-xs); line-height: 1.5; font-weight: 400;
   letter-spacing: 0; text-transform: none; text-align: left;
   box-shadow: var(--shadow-2);
+  /* Hidden: invisible and scaled to nothing, so it adds no width to the page.
+     The scale flips only after the fade, so the fade is all anyone sees. */
   opacity: 0; pointer-events: none; visibility: hidden;
-  transition: opacity var(--dur-micro) var(--ease), transform var(--dur-micro) var(--ease), visibility 0s linear var(--dur-micro);
+  transform: translateX(var(--tx)) scale(0);
+  transition: opacity var(--dur-micro) var(--ease), transform 0s linear var(--dur-micro), visibility 0s linear var(--dur-micro);
 }
-.tip[data-side='bottom'] { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -2px); }
+.tip[data-side='bottom'] { bottom: auto; top: calc(100% + 8px); }
+.tip[data-align='start'] { left: 0; --tx: 0; }
+.tip[data-align='end'] { left: auto; right: 0; --tx: 0; }
 .wrap:hover .tip, .wrap:focus-within .tip {
-  opacity: 1; visibility: visible; transform: translate(-50%, 0);
-  transition-delay: 120ms, 120ms, 0s;
+  opacity: 1; visibility: visible; transform: translateX(var(--tx)) scale(1);
+  transition: opacity var(--dur-micro) var(--ease) 120ms, transform 0s linear 120ms, visibility 0s linear 120ms;
 }
 .term {
   border-bottom: 1px dotted var(--text-faint);

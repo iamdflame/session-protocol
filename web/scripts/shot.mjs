@@ -148,6 +148,8 @@ const chrome = spawn(CHROME, [
 
 const errors = [];
 
+const overflows = [];
+
 try {
   await waitPort(PORT);
   const cdp = await CDP.attach(PORT);
@@ -265,6 +267,32 @@ try {
       })()`);
       await settle(300, 3000);
 
+      /* No page may scroll sideways at any width the redesign supports. When
+         one does, name the element that sticks out furthest, so the report
+         says what to fix rather than only that something is wrong. */
+      const over = await cdp.eval(`(() => {
+        const vw = document.documentElement.clientWidth;
+        const extra = document.documentElement.scrollWidth - vw;
+        if (extra <= 1) return null;
+        let worst = null, far = vw;
+        // Content inside a container that clips or scrolls sideways cannot
+        // widen the page; only an element that escapes every such box can.
+        const escapes = e => {
+          for (let a = e.parentElement; a && a !== document.body; a = a.parentElement) {
+            const ox = getComputedStyle(a).overflowX;
+            if (ox !== 'visible') return a.getBoundingClientRect().right > vw + 1;
+          }
+          return true;
+        };
+        for (const e of document.querySelectorAll('body *')) {
+          const r = e.getBoundingClientRect();
+          if (r.width && r.right > far + 1 && getComputedStyle(e).position !== 'fixed' && escapes(e)) { far = r.right; worst = e; }
+        }
+        const id = worst ? worst.tagName.toLowerCase() + (worst.className && typeof worst.className === 'string' ? '.' + worst.className.split(' ')[0] : '') : '?';
+        return extra + 'px, widest ' + id;
+      })()`);
+      if (over) overflows.push(`${path} @ ${w}: ${over}`);
+
       const shot = await cdp.send('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: FULL,
@@ -284,6 +312,11 @@ try {
     }
   }
 
+  if (overflows.length) {
+    console.log(`\n${overflows.length} page(s) scroll sideways:`);
+    for (const o of overflows) console.log('  ' + o);
+    process.exitCode = 1;
+  }
   if (errors.length) {
     console.log(`\n${errors.length} console error(s):`);
     for (const e of [...new Set(errors)].slice(0, 12)) console.log('  ' + e.slice(0, 220));
