@@ -25,8 +25,24 @@ async function handler(req: Request): Promise<Response> {
     const m = loadManifest();
     const report = await crank(connection(m), m, operator());
     lastRun = now; lastReport = report;
+    /* One line per run, in the function log.
+
+       The report used to live only in the response body, which the platform
+       does not keep. On 22 Sep 2026 the 09:35 and 09:55 ET runs both failed to
+       settle the opening bell, the 16:05 run found two bells elapsed and
+       halted the vault — exactly as designed — and there was no record
+       anywhere of *why* the morning settlement had been refused. A run that
+       decides not to act, or tries and is refused, is the one worth reading. */
+    console.log(JSON.stringify({
+      crank: m.symbol, at: report.at, due: report.boundaryDue,
+      settled: report.settled, markSource: report.markSource, markNote: report.markNote,
+      markAgeSecs: report.markAgeSecs, exposed: report.exposed, halted: report.halted,
+      haltReason: report.haltReason, pending: report.pendingAfter, fills: report.fills.length,
+      fillError: report.fillError, auction: report.auction,
+    }));
     return json({ cached: false, report });
   } catch (e) {
+    console.error(JSON.stringify({ crank: 'error', message: e instanceof Error ? e.message : String(e) }));
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 }

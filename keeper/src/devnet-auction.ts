@@ -79,7 +79,7 @@ const WINDOW_SECS = 120;
 
 const send = async (label: string, signers: Keypair[], ...ix: Parameters<Transaction['add']>) => {
   const tx = new Transaction()
-    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }))
+    .add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }))
     .add(...ix);
   try {
     const sig = await sendAndConfirmTransaction(conn, tx, signers, { commitment: 'confirmed' });

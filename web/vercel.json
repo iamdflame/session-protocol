@@ -54,15 +54,15 @@
   "crons": [
     {
       "path": "/api/crank",
-      "schedule": "35,55 13,14 * * 1-5"
+      "schedule": "32-57/5 13,14 * * 1-5"
     },
     {
       "path": "/api/crank",
-      "schedule": "5,25 20,21 * * 1-5"
+      "schedule": "2-27/5 20,21 * * 1-5"
     },
     {
       "path": "/api/crank",
-      "schedule": "5,25 17,18 * * 1-5"
+      "schedule": "2-27/5 17,18 * * 1-5"
     },
     {
       "path": "/api/crank",

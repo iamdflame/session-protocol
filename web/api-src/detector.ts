@@ -43,6 +43,8 @@ async function handler(req: Request): Promise<Response> {
 
     const out = { ...report, cranked };
     if (!dry) { lastRun = now; lastReport = out; }
+    // Logged for the same reason the crank is: the response body is not kept.
+    console.log(JSON.stringify({ detector: m.symbol, premiumBps: report.premiumBps, posted: report.posted, cranked }));
     return json({ cached: false, report: out });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

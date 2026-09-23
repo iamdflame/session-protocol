@@ -93,15 +93,26 @@ export interface CrankReport {
 
 const pk = (s: string) => new PublicKey(s);
 
-/* Settling a boundary costs about 265,000 compute units — the oracle reads,
-   the issuer inspection, the roll, funding, and the handoff sizing, in one
-   instruction. The runtime's default is 200,000, so every settle this keeper
-   ever sent failed with `exceeded CUs meter` and reported it as a failed
-   simulation, which is why no boundary had settled on chain.
-   
-   Asked for explicitly, with headroom, rather than left to a default that is
-   smaller than the work. */
-export const CRANK_CU = 400_000;
+/* The compute budget for a settlement, and why it is the ceiling.
+
+   The first time: a settle cost about 265,000 CU and the runtime default is
+   200,000, so every settlement this keeper sent died in simulation and none
+   had ever landed. The fix raised the limit to 400,000 — sized to the one
+   settlement measured, which happened to be cheap because NIGHT was empty.
+
+   The second time, 22 Sep 2026: the opening bell after a full night, with
+   both classes populated, cost more than 400,000. Both morning attempts died
+   in preflight, which leaves nothing on chain; the 16:05 crank found two bells
+   elapsed and halted the vault, exactly as designed. Replaying those two bells
+   cost 677,259 CU — about 338,000 per settlement before the oracle reads, the
+   equity-feed check and the calendar walk that `settle_boundary` adds.
+
+   The cost moves with the state — which classes are populated, how many
+   calendar days the decision walks, whether funding and a handoff are sized —
+   so any number chosen from one observation is a number waiting for the next
+   state to exceed it. A limit is only a ceiling and costs nothing unless a
+   priority fee is set, so the crank asks for the most a transaction can have. */
+export const CRANK_CU = 1_400_000;
 const budgeted = (...ix: TransactionInstruction[]) =>
   new Transaction()
     .add(ComputeBudgetProgram.setComputeUnitLimit({ units: CRANK_CU }))
