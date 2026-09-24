@@ -193,6 +193,30 @@ The program flags every such print `simulated`, for good, and the page says
 so first. The details, the byte-exact verification path and how to check a
 print yourself are in [`docs/BELL.md`](docs/BELL.md).
 
+## Bell orders: the cross
+
+The oracle exists for this. `programs/session-cross` takes orders any time
+before a bell and fills all of them at the bell's print, times the xStock
+mint's own multiplier. A raw xStock token is `multiplier` shares; xStocks'
+docs, Pyth's `.RR` feeds and real Jupiter fills agree (`docs/CROSS.md`).
+
+- Buyers and sellers net against each other at that price, and the matched
+  part pays no fee.
+- If one side is larger, makers fill the difference in a two-minute
+  uniform-price auction. Their fee is shared across the crowded side, and a
+  backstop maker's standing offer caps it.
+- The book freezes two minutes before the bell, so nobody can react to a
+  price they can see coming.
+- A missing print, a multiplier change near the bell, or Pyth disagreeing
+  with the mint cancels the cross and refunds everyone whole.
+- An issuer pause can hold tokens, never a quote refund.
+
+The arithmetic is `crates/session-core/src/cross.rs`, property-tested over
+10,000 random crosses per property, and the fee rule came out of those
+tests. The program is tested end to end on the real NVDAx mint with
+Pyth-verified prints, and every balance matches the arithmetic to the
+atom. Its devnet deployment is pending: it needs 3.39 SOL of program rent.
+
 ## Safety model
 
 Every caller is assumed adversarial and every input hostile.
@@ -325,11 +349,14 @@ programs/session-bell/src/   the bell oracle
   lib.rs         post, finalise, mark missing; the verifier CPI
 sdk/             calendar, settlement, account decoding, health, instruction builders; bell.ts
 keeper/          the permissionless crank and fill; devnet init and checks; the bell poster
-tests/integration/  LiteSVM against Pyth's own verifier binary; writes the Lazer vectors
+programs/session-cross/src/  bell orders: escrow, pricing, the auction, settlement
+crates/session-core/src/xstock.rs  what a raw xStock atom is worth, read from the mint
+crates/session-core/src/cross.rs   netting and the uniform-price auction, pure
+tests/integration/  LiteSVM against Pyth's own verifier binary; the cross on the real NVDAx
 tools/lazer-devnet/ Pyth's verifier under a devnet id, for the test signer
 web/             the site — Vite + React, the wallet layer, two serverless functions
 research/        the session study, bad-print rejection, live execution costs
-docs/            the audit, the runbook, the key policy, the mainnet costing; the bell (BELL.md, METHOD.md)
+docs/            the audit, the runbook, the key policy, the mainnet costing; the bell and the cross (BELL.md, METHOD.md, CROSS.md)
 tests/vectors/   the cross-language vectors
 ```
 

@@ -91,3 +91,33 @@ The fee rule above came out of that last property. The TypeScript mirror is pinn
 - A final print is immutable, and a cross prices at most once.
 - Refunds are always reachable: a cancelled cross refunds everyone, and the admin can only stop *new* orders.
 - A non-zero transfer fee, a transfer hook or a paused mint stops new orders. xStocks carry none of the first two.
+
+## Where it stands
+
+**Built and tested.** `programs/session-cross` (`Crosf1CpgcEs6G6SiX2B7KMR4hxVcE2FGU2r53a3RK9K`), 667,656 bytes. Its instructions:
+
+- `init_config`: bound to the upgrade authority.
+- `create_market` and `set_market`: admin; bounded parameters and the new-order switch.
+- `place_order` and `cancel_order`: until the freeze.
+- `price_cross`: once the print is final, or it cancels.
+- `cancel_cross`: no final print within six hours.
+- `confirm_orders`: batched.
+- `post_offer`: during the auction.
+- `clear`: after it.
+- `settle_order` and `settle_offer`: per leg.
+- `close_cross`: dust to the treasury, rent back.
+
+Every step after `place_order` is permissionless.
+
+`tests/integration/tests/cross.rs` runs it in LiteSVM on the **real NVDAx mint**, captured from mainnet and installed at its real address with only its authorities swapped. Prices come from prints **Pyth's own verifier** checked. All 9 cases pass, and every balance change equals `session_core::cross` computed from the same book, to the atom:
+
+- **A full cross.** Five orders net at $224.06 × 1.0017, and two limit orders are refunded whole. A 15 bp maker fills 4.676 NVDAx at the uniform price, and a 40 bp maker is not needed. The seller receives exactly `X`: $448.882340 for 2 raw tokens. The dust (1 raw atom, 3 quote atoms) goes to the treasury, and escrow ends at zero.
+- **Crowded sellers** against a quote maker at 20 bp.
+- **A missing print** cancels the cross and refunds everyone whole; so does **no print within six hours**.
+- **The freeze** holds at 120 s before the bell; a cancel before it returns the escrow.
+- **Only the owner** cancels an order; there is no order without a bell, and minimums hold.
+- **An issuer pause** mid-settlement holds the tokens but never the quote refund, and a paused mint takes no new orders.
+- **A multiplier activation** 60 s before the bell cancels the cross.
+- **Pyth's `.RR`** disagreeing with the mint's multiplier cancels the cross.
+
+**Devnet: pending.** The deployment needs 3.39 SOL of program rent. `npm run cross:devnet` lists the steps and `-- --apply` takes them: a fixture NVDAx with the real extensions, the config, an NVDA market, and the backstop maker. `npm run cross:keeper` then runs every cross from bell to close.
