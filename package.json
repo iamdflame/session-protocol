@@ -18,6 +18,7 @@
     "derive": "node --experimental-strip-types research/derive.ts && node --experimental-strip-types research/session-study.ts",
     "study": "node --experimental-strip-types research/session-study.ts",
     "exec-cost": "node research/executability.mjs",
+    "night-cost": "node --experimental-strip-types research/night-cost.ts",
     "devnet:init": "node --experimental-strip-types keeper/src/devnet-init.ts",
     "devnet:crank": "node --experimental-strip-types keeper/src/devnet-crank.ts",
     "devnet:check": "node --experimental-strip-types keeper/src/devnet-encoding-check.ts && node --experimental-strip-types keeper/src/devnet-trade-check.ts",

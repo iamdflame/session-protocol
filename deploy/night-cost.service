@@ -1,0 +1,24 @@
+# The cost-of-the-night collector, as a systemd user service.
+#
+# Installed by deploy/install-night-cost.sh, which fills in @NODE@ and @REPO@:
+# node on this machine comes from nvm, which a systemd unit cannot see, so the
+# path is resolved once at install time rather than hoped for at boot.
+#
+#   systemctl --user status night-cost
+#   journalctl --user -u night-cost -f
+
+[Unit]
+Description=SESSION cost-of-the-night collector (Jupiter round trips every ten minutes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@NODE@ --experimental-strip-types research/night-cost.ts --watch
+Environment=NODE_NO_WARNINGS=1
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

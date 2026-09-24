@@ -1,0 +1,15 @@
+{
+  "note": "The tokens the cost-of-the-night study samples. Pinned by mint, never looked up by ticker: a symbol search returns same-name pump.fun tokens beside the real ones (QQQx and IBMx both have them). The first five come from data/universe.json; QQQx and IBMx were resolved on 2026-09-24 through Jupiter's token search, keeping only the mint carrying the `xstocks` tag.",
+  "resolved": "2026-09-24",
+  "quote": { "symbol": "USDC", "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "decimals": 6 },
+  "sizesUsd": [100, 1000, 10000, 50000],
+  "names": [
+    { "symbol": "NVDAx", "mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh", "decimals": 8, "source": "data/universe.json" },
+    { "symbol": "SPYx",  "mint": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W", "decimals": 8, "source": "data/universe.json" },
+    { "symbol": "TSLAx", "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB", "decimals": 8, "source": "data/universe.json" },
+    { "symbol": "AAPLx", "mint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp", "decimals": 8, "source": "data/universe.json" },
+    { "symbol": "METAx", "mint": "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu", "decimals": 8, "source": "data/universe.json" },
+    { "symbol": "QQQx",  "mint": "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ", "decimals": 8, "source": "lite-api.jup.ag/tokens/v2/search, tag xstocks, 2026-09-24" },
+    { "symbol": "IBMx",  "mint": "XspwhyYPdWVM8XBHZnpS9hgyag9MKjLRyE3tVfmCbSr", "decimals": 8, "source": "lite-api.jup.ag/tokens/v2/search, tag xstocks, 2026-09-24" }
+  ]
+}
