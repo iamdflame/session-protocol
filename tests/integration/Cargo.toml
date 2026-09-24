@@ -11,11 +11,13 @@ description = "session-bell against Pyth's own Lazer verifier binary, in LiteSVM
 [workspace]
 
 [dependencies]
+base64 = "0.22"
 byteorder = "1.5"
 ed25519-dalek = "2.2"
 litesvm = { version = "=0.16.0", features = ["precompiles"] }
 pyth-lazer-protocol = "=0.46.0"
 serde_json = "1"
+session-core = { path = "../../crates/session-core" }
 sha2 = "0.10"
 solana-account = "4.3"
 solana-address = "2.6"

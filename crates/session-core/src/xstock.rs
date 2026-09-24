@@ -106,6 +106,83 @@ impl ScaledUi {
     }
 }
 
+/// What an issuer's powers over a mint mean for a venue holding it in escrow.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct IssuerFlags {
+    /// Transfers are paused: nothing moves in or out until the issuer resumes.
+    pub paused: bool,
+    /// A transfer-hook program is set: every transfer needs accounts a venue
+    /// does not pass, so transfers fail.
+    pub hook_set: bool,
+    /// Either transfer-fee schedule is non-zero: the venue would receive less
+    /// than it was sent, and escrow arithmetic assumes it does not.
+    pub transfer_fee: bool,
+    /// New token accounts start frozen.
+    pub default_frozen: bool,
+    pub scaled_ui: Option<ScaledUi>,
+}
+
+impl IssuerFlags {
+    /// Whether a venue should refuse new escrow in this mint.
+    pub fn refuses_escrow(&self) -> bool {
+        self.paused || self.hook_set || self.transfer_fee || self.default_frozen
+    }
+}
+
+const EXT_TRANSFER_FEE_CONFIG: u16 = 1;
+const EXT_DEFAULT_ACCOUNT_STATE: u16 = 6;
+const EXT_TRANSFER_HOOK: u16 = 14;
+const EXT_PAUSABLE: u16 = 26;
+
+/// Read every flag at once from a mint's bytes. A classic 82-byte mint has
+/// none; `Err(())` for bytes that are not a well-formed mint.
+pub fn issuer_flags(data: &[u8]) -> Result<IssuerFlags, ()> {
+    let mut f = IssuerFlags::default();
+    if data.len() <= TLV_START {
+        return if data.len() >= 82 { Ok(f) } else { Err(()) };
+    }
+    if data[ACCOUNT_LEN] != ACCOUNT_TYPE_MINT {
+        return Err(());
+    }
+    let u16_at = |at: usize| -> Result<u16, ()> {
+        Ok(u16::from_le_bytes(data.get(at..at + 2).ok_or(())?.try_into().map_err(|_| ())?))
+    };
+    let mut at = TLV_START;
+    while at + 4 <= data.len() {
+        let ty = u16_at(at)?;
+        let len = u16_at(at + 2)? as usize;
+        if ty == 0 && len == 0 {
+            break;
+        }
+        let body = at + 4;
+        let end = body.checked_add(len).ok_or(())?;
+        let d = data.get(body..end).ok_or(())?;
+        match ty {
+            EXT_PAUSABLE => f.paused = *d.get(32).ok_or(())? != 0,
+            // authority 32, then the program: all zeros is "none"
+            EXT_TRANSFER_HOOK => f.hook_set = d.get(32..64).ok_or(())?.iter().any(|b| *b != 0),
+            EXT_TRANSFER_FEE_CONFIG => {
+                // authorities 64, withheld 8, then two schedules of
+                // { epoch 8, maximum 8, basis points 2 }
+                let older = u16::from_le_bytes(d.get(88..90).ok_or(())?.try_into().map_err(|_| ())?);
+                let newer = u16::from_le_bytes(d.get(106..108).ok_or(())?.try_into().map_err(|_| ())?);
+                f.transfer_fee = older != 0 || newer != 0;
+            }
+            EXT_DEFAULT_ACCOUNT_STATE => f.default_frozen = d.first() == Some(&2),
+            EXT_SCALED_UI_AMOUNT => {
+                if len != 56 {
+                    return Err(());
+                }
+                let u64_at = |o: usize| u64::from_le_bytes(d[o..o + 8].try_into().unwrap());
+                f.scaled_ui = Some(ScaledUi { current_bits: u64_at(32), new_effective_ts: u64_at(40) as i64, new_bits: u64_at(48) });
+            }
+            _ => {}
+        }
+        at = end;
+    }
+    Ok(f)
+}
+
 /// Byte layout of a Token-2022 mint: the 82-byte base, padding to the
 /// 165-byte account length, one account-type byte, then type-length-value
 /// extensions.
@@ -245,6 +322,37 @@ mod tests {
         assert_eq!(s.new_effective_ts, 1_789_000_200); // 10 Sep 2026 00:30 UTC
         // at the 24 Sep close the September multiplier is the one in force
         assert_eq!(multiplier_wad(s.bits_at(1_790_280_000)), Some(1_001_701_196_801_074_056));
+    }
+
+    /// The real NVDAx: pausable but not paused, a hook slot with no program,
+    /// no transfer fee. A venue may hold it. The real OPENAI PreStock carries
+    /// a transfer fee, which escrow arithmetic cannot take.
+    #[test]
+    fn issuer_flags_of_the_real_mints() {
+        let n = issuer_flags(&fixture("nvdax")).unwrap();
+        assert!(!n.paused && !n.hook_set && !n.transfer_fee && !n.default_frozen);
+        assert!(!n.refuses_escrow());
+        assert_eq!(n.scaled_ui, scaled_ui(&fixture("nvdax")).unwrap());
+        let o = issuer_flags(&fixture("openai")).unwrap();
+        assert!(o.transfer_fee && o.refuses_escrow());
+    }
+
+    /// Flip the pause byte of the real NVDAx and the venue must refuse it.
+    #[test]
+    fn a_paused_mint_is_refused() {
+        let mut d = fixture("nvdax");
+        let mut at = 166;
+        while at + 4 <= d.len() {
+            let ty = u16::from_le_bytes([d[at], d[at + 1]]);
+            let len = u16::from_le_bytes([d[at + 2], d[at + 3]]) as usize;
+            if ty == 26 {
+                d[at + 4 + 32] = 1;
+                break;
+            }
+            at += 4 + len;
+        }
+        let f = issuer_flags(&d).unwrap();
+        assert!(f.paused && f.refuses_escrow());
     }
 
     #[test]

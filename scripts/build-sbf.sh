@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build every program for the chain, and refuse to leave an artifact behind if
-# any function in any of them overran the SBF stack frame.
+# any function in any of them overran the SBF stack frame, or if any artifact
+# is too small to be a program at all.
 #
 # cargo build-sbf prints "Stack offset ... exceeded max offset" as an Error
 # line, exits 0, and writes the .so anyway. On chain that is an access
@@ -8,30 +9,51 @@
 # once; adding Token-2022 accounts broke three more structs. A warning nobody
 # can miss is worth more than a line in a runbook.
 #
-# The workspace now builds more than one program, and the overrun line names
-# the function, not the artifact, so every .so this build wrote is removed:
-# a half-good set of binaries is still a set somebody will deploy.
+# Each program is built in its own cargo invocation. session-cross depends on
+# session-bell with its `cpi` feature, and one workspace build unifies
+# features: session-bell was compiled without its entrypoint and came out a
+# valid, 896-byte, empty program. Built alone, each program gets only its own
+# features — and any .so under 20 KB is refused anyway, because an empty
+# program deploys as happily as a real one.
+#
+# The overrun line names the function, not the artifact, so every .so is
+# removed on a refusal: a half-good set of binaries is still a set somebody
+# will deploy.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 log=$(mktemp)
-stamp=$(mktemp)
-cargo build-sbf "$@" 2>&1 | tee "$log"
-status=${PIPESTATUS[0]}
+status=0
+for manifest in programs/*/Cargo.toml; do
+  echo "── $(dirname "$manifest")"
+  cargo build-sbf --manifest-path "$manifest" "$@" 2>&1 | tee -a "$log"
+  s=${PIPESTATUS[0]}
+  [ "$s" -ne 0 ] && status=$s
+done
+
+refuse() {
+  echo
+  echo "REFUSING THE ARTIFACTS — $1"
+  rm -f target/deploy/*.so
+  rm -f "$log"
+  exit 1
+}
 
 if grep -q "Stack offset" "$log"; then
   echo
-  echo "REFUSING THE ARTIFACTS — $(grep -c 'Stack offset' "$log") function(s) overran the 4KiB SBF stack:"
+  echo "$(grep -c 'Stack offset' "$log") function(s) overran the 4KiB SBF stack:"
   grep -oE "[a-z_]+\.\.[A-Za-z_]+" "$log" | sort -u | sed 's/^/  /'
-  echo
   echo "Box the deserialised accounts in those structs: Box<Account<..>> / Box<InterfaceAccount<..>>."
-  find target/deploy -maxdepth 1 -name '*.so' -newer "$stamp" -print -delete 2>/dev/null | sed 's/^/  removed /'
-  # Anything older than this run was not written by it, but a failed build
-  # should not leave a stale artifact looking current either.
-  rm -f target/deploy/*.so
-  rm -f "$log" "$stamp"
-  exit 1
+  refuse "a stack frame overran"
 fi
 
-rm -f "$log" "$stamp"
+for so in target/deploy/*.so; do
+  size=$(stat -c %s "$so")
+  if [ "$size" -lt 20000 ]; then
+    refuse "$so is $size bytes: too small to be a program (built without its entrypoint?)"
+  fi
+  echo "  $(basename "$so"): $size bytes"
+done
+
+rm -f "$log"
 exit "$status"

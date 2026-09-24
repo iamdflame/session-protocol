@@ -1,0 +1,33 @@
+[package]
+name = "session-cross"
+version = "0.1.0"
+edition = "2021"
+description = "Orders that fill at the bell: netted at the print, the imbalance to a uniform-price auction"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "session_cross"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.31.1", features = ["token_2022_extensions"] }
+session-core = { path = "../../crates/session-core" }
+# The prints and listings are read as session-bell's own account types, so
+# Anchor checks their owner and discriminator; nothing here copies a layout.
+session-bell = { path = "../session-bell", features = ["cpi"] }
+
+[dev-dependencies]
+proptest = "1"
+
+# Anchor's macros test cfgs this crate does not declare.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))', 'cfg(target_os, values("solana"))'] }
