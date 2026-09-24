@@ -12,6 +12,7 @@ export const SECONDARY: NavItem[] = [
   { to: '/research', label: 'Research', icon: 'research' },
   { to: '/how-it-works', label: 'How it works', icon: 'how' },
   { to: '/bell', label: 'Bell', icon: 'bell' },
+  { to: '/oracle', label: 'Oracle', icon: 'verified' },
 ];
 export const isActive = (item: NavItem, pathname: string) =>
   item.match ? item.match(pathname) : pathname === item.to || pathname.startsWith(item.to + '/');

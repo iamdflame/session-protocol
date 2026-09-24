@@ -172,6 +172,27 @@ Every mark is gated on Pyth's confidence interval before it is allowed to move
 anyone's NAV. Pyth is the only major oracle that publishes its own uncertainty,
 and refusing to settle when it is high is the entire reason to want that number.
 
+## The bell oracle
+
+The next product settles orders at the open and the close, so it needs the
+open and the close on chain. `programs/session-bell` keeps them: for each
+listing and trading day, one print for 09:30 and one for 16:00, taken from a
+Pyth Pro message whose signature a Pyth verifier checked in the same
+transaction and which a written rule accepted (`docs/METHOD.md`). Anyone may
+post, and a better price replaces the stored one until the deadline. After
+that the print is final, or the bell is recorded missing.
+
+It is held to Pyth's own code from both ends. Its parser reads every
+message Pyth's own encoder wrote for it and refuses each broken variant with
+the named error, and its end-to-end tests run against Pyth's verifier exactly
+as deployed on mainnet (`tests/integration`, in LiteSVM). It is live on
+devnet for NVDA, SPY, TSLA, AAPL and QQQ, with a poster running every bell,
+and the site's `/oracle` page shows every print. On devnet the signer is a
+test key and the prices are Jupiter's, because there is no Pyth Pro key yet.
+The program flags every such print `simulated`, for good, and the page says
+so first. The details, the byte-exact verification path and how to check a
+print yourself are in [`docs/BELL.md`](docs/BELL.md).
+
 ## Safety model
 
 Every caller is assumed adversarial and every input hostile.
@@ -274,6 +295,8 @@ says where it came from — **Live** for the chain, **Devnet** for test funds,
   what is live and what is not, and the failure modes.
 - **Bell** — the next bell as the protocol's heartbeat, whether the vault has
   settled it, and the keeper: `$BELL` on mainnet and what it cannot do.
+- **Oracle** — every open and close the bell oracle has recorded, the rule
+  as the config holds it, and what on devnet is simulated and what is not.
 - **List** — open a vault yourself; `initialize_vault` takes no permission.
 
 A 90-second tour walks the seven things worth seeing. No chart library, no UI
@@ -295,11 +318,18 @@ programs/session/src/
   lib.rs         instruction surface
   machine.rs     the session state machine — tracked, never inferred
   ops.rs         instruction policy, separated from plumbing so it is testable
-sdk/             calendar, settlement, account decoding, health, instruction builders
-keeper/          the permissionless crank and fill; devnet init and checks
+programs/session-bell/src/   the bell oracle
+  lazer.rs       Pyth Pro messages, parsed exactly or refused
+  rules.rs       method v1: which price is the open or the close
+  state.rs       config, listings, prints
+  lib.rs         post, finalise, mark missing; the verifier CPI
+sdk/             calendar, settlement, account decoding, health, instruction builders; bell.ts
+keeper/          the permissionless crank and fill; devnet init and checks; the bell poster
+tests/integration/  LiteSVM against Pyth's own verifier binary; writes the Lazer vectors
+tools/lazer-devnet/ Pyth's verifier under a devnet id, for the test signer
 web/             the site — Vite + React, the wallet layer, two serverless functions
 research/        the session study, bad-print rejection, live execution costs
-docs/            the audit, the runbook, the key policy, the mainnet costing
+docs/            the audit, the runbook, the key policy, the mainnet costing; the bell (BELL.md, METHOD.md)
 tests/vectors/   the cross-language vectors
 ```
 

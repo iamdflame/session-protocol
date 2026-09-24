@@ -13,7 +13,7 @@ const MOBILE = [...PRIMARY, { to: '/research', label: 'Research', icon: 'researc
 export function BottomNav() {
   const { pathname } = useLocation();
   const [more, setMore] = useState(false);
-  const moreActive = ['/how-it-works', '/bell', '/list'].some(p => pathname.startsWith(p));
+  const moreActive = ['/how-it-works', '/bell', '/oracle', '/list'].some(p => pathname.startsWith(p));
   return (
     <>
       <nav className={s.bottom} aria-label="Primary">
@@ -37,6 +37,7 @@ export function BottomNav() {
           {[
             { to: '/how-it-works', label: 'How it works', icon: 'how' as const, sub: 'The handoff, step by step' },
             { to: '/bell', label: 'Bell', icon: 'bell' as const, sub: 'The live heartbeat and the keeper' },
+            { to: '/oracle', label: 'Oracle', icon: 'verified' as const, sub: 'Every open and close, as Pyth signed them' },
             { to: '/list', label: 'Open a vault', icon: 'list' as const, sub: 'initialize_vault from your wallet' },
           ].map(l => (
             <Link key={l.to} to={l.to} className={s.moreItem} onClick={() => setMore(false)}>

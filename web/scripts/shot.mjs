@@ -52,6 +52,7 @@ const PAGES = [
   ['/markets/NVDAx', 'vault-chain'],
   ['/markets/OPENAI', 'vault-event'],
   ['/bell', 'keeper'],
+  ['/oracle', 'oracle'],
   ['/research', 'research'],
   ['/how-it-works', 'how'],
   ['/list', 'list'],

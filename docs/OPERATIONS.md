@@ -418,6 +418,62 @@ compromise, halt, and investigate.
 
 ---
 
+## The bell oracle and the two services
+
+`programs/session-bell` keeps the open and close prints (`docs/BELL.md`, `docs/METHOD.md`). Two systemd user services run beside it on the operator machine. Both are installed by the same script, which fills in the paths nvm hides from systemd:
+
+```bash
+deploy/install-service.sh bell-poster     # posts every open and close to devnet
+deploy/install-service.sh night-cost      # the cost-of-the-night study, every ten minutes
+
+systemctl --user status bell-poster       # or night-cost
+journalctl --user -u bell-poster -f
+npm run bell:poster -- --status           # the chain's prints, and the poster's own log
+npm run night-cost -- --status
+```
+
+They run with nobody logged in only if lingering is on (`loginctl enable-linger $USER`); the installer says which it is.
+
+**Setting up.** `npm run bell:devnet` reports what exists and what is missing, and `-- --apply` does the missing steps: the verifier's storage and fee treasury, trusting the test signer, the config, the five listings, funding the poster, and `web/public/bell-devnet.json`. Running it again changes nothing that is already right.
+
+**What the poster does at a bell.**
+
+- It wakes a minute before the window and polls its source every five seconds.
+- An open is posted as soon as a price qualifies. A close is posted once its window has passed, when the last qualifying price is known.
+- It waits for the deadline, finalises what it posted, and marks missing any listing that had nothing.
+- On every start it settles the past week's bells first. A poster that was down catches up, but only by freezing: a bell whose deadline passed while it was down is `Missing`. It is never back-filled, because posting for it has closed.
+- `-- --simulate --rehearse` builds the next bell's post and has devnet simulate it, without sending anything.
+
+**Funding.** The poster pays each print's rent, 0.00257 SOL, plus fees: ten prints a trading day for five listings, about 0.026 SOL. Its key is `keeper/.devnet/bell-poster.json`; top it up from the deploy wallet.
+
+**Keys**, all in `keeper/.devnet/` (gitignored):
+
+- `bell-signer.json`: the test key the devnet verifier trusts. Whoever holds it can sign simulated prints. To rotate it, `update` the verifier with the old key and expiry 0, then with a new key.
+- `bell-poster.json`: lamports only; no privilege.
+- `lazer-treasury.json`: receives the verifier's 1-lamport fee.
+- `session_bell-keypair.json` and `lazer_devnet-keypair.json`: the two program ids. The upgrade authority for both is the deploy wallet.
+
+**Upgrading the bell program.** Upgrading means:
+
+```bash
+npm run build:program
+(cd tests/integration && ./fetch.sh && cargo test)
+solana program deploy target/deploy/session_bell.so --program-id target/deploy/session_bell-keypair.json --url devnet
+```
+
+The buffer needs about 2.3 SOL for the length of the upload. One upgrade is pending: the deployed build predates `FeedFromTheFuture`.
+
+**Switching to Pyth Pro.** With a key:
+
+1. `npm i @pythnetwork/pyth-lazer-sdk@7.0.0`.
+2. Set `PYTH_PRO_TOKEN`.
+3. `set_verifier` to Pyth's own program, `pytd2yyk641x7ak7mkaasSJVXh6YYZnC7wTmtgAyxPt`. It is deployed on devnet too.
+4. Run the poster without `--simulate`.
+
+From then on, new prints are not flagged simulated. The poster refuses to run a simulated source against a config that verifies through Pyth, and the reverse.
+
+---
+
 ## What is not covered
 
 - **No mainnet deployment yet.** xStocks exist only on mainnet, so validator-backed

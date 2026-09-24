@@ -26,6 +26,7 @@ const PAGES: Omit<Row, 'rank'>[] = [
   { key: 'p:research', to: '/research', title: 'Research', sub: 'Does the overnight premium survive?', icon: 'research' },
   { key: 'p:how', to: '/how-it-works', title: 'How it works', sub: 'The handoff, step by step', icon: 'how' },
   { key: 'p:bell', to: '/bell', title: 'Bell', sub: 'The next boundary, live', icon: 'bell' },
+  { key: 'p:oracle', to: '/oracle', title: 'Oracle', sub: 'Every open and close, as Pyth signed them', icon: 'verified' },
   { key: 'p:list', to: '/list', title: 'Open a vault', sub: 'initialize_vault from your wallet', icon: 'list' },
   { key: 'p:demo', to: '/trade?demo=1', title: 'Explore the demo', sub: 'A sandbox copy of the NVDAx vault — no wallet, nothing sent', icon: 'play' },
   { key: 'p:tour', to: '/', title: 'Take the 90-second tour', sub: 'Seven stops: the classes, the clock, the vault, the research', icon: 'play', tour: true },
