@@ -41,6 +41,13 @@ export const BELL_DISCRIMINATOR: Record<string, number[]> = {
   mark_missing:       [72, 183, 147, 73, 249, 115, 228, 213],
 };
 
+/** The verifier's own instructions: Pyth's Lazer program, or a copy of it. */
+export const LAZER_DISCRIMINATOR: Record<'initialize' | 'update' | 'verify_message', number[]> = {
+  initialize:     [175, 175, 109, 31, 13, 152, 155, 237],
+  update:         [219, 200, 88, 176, 158, 63, 253, 127],
+  verify_message: [180, 193, 120, 55, 189, 135, 203, 83],
+};
+
 /** `sha256("account:<Name>")[..8]`. `Storage` is the Lazer program's. */
 export const BELL_ACCOUNT: Record<'BellConfig' | 'Listing' | 'Print' | 'Storage', number[]> = {
   BellConfig: [232, 147, 157, 246, 86, 251, 241, 165],
@@ -122,7 +129,7 @@ export interface BellParams {
 
 /** Method v1, `Params::V1` in state.rs. */
 export const PARAMS_V1: BellParams = {
-  minPublishers: 3, maxConfBps: 25, closeLeadSecs: 10, openWindowSecs: 60,
+  minPublishers: 1, maxConfBps: 25, closeLeadSecs: 10, openWindowSecs: 60,
   finalizeAfterSecs: 300, maxDivergenceBps: 300, methodVersion: 1,
 };
 
@@ -138,6 +145,35 @@ export function bellWindow(bell: number, kind: BellKind, p: BellParams = PARAMS_
 export function bellDeadline(bell: number, kind: BellKind, p: BellParams = PARAMS_V1): number {
   return (kind === 'close' ? bell : bell + p.openWindowSecs) + p.finalizeAfterSecs;
 }
+
+/** Why a candidate is not the bell price: the names `rules::Reject` maps to. */
+export type BellReject =
+  | 'MissingProperty' | 'NonPositivePrice' | 'BadExponent' | 'TooFewPublishers'
+  | 'NotRegularSession' | 'ConfidenceTooWide' | 'OutsideWindow' | 'FeedAfterMessage';
+
+/** `rules::accept`, so a poster never pays to send what the program refuses. */
+export function bellAccept(
+  f: LazerFeed, messageTsUs: bigint, w: { startUs: bigint; endUs: bigint }, p: BellParams = PARAMS_V1,
+): BellReject | null {
+  if (f.price === null) return 'MissingProperty';
+  if (f.price <= 0n) return 'NonPositivePrice';
+  if (f.exponent === null) return 'MissingProperty';
+  if (f.exponent < -18 || f.exponent > 12) return 'BadExponent';
+  if (f.publishers === null) return 'MissingProperty';
+  if (f.publishers < p.minPublishers) return 'TooFewPublishers';
+  if (f.session === null) return 'MissingProperty';
+  if (f.session !== 0) return 'NotRegularSession';
+  if (f.confidence === null || f.confidence <= 0n) return 'MissingProperty';
+  if (f.confidence * 10_000n > BigInt(p.maxConfBps) * f.price) return 'ConfidenceTooWide';
+  if (f.feedTsUs === null) return 'MissingProperty';
+  if (f.feedTsUs < w.startUs || f.feedTsUs > w.endUs) return 'OutsideWindow';
+  if (messageTsUs < f.feedTsUs) return 'FeedAfterMessage';
+  return null;
+}
+
+/** `rules::better`: strict, so an equal timestamp never replaces. */
+export const bellBetter = (kind: BellKind, oldTsUs: bigint, newTsUs: bigint): boolean =>
+  kind === 'close' ? newTsUs > oldTsUs : newTsUs < oldTsUs;
 
 export function encodeBellParams(p: BellParams): Uint8Array {
   return concat(
@@ -558,6 +594,20 @@ export function setListingActiveIx(a: { admin: PublicKey; symbol: string; active
   return ix([
     r(a.admin, true), r(bellConfigPda(program)[0]), w(listingPda(a.symbol, program)[0]),
   ], concat(disc('set_listing_active'), u8(a.active ? 1 : 0)), program);
+}
+
+/* The verifier's administration. Pyth runs these for its own instance; the
+   devnet copy in tools/lazer-devnet is run by whoever deployed it. */
+
+export function lazerInitializeIx(a: { verifier: PublicKey; payer: PublicKey; topAuthority: PublicKey; treasury: PublicKey }) {
+  return ix([w(a.payer, true), w(verifierStoragePda(a.verifier)), r(SystemProgram.programId)],
+    concat(Uint8Array.from(LAZER_DISCRIMINATOR.initialize), a.topAuthority.toBytes(), a.treasury.toBytes()), a.verifier);
+}
+
+/** Trust `signer` until `expiresAt` (unix seconds); 0 removes it. */
+export function lazerUpdateIx(a: { verifier: PublicKey; topAuthority: PublicKey; signer: PublicKey; expiresAt: number }) {
+  return ix([r(a.topAuthority, true), w(verifierStoragePda(a.verifier))],
+    concat(Uint8Array.from(LAZER_DISCRIMINATOR.update), a.signer.toBytes(), i64(BigInt(a.expiresAt))), a.verifier);
 }
 
 /** Byte offset of the message inside `post_print`'s data. */

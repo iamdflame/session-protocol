@@ -35,6 +35,8 @@
     "devnet:curate": "node --experimental-strip-types keeper/src/curate.ts",
     "devnet:auction": "node --experimental-strip-types keeper/src/devnet-auction.ts",
     "bell-prints": "node --experimental-strip-types keeper/src/bell-prints.ts",
+    "bell:devnet": "node --experimental-strip-types keeper/src/bell-devnet.ts",
+    "bell:poster": "node --experimental-strip-types keeper/src/bell-poster.ts",
     "bell": "node --experimental-strip-types agent/launch.ts",
     "bell:verify": "node --experimental-strip-types agent/verify.ts",
     "mcp": "node --experimental-strip-types agent/mcp.ts",

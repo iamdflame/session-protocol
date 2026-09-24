@@ -1,0 +1,38 @@
+[package]
+name = "pyth-lazer-devnet"
+version = "0.8.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+description = "Pyth's Lazer verifier (pyth-lazer-solana-contract 0.8.0) under a devnet id of its own, to hold a test signer"
+
+# Its own workspace: this is Pyth's program, built on demand for devnet, and
+# `npm run build:program` should not ship it with SESSION's.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "pyth_lazer_devnet"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+# Pyth's own dependency list, less pyth-lazer-protocol (see src/lib.rs).
+[dependencies]
+anchor-lang = "0.31.1"
+bytemuck = { version = "1.20.0", features = ["derive"] }
+byteorder = "1.5.0"
+thiserror = "2.0.3"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))', 'cfg(target_os, values("solana"))'] }

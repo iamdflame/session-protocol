@@ -39,7 +39,16 @@ const LAZER: &str = "pytd2yyk641x7ak7mkaasSJVXh6YYZnC7wTmtgAyxPt";
 const BELL: &str = "BeLLKXJwhSH6YXYQLc8xLd11GxJUvoaT1h9zCadymJv4";
 const MEMO: &str = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const BELL_SO: &str = "../../target/deploy/session_bell.so";
-const LAZER_SO: &str = "fixtures/pyth_lazer.so";
+
+/// The verifier under test: Pyth's mainnet binary by default, or any build
+/// of it named by `BELL_VERIFIER_SO` and `BELL_VERIFIER_ID` — which is how
+/// the devnet copy in tools/lazer-devnet is held to the same cases.
+fn verifier() -> (Address, String) {
+    match (std::env::var("BELL_VERIFIER_ID"), std::env::var("BELL_VERIFIER_SO")) {
+        (Ok(id), Ok(so)) => (addr(&id), so),
+        _ => (addr(LAZER), "fixtures/pyth_lazer.so".into()),
+    }
+}
 
 // Pyth Pro feed ids for NVDA.
 const EQUITY: u32 = 1314; // Equity.US.NVDA/USD
@@ -174,7 +183,7 @@ struct Params {
 }
 
 const V1: Params = Params {
-    min_publishers: 3,
+    min_publishers: 1,
     max_conf_bps: 25,
     close_lead_secs: 10,
     open_window_secs: 60,
@@ -222,7 +231,8 @@ impl Env {
     /// September open. The clock is then set just after that day's close.
     fn new() -> Env {
         let mut env = Env::bare();
-        env.init_config(addr(LAZER)).unwrap();
+        let lazer = env.lazer;
+        env.init_config(lazer).unwrap();
         env.register("NVDA", [EQUITY, RR, TOKEN, INDEX]).unwrap();
         env.listing = pda(&[b"listing", &symbol("NVDA")], &env.bell);
         env.set_time(CLOSE + 1);
@@ -232,9 +242,9 @@ impl Env {
     /// Programs and Pyth's storage, but no config yet.
     fn bare() -> Env {
         let mut svm = LiteSVM::new();
-        let lazer = addr(LAZER);
+        let (lazer, lazer_so) = verifier();
         let bell = addr(BELL);
-        svm.add_program_from_file(lazer, LAZER_SO).expect("run ./fetch.sh first");
+        svm.add_program_from_file(lazer, &lazer_so).expect("run ./fetch.sh first");
         svm.add_program_from_file(bell, BELL_SO).expect("run `npm run build:program` at the repository root first");
 
         let admin = Keypair::new();
@@ -671,11 +681,11 @@ fn a_valid_close_is_stored_with_every_field() {
     // 224.41 against 224.06 × 1.0017 = 224.440902: −1.38 bps
     assert_eq!(p.divergence_bps, -1);
     assert_eq!(p.flags & FLAG_DIVERGENCE_KNOWN, FLAG_DIVERGENCE_KNOWN);
-    assert_eq!(p.flags & FLAG_SIMULATED, 0, "verified by Pyth's program id");
+    assert_eq!(p.flags & FLAG_SIMULATED != 0, env.lazer != addr(LAZER), "simulated exactly when not Pyth's program id");
 
     assert_eq!(p.message_ts_us, feed_ts + 150_000);
     assert_eq!(p.signer, env.signer.verifying_key().to_bytes());
-    assert_eq!(p.verifier, addr(LAZER));
+    assert_eq!(p.verifier, env.lazer);
     assert_eq!(p.poster, env.poster.pubkey());
     assert_eq!(p.posted_at, CLOSE + 1);
     assert_eq!(p.finalized_at, 0);
@@ -858,7 +868,7 @@ fn each_rule_refuses_on_chain() {
         (sign(&env.signer, payload(ts, vec![(RR, simple(1, ts))])), "FeedMissing"),
         (env.close_msg(&Equity { session: MarketSession::PreMarket, ..Equity::at(ts) }), "NotRegularSession"),
         (env.close_msg(&Equity { session: MarketSession::PostMarket, ..Equity::at(ts) }), "NotRegularSession"),
-        (env.close_msg(&Equity { publishers: 2, ..Equity::at(ts) }), "TooFewPublishers"),
+        (env.close_msg(&Equity { publishers: 0, ..Equity::at(ts) }), "TooFewPublishers"),
         (env.close_msg(&Equity { conf: 56_015_001, ..Equity::at(ts) }), "ConfidenceTooWide"),
         (env.close_msg(&Equity { price: -5, ..Equity::at(ts) }), "NonPositivePrice"),
         (env.close_msg(&Equity::at(CLOSE as u64 * US + 1)), "OutsideWindow"),
@@ -967,16 +977,16 @@ fn only_the_upgrade_authority_creates_the_config() {
     let mut env = Env::bare();
     let stranger = Keypair::new();
     env.svm.airdrop(&stranger.pubkey(), 10_000_000_000).unwrap();
-    let storage = env.storage;
-    refused(env.init_config_as(&stranger, addr(LAZER), storage, V1), &anchor("NotUpgradeAuthority"));
+    let (storage, lazer) = (env.storage, env.lazer);
+    refused(env.init_config_as(&stranger, lazer, storage, V1), &anchor("NotUpgradeAuthority"));
     let admin = env.admin.insecure_clone();
-    refused(env.init_config_as(&admin, addr(LAZER), Keypair::new().pubkey(), V1), &anchor("WrongVerifierStorage"));
+    refused(env.init_config_as(&admin, lazer, Keypair::new().pubkey(), V1), &anchor("WrongVerifierStorage"));
     refused(
-        env.init_config_as(&admin, addr(LAZER), storage, Params { max_conf_bps: 5_000, ..V1 }),
+        env.init_config_as(&admin, lazer, storage, Params { max_conf_bps: 5_000, ..V1 }),
         &anchor("BadParams"),
     );
-    ok(env.init_config_as(&admin, addr(LAZER), storage, V1), "init");
-    refused(env.init_config_as(&admin, addr(LAZER), storage, V1), "already in use");
+    ok(env.init_config_as(&admin, lazer, storage, V1), "init");
+    refused(env.init_config_as(&admin, lazer, storage, V1), "already in use");
     println!("ok only the upgrade authority creates the config, once");
 }
 

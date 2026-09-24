@@ -1,0 +1,23 @@
+# The bell poster, as a systemd user service: posts each NYSE open and close
+# to the devnet session-bell program from the simulated source, then
+# finalises it. Installed by `deploy/install-service.sh bell-poster`.
+#
+#   systemctl --user status bell-poster
+#   journalctl --user -u bell-poster -f
+#   npm run bell:poster -- --status
+
+[Unit]
+Description=SESSION bell poster (devnet, simulated signer)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@NODE@ --experimental-strip-types keeper/src/bell-poster.ts --simulate
+Environment=NODE_NO_WARNINGS=1
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

@@ -24,7 +24,11 @@ pub const BELL_VERSION: u8 = 1;
 /// The rule's parameters. Defaults are method v1 (`docs/METHOD.md`).
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
 pub struct Params {
-    /// Fewest Pyth publishers behind an equity price for it to count.
+    /// Fewest Pyth publishers behind an equity price for it to count. Pyth
+    /// itself publishes an aggregate only above a per-feed minimum, which for
+    /// US equities is 1 or 2 (SPY, AAPL, QQQ: 1; NVDA, TSLA: 2), so v1 sets
+    /// 1 and leaves quality to the confidence bound. It can be raised once
+    /// the bells' own records say what the count is at 09:30 and 16:00.
     pub min_publishers: u16,
     /// Widest confidence interval accepted, as basis points of the price.
     pub max_conf_bps: u16,
@@ -43,7 +47,7 @@ pub struct Params {
 
 impl Params {
     pub const V1: Params = Params {
-        min_publishers: 3,
+        min_publishers: 1,
         max_conf_bps: 25,
         close_lead_secs: 10,
         open_window_secs: 60,

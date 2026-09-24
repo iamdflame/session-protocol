@@ -11,7 +11,7 @@ import {
   BELL_ACCOUNT, BELL_DISCRIMINATOR, BELL_PROGRAM_ID, PYTH_LAZER_PROGRAM_ID, PYTH_LAZER_STORAGE, PARAMS_V1,
   bellDeadline, bellTs, bellWindow, decimalPrice, decodePrint, ed25519Ix, encodeBellParams, encodeLazerMessage,
   encodeLazerPayload, etDay, LazerError, parseLazerMessage, parseLazerPayload, postPrintIxs, PRINT_LISTING_OFFSET,
-  symbolBytes, verifierStoragePda, MIN_DAY, MAX_DAY, type LazerFeed,
+  symbolBytes, verifierStoragePda, MIN_DAY, MAX_DAY, LAZER_DISCRIMINATOR, bellAccept, bellBetter, type LazerFeed,
 } from '../sdk/src/bell.ts';
 
 let failed = 0;
@@ -26,6 +26,10 @@ console.log('discriminators');
 for (const [name, bytes] of Object.entries(BELL_DISCRIMINATOR)) {
   const want = [...createHash('sha256').update(`global:${name}`).digest().subarray(0, 8)];
   check(`global:${name}`, want.join() === bytes.join(), `${bytes} vs ${want}`);
+}
+for (const [name, bytes] of Object.entries(LAZER_DISCRIMINATOR)) {
+  const want = [...createHash('sha256').update(`global:${name}`).digest().subarray(0, 8)];
+  check(`lazer global:${name}`, want.join() === bytes.join(), `${bytes} vs ${want}`);
 }
 for (const [name, bytes] of Object.entries(BELL_ACCOUNT)) {
   const want = [...createHash('sha256').update(`account:${name}`).digest().subarray(0, 8)];
@@ -156,6 +160,35 @@ console.log('bell times (tests/vectors/bells.json, from rules.rs)');
   const o = bellWindow(1_790_256_600, 'open');
   check('open window [09:30:00, 09:31:00]', o.startUs === 1_790_256_600_000_000n && o.endUs === 1_790_256_660_000_000n);
   check('deadlines: close + 300, open + 60 + 300', bellDeadline(1_790_280_000, 'close') === 1_790_280_300 && bellDeadline(1_790_256_600, 'open') === 1_790_256_960);
+}
+
+console.log('the rule (bellAccept mirrors rules::accept, case for case)');
+{
+  const close = 1_790_280_000;
+  const w = bellWindow(close, 'close');
+  const ts = w.endUs - 200_000n;
+  const ok: LazerFeed = {
+    feedId: 1314, price: 22_406_000_000n, bestBid: null, bestAsk: null, publishers: 9, exponent: -8,
+    confidence: 1_100_000n, session: 0, emaPrice: null, emaConfidence: null, feedTsUs: ts,
+  };
+  check('a good close is accepted', bellAccept(ok, ts, w) === null);
+  const cases: [Partial<LazerFeed>, string][] = [
+    [{ price: null }, 'MissingProperty'], [{ price: -1n }, 'NonPositivePrice'],
+    [{ exponent: null }, 'MissingProperty'], [{ exponent: -19 }, 'BadExponent'],
+    [{ publishers: null }, 'MissingProperty'], [{ publishers: 0 }, 'TooFewPublishers'],
+    [{ session: null }, 'MissingProperty'], [{ session: 2 }, 'NotRegularSession'],
+    [{ confidence: null }, 'MissingProperty'], [{ confidence: -5n }, 'MissingProperty'],
+    [{ confidence: 56_015_001n }, 'ConfidenceTooWide'], [{ feedTsUs: null }, 'MissingProperty'],
+    [{ feedTsUs: w.endUs + 1n }, 'OutsideWindow'], [{ feedTsUs: w.startUs - 1n }, 'OutsideWindow'],
+  ];
+  for (const [patch, want] of cases) {
+    const got = bellAccept({ ...ok, ...patch }, (patch.feedTsUs ?? ts) as bigint, w);
+    check(`${JSON.stringify(patch, (_, v) => (typeof v === 'bigint' ? `${v}n` : v))} → ${want}`, got === want, String(got));
+  }
+  check('exactly 25 bps is in', bellAccept({ ...ok, confidence: 56_015_000n }, ts, w) === null);
+  check('a feed newer than its message → FeedAfterMessage', bellAccept(ok, ts - 1n, w) === 'FeedAfterMessage');
+  check('better: a later close, an earlier open, never an equal one',
+    bellBetter('close', 5n, 6n) && !bellBetter('close', 6n, 6n) && bellBetter('open', 6n, 5n) && !bellBetter('open', 5n, 6n));
 }
 
 console.log('odds and ends');

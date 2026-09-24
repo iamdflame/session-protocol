@@ -6,8 +6,9 @@
 //!   where open is 09:30 ET.
 //!
 //! In either case the price must be positive and come from the regular
-//! session. It needs at least `min_publishers` publishers and a confidence
-//! interval no wider than `max_conf_bps`. "Generated" means Pyth's
+//! session. It needs at least `min_publishers` publishers (1 in v1: any
+//! aggregate Pyth publishes at all) and a confidence interval no wider than
+//! `max_conf_bps`. "Generated" means Pyth's
 //! per-feed update timestamp, not the message's: since March 2026 a feed whose
 //! market has shut carries its last price forward in every message, and a
 //! 16:00:05 message can hold a 15:59:58 price. The window is judged on
@@ -316,7 +317,7 @@ mod tests {
             (FeedUpdate { exponent: None, ..ok }, Reject::Missing("exponent")),
             (FeedUpdate { exponent: Some(-19), ..ok }, Reject::BadExponent),
             (FeedUpdate { publishers: None, ..ok }, Reject::Missing("publisherCount")),
-            (FeedUpdate { publishers: Some(2), ..ok }, Reject::TooFewPublishers),
+            (FeedUpdate { publishers: Some(0), ..ok }, Reject::TooFewPublishers),
             (FeedUpdate { session: None, ..ok }, Reject::Missing("marketSession")),
             (FeedUpdate { session: Some(MarketSession::PostMarket), ..ok }, Reject::NotRegularSession),
             (FeedUpdate { confidence: None, ..ok }, Reject::Missing("confidence")),

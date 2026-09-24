@@ -1,0 +1,108 @@
+{
+  "note": "Written by `npm run bell:devnet -- --apply`. The devnet bell: a test signer, not Pyth's.",
+  "cluster": "devnet",
+  "program": "BeLLKXJwhSH6YXYQLc8xLd11GxJUvoaT1h9zCadymJv4",
+  "config": "EsDs2dRa1wP17tqq9BLMavYcvpgbHWBHTcB3zc5ckzew",
+  "verifier": "CVuKQFLc1PAuJ8y7kPckw8Hi8W6WhdeWrhM9UBVdm2qs",
+  "verifierSource": "pyth-lazer-solana-contract 0.8.0, built under a devnet id (tools/lazer-devnet)",
+  "verifierStorage": "2DKgCZXriQHS5WzCYdqMQ94EsG4BJbYeZT91g8HvLUxd",
+  "treasury": "8NJrVeQop3zjpCYnSgxWZZJHB87kP4tMSJ6KkqdT11qQ",
+  "signer": "5knAYu8dq3gH9wyuXY3dUuupSy2MTNnLrgXsb5vTwNXr",
+  "simulated": true,
+  "priceSource": "Jupiter price v3: the share's reference price (stockData), stamped with Jupiter's own update time, and the xStock's USD price beside it. No redemption-rate feed: Jupiter's scaled-UI multiplier is not shown to be the quantity Pyth's .RR feed carries, so simulated prints leave it absent",
+  "placeholders": "Publisher count 1 (one source) and a confidence of 1 bp: Jupiter reports neither",
+  "params": {
+    "minPublishers": 1,
+    "maxConfBps": 25,
+    "closeLeadSecs": 180,
+    "openWindowSecs": 300,
+    "finalizeAfterSecs": 300,
+    "maxDivergenceBps": 300,
+    "methodVersion": 1
+  },
+  "poster": "2gV24z2k3Am15jfVwDrLnugPNPKQCFzV9sKnmGbAT9QU",
+  "listings": [
+    {
+      "symbol": "NVDA",
+      "listing": "3rtzzDabjEwEuVNSustqcxXjwm3eiyFQBZetF8eSbjvh",
+      "feeds": {
+        "equity": 1314,
+        "rr": 1832,
+        "token": 1833,
+        "index": 3188
+      },
+      "feedNames": {
+        "equity": "Equity.US.NVDA/USD",
+        "rr": "Crypto.NVDAX/NVDA.RR",
+        "token": "Crypto.NVDAX/USD",
+        "index": "Equity.Index.NVDA/USD"
+      },
+      "mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh"
+    },
+    {
+      "symbol": "SPY",
+      "listing": "GajX8sTbCDt5EvKbwYh5tHJbWNfGJcxfWxViXWJHwu9H",
+      "feeds": {
+        "equity": 1398,
+        "rr": 1842,
+        "token": 1843
+      },
+      "feedNames": {
+        "equity": "Equity.US.SPY/USD",
+        "rr": "Crypto.SPYX/SPY.RR",
+        "token": "Crypto.SPYX/USD"
+      },
+      "mint": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W"
+    },
+    {
+      "symbol": "TSLA",
+      "listing": "FoosPvThwj2HpE6ihV9x2ZNchHRxiDFaetgXwwZcvdBJ",
+      "feeds": {
+        "equity": 1435,
+        "rr": 1846,
+        "token": 1847,
+        "index": 3185
+      },
+      "feedNames": {
+        "equity": "Equity.US.TSLA/USD",
+        "rr": "Crypto.TSLAX/TSLA.RR",
+        "token": "Crypto.TSLAX/USD",
+        "index": "Equity.Index.TSLA/USD"
+      },
+      "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
+    },
+    {
+      "symbol": "AAPL",
+      "listing": "8aHeympJMkUh9kAh3i7H1Gw935n46jDeeGGBD4zF95pc",
+      "feeds": {
+        "equity": 922,
+        "rr": 1791,
+        "token": 1792,
+        "index": 3191
+      },
+      "feedNames": {
+        "equity": "Equity.US.AAPL/USD",
+        "rr": "Crypto.AAPLX/AAPL.RR",
+        "token": "Crypto.AAPLX/USD",
+        "index": "Equity.Index.AAPL/USD"
+      },
+      "mint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp"
+    },
+    {
+      "symbol": "QQQ",
+      "listing": "2GoxCbzVMn689SCEAMT2NEBNHHPWSGTAutWKaZr2Zo3B",
+      "feeds": {
+        "equity": 1363,
+        "rr": 1836,
+        "token": 1837
+      },
+      "feedNames": {
+        "equity": "Equity.US.QQQ/USD",
+        "rr": "Crypto.QQQX/QQQ.RR",
+        "token": "Crypto.QQQX/USD"
+      },
+      "mint": "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ"
+    }
+  ],
+  "writtenAt": "2026-09-24T21:08:47.056Z"
+}
