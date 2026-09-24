@@ -45,10 +45,8 @@ use anchor_spl::token_2022_extensions::token_metadata::{
 };
 
 pub mod auction;
-pub mod calendar;
 pub mod errors;
 pub mod event;
-pub mod fixed;
 pub mod funding;
 pub mod issuer;
 pub mod machine;
@@ -57,6 +55,11 @@ pub mod oracle;
 pub mod recap;
 pub mod settle;
 pub mod state;
+
+// The calendar and the fixed-point arithmetic live in `session-core`, shared with
+// `session-bell`. Re-exported under their old paths, so `crate::calendar::…` and
+// `crate::fixed::…` mean exactly what they meant before the move.
+pub use session_core::{calendar, fixed};
 
 use calendar::{session_at, Session};
 use anchor_lang::solana_program::hash::hashv;

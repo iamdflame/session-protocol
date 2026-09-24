@@ -284,9 +284,10 @@ accessibility harness finds no problems on any route with either session active.
 ## Layout
 
 ```
-programs/session/src/
+crates/session-core/src/     shared by every program, no dependencies
   calendar.rs    NYSE session oracle — DST, holidays, half-days, computus
   fixed.rs       256-bit mul_div, WAD fixed point
+programs/session/src/
   settle.rs      boundary settlement, NAV roll, handoff sizing
   funding.rs     skew-based funding between the classes
   oracle.rs      Pyth marks, guards, and an explicit PriceUpdateV2 parser

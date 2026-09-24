@@ -1,4 +1,4 @@
-/* Generates the shared calendar vectors that programs/session/src/calendar.rs
+/* Generates the shared calendar vectors that crates/session-core/src/calendar.rs
    must reproduce exactly. If Rust and TypeScript ever disagree about when a
    boundary fires, money moves to the wrong token class. */
 import { sessionAt, holidays, earlyCloses, daysFromCivil, isDST } from '../sdk/src/calendar.ts';

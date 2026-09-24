@@ -3,7 +3,7 @@
 
    This is the most safety-critical pure function in the protocol: it decides
    when a boundary fires, and therefore who earns the next stretch of return.
-   The on-chain program in `programs/session/src/calendar.rs` runs the same
+   The on-chain programs, through `crates/session-core/src/calendar.rs`, run the same
    algorithm, and `tests/vectors/calendar.json` proves the two agree.
 
    Deliberately written with integer arithmetic only — no Date, no timezone

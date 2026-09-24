@@ -1458,6 +1458,15 @@ dependencies = [
  "anchor-spl",
  "proptest",
  "serde_json",
+ "session-core",
+]
+
+[[package]]
+name = "session-core"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde_json",
 ]
 
 [[package]]
