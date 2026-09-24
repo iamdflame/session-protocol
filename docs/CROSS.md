@@ -120,4 +120,12 @@ Every step after `place_order` is permissionless.
 - **A multiplier activation** 60 s before the bell cancels the cross.
 - **Pyth's `.RR`** disagreeing with the mint's multiplier cancels the cross.
 
+`tests/integration/tests/cross_fuzz.rs` then runs randomised crosses through the program, one per trading day. Each has:
+
+- a random share price;
+- 1–5 buyers and 1–5 sellers, with random sizes and random limits, some out of band;
+- 0–3 makers at random fees on whichever side is crowded.
+
+Every participant's balance change must equal the arithmetic to the atom, and the escrow must be empty after every close. 300 crosses pass on one seed (181 crowded with buyers, 119 with sellers, 12,845 NVDAx delivered), spanning more than a year of trading days: DST changes, holidays and a year boundary. 40 pass on the default seed on every run. `CROSS_FUZZ=<n> CROSS_FUZZ_SEED=<s>` runs more.
+
 **Devnet: pending.** The deployment needs 3.39 SOL of program rent. `npm run cross:devnet` lists the steps and `-- --apply` takes them: a fixture NVDAx with the real extensions, the config, an NVDA market, and the backstop maker. `npm run cross:keeper` then runs every cross from bell to close.
