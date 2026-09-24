@@ -1462,6 +1462,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "session-bell"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "proptest",
+ "serde_json",
+ "session-core",
+]
+
+[[package]]
 name = "session-core"
 version = "0.1.0"
 dependencies = [

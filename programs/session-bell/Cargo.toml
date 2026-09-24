@@ -1,0 +1,31 @@
+[package]
+name = "session-bell"
+version = "0.1.0"
+edition = "2021"
+description = "The bell: Pyth Pro prints at the NYSE open and close, verified on chain and kept"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "session_bell"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+session-core = { path = "../../crates/session-core" }
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1"
+
+# Anchor's macros test cfgs this crate does not declare. Declaring them keeps a
+# genuinely unexpected cfg visible instead of buried under twenty of these.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))', 'cfg(target_os, values("solana"))'] }
