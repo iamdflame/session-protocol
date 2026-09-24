@@ -11,7 +11,7 @@ import {
   BELL_ACCOUNT, BELL_DISCRIMINATOR, BELL_PROGRAM_ID, PYTH_LAZER_PROGRAM_ID, PYTH_LAZER_STORAGE, PARAMS_V1,
   bellDeadline, bellTs, bellWindow, decimalPrice, decodePrint, ed25519Ix, encodeBellParams, encodeLazerMessage,
   encodeLazerPayload, etDay, LazerError, parseLazerMessage, parseLazerPayload, postPrintIxs, PRINT_LISTING_OFFSET,
-  symbolBytes, verifierStoragePda, MIN_DAY, MAX_DAY, LAZER_DISCRIMINATOR, bellAccept, bellBetter, type LazerFeed,
+  symbolBytes, verifierStoragePda, MIN_DAY, MAX_DAY, LAZER_DISCRIMINATOR, bellAccept, bellBetter, bellNotFromTheFuture, type LazerFeed,
 } from '../sdk/src/bell.ts';
 
 let failed = 0;
@@ -187,6 +187,8 @@ console.log('the rule (bellAccept mirrors rules::accept, case for case)');
   }
   check('exactly 25 bps is in', bellAccept({ ...ok, confidence: 56_015_000n }, ts, w) === null);
   check('a feed newer than its message → FeedAfterMessage', bellAccept(ok, ts - 1n, w) === 'FeedAfterMessage');
+  check('a price exactly 120s past the clock is in, a microsecond more is not',
+    bellNotFromTheFuture(BigInt(close + 120) * 1_000_000n, close) && !bellNotFromTheFuture(BigInt(close + 120) * 1_000_000n + 1n, close));
   check('better: a later close, an earlier open, never an equal one',
     bellBetter('close', 5n, 6n) && !bellBetter('close', 6n, 6n) && bellBetter('open', 6n, 5n) && !bellBetter('open', 5n, 6n));
 }

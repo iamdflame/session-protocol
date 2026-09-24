@@ -165,6 +165,22 @@ pub fn accept(f: &FeedUpdate, message_ts_us: u64, w: Window, p: &Params) -> Resu
     Ok(Quote::from_feed(f))
 }
 
+/// How far ahead of the chain's clock a price may be dated. Solana's clock is
+/// a stake-weighted median of validators' clocks and runs a little behind
+/// or ahead of the wall; two minutes covers that with room to spare.
+pub const MAX_CLOCK_LEAD_SECS: i64 = 120;
+
+/// A price cannot be from after the moment it is posted. Pyth cannot sign a
+/// price it has not produced, so for a Pyth-signed message this never fires;
+/// it is here because a verifier holding a test signer can sign any date,
+/// and a bell must not be posted before it rings.
+pub fn not_from_the_future(feed_ts_us: u64, now: i64) -> bool {
+    match u64::try_from(now.saturating_add(MAX_CLOCK_LEAD_SECS)) {
+        Ok(limit) => feed_ts_us as u128 <= limit as u128 * US_PER_SEC as u128,
+        Err(_) => false,
+    }
+}
+
 /// Whether a candidate at `new_ts_us` replaces a stored print at `old_ts_us`.
 /// Strict: an equal timestamp never replaces, so two posters holding the same
 /// aggregate cannot flip the account between their copies.
@@ -344,6 +360,19 @@ mod tests {
         let msg = (close + 5) as u64 * 1_000_000;
         assert!(accept(&feed(from), msg, w, &P).is_ok());
         assert_eq!(accept(&feed(msg), msg, w, &P), Err(Reject::OutsideWindow));
+    }
+
+    #[test]
+    fn a_price_dated_past_the_clock_is_from_the_future() {
+        let now = 1_790_280_000;
+        let at = |s: i64, us: u64| (s as u64) * 1_000_000 + us;
+        assert!(not_from_the_future(at(now, 0), now));
+        assert!(not_from_the_future(at(now + 120, 0), now), "exactly the allowance is in");
+        assert!(!not_from_the_future(at(now + 120, 1), now), "one microsecond past it is not");
+        assert!(!not_from_the_future(at(now + 3_600, 0), now));
+        assert!(not_from_the_future(0, now));
+        assert!(!not_from_the_future(u64::MAX, now));
+        assert!(!not_from_the_future(1, -1_000), "a clock before 1970 admits nothing");
     }
 
     #[test]

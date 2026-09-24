@@ -36,7 +36,7 @@ import {
   Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import {
-  BELL_ACCOUNT, BELL_PROGRAM_ID, bellAccept, bellBetter, bellConfigPda, bellDeadline, bellTs, bellWindow,
+  BELL_ACCOUNT, BELL_PROGRAM_ID, bellAccept, bellBetter, bellNotFromTheFuture, bellConfigPda, bellDeadline, bellTs, bellWindow,
   decimalPrice, decodeBellConfig, decodeLazerStorage, decodeListing, decodePrint, encodeLazerMessage,
   encodeLazerPayload, etDay, finalizePrintIx, listingPda, markMissingIx, parseLazerMessage, parseLazerPayload,
   postPrintIxs, printPda, PRINT_LISTING_OFFSET, SESSION, type BellConfig, type BellKind, type LazerFeed,
@@ -337,7 +337,7 @@ async function runBell(ctx: Ctx, bell: Bell, simulate: boolean): Promise<void> {
   const consider = (c: Candidate): void => {
     const payload = parseLazerPayload(parseLazerMessage(c.message).payload);
     const why = bellAccept(c.feed, payload.timestampUs, w, p);
-    if (why === null) book.offer(c);
+    if (why === null && bellNotFromTheFuture(c.feed.feedTsUs!, Date.now() / 1000)) book.offer(c);
   };
 
   // an open is posted the moment its first price is in; a close once its window is over
@@ -407,9 +407,10 @@ async function status(): Promise<void> {
 /* ── rehearsal ───────────────────────────────────────────────────────────── */
 
 /** Build the next bell's post from a live observation re-stamped into that
- *  bell's window, and ask devnet to simulate it. Nothing is sent. This is
- *  possible only because the signer is a test key: a Pyth-signed message
- *  cannot be dated in the future. */
+ *  bell's window, and ask devnet to simulate it. Nothing is sent. A test key
+ *  can date a message in the future, which is what makes this possible; a
+ *  program with the FeedFromTheFuture guard refuses it there, after the
+ *  layout, the parse and the rule have all been checked. */
 async function rehearse(ctx: Ctx): Promise<void> {
   const bell = nextBell(Date.now() / 1000, ctx.config);
   const w = bellWindow(bell.ts, bell.kind, ctx.config.params);

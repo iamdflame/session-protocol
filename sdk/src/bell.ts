@@ -171,6 +171,13 @@ export function bellAccept(
   return null;
 }
 
+/** `rules::MAX_CLOCK_LEAD_SECS`: how far past the chain's clock a price may be dated. */
+export const MAX_CLOCK_LEAD_SECS = 120;
+
+/** `rules::not_from_the_future`. */
+export const bellNotFromTheFuture = (feedTsUs: bigint, nowSec: number): boolean =>
+  nowSec + MAX_CLOCK_LEAD_SECS >= 0 && feedTsUs <= BigInt(Math.floor(nowSec) + MAX_CLOCK_LEAD_SECS) * 1_000_000n;
+
 /** `rules::better`: strict, so an equal timestamp never replaces. */
 export const bellBetter = (kind: BellKind, oldTsUs: bigint, newTsUs: bigint): boolean =>
   kind === 'close' ? newTsUs > oldTsUs : newTsUs < oldTsUs;

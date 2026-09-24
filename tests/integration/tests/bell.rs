@@ -887,6 +887,20 @@ fn each_rule_refuses_on_chain() {
 }
 
 #[test]
+fn a_price_dated_past_the_chain_clock_is_refused() {
+    // A test signer can date a message anything; Pyth cannot sign a price it
+    // has not produced. Either way a bell is not posted before it rings.
+    let mut env = Env::new();
+    let msg = env.close_msg(&Equity::at(CLOSE as u64 * US - 1)); // 15:59:59.999999
+    env.set_time(CLOSE - 200);
+    refused(env.post(&msg, DAY, CLOSE_KIND), &anchor("FeedFromTheFuture"));
+    assert!(env.print(DAY, CLOSE_KIND).is_none());
+    env.set_time(CLOSE - 100); // within the two-minute allowance for clock drift
+    ok(env.post(&msg, DAY, CLOSE_KIND), "a price 100s ahead of a lagging clock");
+    println!("ok a price dated past the chain's clock (+120s) is refused");
+}
+
+#[test]
 fn no_bell_on_a_weekend_or_a_holiday() {
     let mut env = Env::new();
     let msg = env.close_msg(&Equity::at(CLOSE as u64 * US - 1));

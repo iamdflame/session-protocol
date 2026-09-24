@@ -75,6 +75,8 @@ pub enum BellError {
     OutsideWindow,
     #[msg("feed timestamp is later than the message's")]
     FeedAfterMessage,
+    #[msg("price is dated later than the chain's clock allows")]
+    FeedFromTheFuture,
 }
 
 /// The envelope failed to parse. Mapped at the call site rather than by

@@ -210,6 +210,7 @@ pub mod session_bell {
         };
         let feed = payload.feed(equity_feed).ok_or(BellError::FeedMissing)?;
         let equity = rules::accept(feed, payload.timestamp_us, window, &params).map_err(BellError::from)?;
+        require!(rules::not_from_the_future(equity.feed_ts_us, clock.unix_timestamp), BellError::FeedFromTheFuture);
         if !fresh {
             require!(
                 rules::better(kind, ctx.accounts.print.equity.feed_ts_us, equity.feed_ts_us),
