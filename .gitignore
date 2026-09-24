@@ -23,9 +23,32 @@ keeper/.agent/
 REBUILD.md
 Problems.md
 
+# Planning documents are working notes, not the product. MASTERPLAN.md also
+# names the pre-IPO issuers this entry refused, and `scripts/eligibility.mjs`
+# fails any tracked file that does — which is the rule working, not a reason
+# to weaken it.
+MASTERPLAN.md
+frontendplan.md
+
 # The collector's store. 14MB and growing, rebuildable from `--backfill` plus
 # a catch-up pass, and it is a working set rather than a source: committing it
 # would put a binary in every diff for data the chain and the API still hold.
 data/collector.db
 data/collector.db-wal
 data/collector.db-shm
+
+# The same reasoning for the cost-of-the-night study and the bell poster's
+# audit log: working sets on this machine, summarised into tracked JSON.
+data/night-cost.db
+data/night-cost.db-wal
+data/night-cost.db-shm
+data/bell-poster.db
+data/bell-poster.db-wal
+data/bell-poster.db-shm
+
+# Crates outside the workspace build into their own target directories, and
+# the Pyth Lazer binary the integration harness loads is fetched from mainnet
+# by `tests/integration/fetch.sh` rather than committed.
+tests/integration/target/
+tests/integration/fixtures/*.so
+tools/*/target/
