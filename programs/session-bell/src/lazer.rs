@@ -466,6 +466,76 @@ mod tests {
         assert_eq!(parse_payload(&bad_flag), Err(LazerError::BadFlag(2)));
     }
 
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    /// `tests/vectors/lazer.json` is written by Pyth's own encoder
+    /// (`tests/integration/tests/vectors.rs`). Every valid case must read to
+    /// exactly the fields that were encoded, and every broken one must be
+    /// refused with the error it names, at the layer it names.
+    #[test]
+    fn reads_what_pyths_encoder_writes() {
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string("../../tests/vectors/lazer.json").unwrap()).unwrap();
+        let num = |v: &serde_json::Value| -> Option<i128> {
+            match v {
+                serde_json::Value::Null => None,
+                serde_json::Value::String(s) => Some(s.parse().unwrap()),
+                n => Some(n.as_i64().unwrap() as i128),
+            }
+        };
+        let cases = doc["cases"].as_array().unwrap();
+        assert!(cases.len() >= 20);
+        for c in cases {
+            let name = c["name"].as_str().unwrap();
+            let raw = unhex(c["message"].as_str().unwrap());
+            if c["ok"].as_bool().unwrap() {
+                let m = parse_message(&raw).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+                assert_eq!(hex_of(&m.public_key), doc["signer"].as_str().unwrap(), "{name}");
+                let p = parse_payload(m.payload).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+                assert_eq!(p.timestamp_us as i128, num(&c["timestamp_us"]).unwrap(), "{name}");
+                assert_eq!(p.channel as i128, num(&c["channel"]).unwrap(), "{name}");
+                let want = c["feeds"].as_array().unwrap();
+                assert_eq!(p.count, want.len(), "{name}");
+                for (f, w) in p.feeds[..p.count].iter().zip(want) {
+                    let got = [
+                        Some(f.feed_id as i128),
+                        f.price.map(i128::from),
+                        f.best_bid.map(i128::from),
+                        f.best_ask.map(i128::from),
+                        f.publishers.map(i128::from),
+                        f.exponent.map(i128::from),
+                        f.confidence.map(i128::from),
+                        f.session.map(|s| s.to_wire() as i128),
+                        f.ema_price.map(i128::from),
+                        f.ema_confidence.map(i128::from),
+                        f.feed_ts_us.map(i128::from),
+                    ];
+                    let keys = [
+                        "feed_id", "price", "best_bid", "best_ask", "publishers", "exponent", "confidence",
+                        "session", "ema_price", "ema_confidence", "feed_ts_us",
+                    ];
+                    for (k, g) in keys.iter().zip(got) {
+                        assert_eq!(g, num(&w[*k]), "{name}: feed {} {k}", f.feed_id);
+                    }
+                }
+            } else {
+                let want = c["error"].as_str().unwrap();
+                let err = match c["layer"].as_str().unwrap() {
+                    "message" => parse_message(&raw).err(),
+                    _ => parse_payload(parse_message(&raw).unwrap().payload).err(),
+                };
+                let got = format!("{:?}", err.unwrap_or_else(|| panic!("{name}: accepted")));
+                assert_eq!(got.split('(').next().unwrap(), want, "{name}");
+            }
+        }
+    }
+
+    fn hex_of(b: &[u8]) -> String {
+        b.iter().map(|x| format!("{x:02x}")).collect()
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(4000))]
 

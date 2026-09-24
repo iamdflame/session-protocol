@@ -1,0 +1,7 @@
+# LiteSVM 0.16 is built on Agave 4.2, which needs Rust 1.93 or newer
+# (`MaybeUninit::write_copy_of_slice`). Pinned here, not repository-wide: the
+# programs themselves build with the Solana platform tools, and nothing else
+# in the repository should move because the test harness did.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"

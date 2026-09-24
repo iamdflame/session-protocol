@@ -1,0 +1,29 @@
+[package]
+name = "bell-integration"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "session-bell against Pyth's own Lazer verifier binary, in LiteSVM"
+
+# Outside the program workspace on purpose: LiteSVM 0.16 is built on Agave 4.2
+# and the Solana 3.x crates, which the SBF toolchain that builds the programs
+# cannot compile. This crate only ever loads the built .so files.
+[workspace]
+
+[dependencies]
+byteorder = "1.5"
+ed25519-dalek = "2.2"
+litesvm = { version = "=0.16.0", features = ["precompiles"] }
+pyth-lazer-protocol = "=0.46.0"
+serde_json = "1"
+sha2 = "0.10"
+solana-account = "4.3"
+solana-address = "2.6"
+solana-clock = "3.1"
+solana-instruction = "3.4"
+solana-keypair = "3.1"
+solana-message = "4.2"
+solana-sdk-ids = "3.1"
+solana-signer = "3.0"
+solana-transaction = "4.1"
+solana-transaction-error = "3"

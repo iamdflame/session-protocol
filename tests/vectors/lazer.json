@@ -1,0 +1,502 @@
+{
+  "cases": [
+    {
+      "channel": 3,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": "1100000",
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 1314,
+          "feed_ts_us": "1790279999800000",
+          "price": "22406000000",
+          "publishers": 9,
+          "session": 0
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 1832,
+          "feed_ts_us": "1790279999900000",
+          "price": "100170000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 1833,
+          "feed_ts_us": "1790279999920000",
+          "price": "22441000000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 3188,
+          "feed_ts_us": "1790279999940000",
+          "price": "22405000000",
+          "publishers": null,
+          "session": null
+        }
+      ],
+      "message": "b9011a8207fd4078d3990c199d540c5a4851d04df92220240ab990b60d5a2cafbef447ad05a53201fc539922f6219351617053e89c439294ca6230909fcb2d0b6d253c02197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c0600",
+      "name": "nvda close: equity, redemption rate, token, 24/7 index",
+      "ok": true,
+      "timestamp_us": "1790279999950000"
+    },
+    {
+      "channel": 1,
+      "feeds": [
+        {
+          "best_ask": "101",
+          "best_bid": "99",
+          "confidence": "5",
+          "ema_confidence": "3",
+          "ema_price": "100",
+          "exponent": -12,
+          "feed_id": 7,
+          "feed_ts_us": "1789999999999999",
+          "price": "-123456",
+          "publishers": 65535,
+          "session": 3
+        }
+      ],
+      "message": "b9011a8210e3ab731c7c206fffc59c36891993b72cc03fa6372714f8b115be035272569161fb15a81919a9025ff490cb09e35c82bc19a4322e2d8bc40430090a12e61f08197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d617a0075d3c79301e025dafe5b06000101070000000d00c01dfeffffffffff01630000000000000002650000000000000003ffff04f4ff0505000000000000000601d6ffffffffffffff070100e025dafe5b0600080100209db4060000000903000a64000000000000000b03000000000000000c01ffdf25dafe5b0600",
+      "name": "every property on one feed, funding included",
+      "ok": true,
+      "timestamp_us": "1790000000000001"
+    },
+    {
+      "channel": 4,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 1314,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 4
+        }
+      ],
+      "message": "b9011a82bee49d1c237afb0d0d7f5cd6ec9b2450683b2c98bb143ee9c144997f9eb963311db29a436ce5d4951d1c530b2cdeaaaa5940df3501fab8e1a5f99ccfa5552a08197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61420075d3c7930500000000000000040122050000090000000000000000000100000000000000000500000000000000000600070008000a00000000000000000c00090400",
+      "name": "absent optionals: no price, no confidence, no timestamp, no funding",
+      "ok": true,
+      "timestamp_us": "5"
+    },
+    {
+      "channel": 2,
+      "feeds": [],
+      "message": "b9011a827dc957dcf30698ff1bfe5b76e39507624d7029a5324c308a099d133d6233204fd9e1768197d3e40573871e029481a8e066993c7393738efdea212bca473b090e197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610e0075d3c79301000000000000000200",
+      "name": "no feeds at all",
+      "ok": true,
+      "timestamp_us": "1"
+    },
+    {
+      "channel": 3,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 1,
+          "feed_ts_us": "8",
+          "price": "1000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 2,
+          "feed_ts_us": "8",
+          "price": "2000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 3,
+          "feed_ts_us": "8",
+          "price": "3000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 4,
+          "feed_ts_us": "8",
+          "price": "4000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 5,
+          "feed_ts_us": "8",
+          "price": "5000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 6,
+          "feed_ts_us": "8",
+          "price": "6000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 7,
+          "feed_ts_us": "8",
+          "price": "7000",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 8,
+          "feed_ts_us": "8",
+          "price": "8000",
+          "publishers": null,
+          "session": null
+        }
+      ],
+      "message": "b9011a82d3f656d317b5b10fbdd95549aca4f3a0a3e5ba073b16c63537a132813eda8b262f040e629d0150a47119ea1d5ee3a6aa73c22b193ebdfe8d5e6c3c66321dfa01197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61e60075d3c79309000000000000000308010000000300e80300000000000004f8ff0c010800000000000000020000000300d00700000000000004f8ff0c010800000000000000030000000300b80b00000000000004f8ff0c010800000000000000040000000300a00f00000000000004f8ff0c010800000000000000050000000300881300000000000004f8ff0c010800000000000000060000000300701700000000000004f8ff0c010800000000000000070000000300581b00000000000004f8ff0c010800000000000000080000000300401f00000000000004f8ff0c010800000000000000",
+      "name": "eight feeds, the most the program reads",
+      "ok": true,
+      "timestamp_us": "9"
+    },
+    {
+      "channel": 3,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 100,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 0
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 101,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 1
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 102,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 2
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 103,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 3
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": null,
+          "feed_id": 104,
+          "feed_ts_us": null,
+          "price": null,
+          "publishers": null,
+          "session": 4
+        }
+      ],
+      "message": "b9011a822b2089bf41cd55d1907b011bbf9ed5acdafb571d7fd56b3d18d9411e8b7bd015262836f6c9557bb1263fe37c095b71f4e9ddad9b331dda494a6d63dd203cd504197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61360075d3c7930200000000000000030564000000010900006500000001090100660000000109020067000000010903006800000001090400",
+      "name": "each market session",
+      "ok": true,
+      "timestamp_us": "2"
+    },
+    {
+      "channel": 255,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": 32767,
+          "feed_id": 4294967295,
+          "feed_ts_us": "18446744073709551615",
+          "price": "9223372036854775807",
+          "publishers": null,
+          "session": null
+        },
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": null,
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -32768,
+          "feed_id": 0,
+          "feed_ts_us": null,
+          "price": "-9223372036854775808",
+          "publishers": 0,
+          "session": null
+        }
+      ],
+      "message": "b9011a829f738687e2a2afa1d1f8c9b82140a3f0e1fa74aba9141182ad3bd05c52700aa2a2aa92e4a3e0f4ae0f98818f820676deff4436aa3bfc9599219c3291f595100c197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d613d0075d3c793ffffffffffffffffff02ffffffff0300ffffffffffffff7f04ff7f0c01ffffffffffffffff0000000003000000000000000080040080030000",
+      "name": "extremes: i64 and u64 bounds, i16 bounds",
+      "ok": true,
+      "timestamp_us": "18446744073709551615"
+    },
+    {
+      "channel": 3,
+      "feeds": [
+        {
+          "best_ask": null,
+          "best_bid": null,
+          "confidence": "1100000",
+          "ema_confidence": null,
+          "ema_price": null,
+          "exponent": -8,
+          "feed_id": 1314,
+          "feed_ts_us": "2",
+          "price": "22406000000",
+          "publishers": 9,
+          "session": 0
+        }
+      ],
+      "message": "b9011a827b7aaafa8682ac6e1163a155527a7cb8ebe1c8b18b3d3b5d91423acd7fd598a150d7a4f54032c445a1afa004e0273630f3e495dd32310c896e09631942fc0d07197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61380075d3c7930300000000000000030122050000060c01020000000000000009000003090004f8ff05e0c810000000000000806d803705000000",
+      "name": "properties in reverse order",
+      "ok": true,
+      "timestamp_us": "3"
+    },
+    {
+      "error": "TrailingBytes",
+      "layer": "payload",
+      "message": "b9011a827b0593ad8564fe72d1104d0f5deaa7f82f3dee936d357ae0206e9f0be4d07794c6d0c8b5986b1734f8ddd525ae05faee3c369cad29001a18c27550681f164201197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d618a0075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c060000",
+      "name": "a byte after the last feed",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a82c36506ba4245630c7cafa7e3aa5109b3047e88f2213eed1b127bfa987db4b1f5a2a7ebab6638e17de7879a64660abebd01a95dbde8d5f6f8e4a511fcb4ce3b0b197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61030075d3c7",
+      "name": "payload cut to 3 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a8217df2b1552da1af8eb44b9934158fffb7a4c3f69ba961ae0a855021b1e20e6cb57e36aa2d94ddb04ec944a2f0471546874ee2bed0bc49af9fb40dbc655bb0901197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610c0075d3c793b00c720b405c0600",
+      "name": "payload cut to 12 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a82677e36242cd88e7ad6693d128a83962a71eb84c91f948c873da10f8b622a5a1fae89450bca0c3bf9374209703d853895cceef87bba09e2933a46232ed2124805197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d610e0075d3c793b00c720b405c06000304",
+      "name": "payload cut to 14 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a8285e42f8182d4c5792097f171d19cfa83063b5c62c54b112d08ef2bea1122164beca4455ebe2ce28783734bddf48698b0e4e824ee32271b4892ed6bdae1fccf04197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61110075d3c793b00c720b405c06000304220500",
+      "name": "payload cut to 17 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a82afe360089dbce1b75ecef3b6323996c8dc7a7fefecc67e3f7e088be659068670ff0c5013023aed8488b6d66850b0936769fa08494c0745641b13d9d9ef7cb600197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61140075d3c793b00c720b405c06000304220500000600",
+      "name": "payload cut to 20 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a8267cd0892cd5a70c20b44f71b96b016a777cc9d300a7db0f9299f837ff49790d51ac53275538f08d63bffba96add00d7345b8b127445fdc6c625c884faa0cc904197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61190075d3c793b00c720b405c06000304220500000600806d803705",
+      "name": "payload cut to 25 bytes",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "payload",
+      "message": "b9011a825a0cae48e4a04995194bc972e741b05b4afbe02c9842fd09cb7536c49da69995325cc017247f4488d8519607ef3271e6242ee7ee82fde2b39d50897682db070c197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61880075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c06",
+      "name": "payload cut to 136 bytes",
+      "ok": false
+    },
+    {
+      "error": "BadPayloadMagic",
+      "layer": "payload",
+      "message": "b9011a8246440cbb510f0bf5978a4316019a121168dc33f341b0e3b3ccd52866f193e8d08b88fc42b1bd10d1c502dd349ffcda6fe134ce5117c8659da77df54ab1f31b06197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890074d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c0600",
+      "name": "wrong payload magic",
+      "ok": false
+    },
+    {
+      "error": "TooManyFeeds",
+      "layer": "payload",
+      "message": "b9011a82b1f90b32fe65d34670dc6eec07c6fbcd4b08064e12eac3cda29e16a9a918cb966f001d3ae953afb3c471b70763b1ef6b8ec181e265e7d4fa60e6cd1d817beb0e197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61010175d3c79309000000000000000309010000000300010000000000000004f8ff0c010100000000000000020000000300010000000000000004f8ff0c010100000000000000030000000300010000000000000004f8ff0c010100000000000000040000000300010000000000000004f8ff0c010100000000000000050000000300010000000000000004f8ff0c010100000000000000060000000300010000000000000004f8ff0c010100000000000000070000000300010000000000000004f8ff0c010100000000000000080000000300010000000000000004f8ff0c010100000000000000090000000300010000000000000004f8ff0c010100000000000000",
+      "name": "nine feeds, one more than the program reads",
+      "ok": false
+    },
+    {
+      "error": "DuplicateFeed",
+      "layer": "payload",
+      "message": "b9011a822d8f9b5c0427e3a368b9d64d4710c42c1ae9227ac2da1138d5b0acc0d284b1eac34fc050f09d689d45973a0bee324eb3e3181f6aaf6a2e7b0a75987941464009197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61440075d3c79309000000000000000302220500000300010000000000000004f8ff0c010100000000000000220500000300020000000000000004f8ff0c010200000000000000",
+      "name": "the same feed twice",
+      "ok": false
+    },
+    {
+      "error": "DuplicateProperty",
+      "layer": "payload",
+      "message": "b9011a8280c7add0fcb420539bbf96dbb39b693f24898cc375f1a62ddde9cc18efc85178d85abd595647298379983cf6c75edace7ed4a2d15349c0a6d458deca0db02e06197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61190075d3c79309000000000000000301220500000204f8ff04fbff",
+      "name": "the same property twice",
+      "ok": false
+    },
+    {
+      "error": "UnknownProperty",
+      "layer": "payload",
+      "message": "b9011a82437b492407344430cf26fc35d9206548a2a833def956099b6a95ce56b564ce292a48e528609724e1603ea9dec98100ad4b3bef07fcc9d25c1a197103f879b608197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890075d3c793b00c720b405c0600030422050000060d806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c0600",
+      "name": "a property id Pyth has not defined",
+      "ok": false
+    },
+    {
+      "error": "BadSession",
+      "layer": "payload",
+      "message": "b9011a82bdead03df1d4511084ca96655cff8ab1f5933ab43e38c4207cbe84ea7b2569b6058dea0799753ef45367d70ef5feb3a8d8329fed2f6abca15f8fcaac101b9b0d197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61160075d3c793010000000000000003010100000001090500",
+      "name": "a market session outside 0..=4",
+      "ok": false
+    },
+    {
+      "error": "BadFlag",
+      "layer": "payload",
+      "message": "b9011a82e627e27d5275c0a4a05cc81c6c180d58021ce698fd1825f51fea045a3e7603865620f80631665f2f931f8fafb6349028adb4b7f66fe8929b95bc39fc4f6e020b197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d611d0075d3c7930100000000000000030101000000010c024d00000000000000",
+      "name": "an optional's present flag that is neither 0 nor 1",
+      "ok": false
+    },
+    {
+      "error": "BadFormatMagic",
+      "layer": "message",
+      "message": "b8011a8207fd4078d3990c199d540c5a4851d04df92220240ab990b60d5a2cafbef447ad05a53201fc539922f6219351617053e89c439294ca6230909fcb2d0b6d253c02197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c0600",
+      "name": "wrong message magic",
+      "ok": false
+    },
+    {
+      "error": "BadLength",
+      "layer": "message",
+      "message": "b9011a8207fd4078d3990c199d540c5a4851d04df92220240ab990b60d5a2cafbef447ad05a53201fc539922f6219351617053e89c439294ca6230909fcb2d0b6d253c02197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c060000",
+      "name": "a byte after the payload",
+      "ok": false
+    },
+    {
+      "error": "BadLength",
+      "layer": "message",
+      "message": "b9011a8207fd4078d3990c199d540c5a4851d04df92220240ab990b60d5a2cafbef447ad05a53201fc539922f6219351617053e89c439294ca6230909fcb2d0b6d253c02197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61890075d3c793b00c720b405c06000304220500000600806d80370500000005e0c810000000000004f8ff0309000900000c01c0c26f0b405c06002807000003001079f8050000000004f8ff0c016049710b405c0600290700000300407c96390500000004f8ff0c018097710b405c0600740c00000300402b71370500000004f8ff0c01a0e5710b405c06",
+      "name": "a message one byte short of its declared length",
+      "ok": false
+    },
+    {
+      "error": "Truncated",
+      "layer": "message",
+      "message": "b9011a8207fd4078d3990c199d540c5a4851d04df92220240ab990b60d5a2cafbef447ad05a53201fc539922f6219351617053e89c439294ca623090",
+      "name": "a message cut inside its header",
+      "ok": false
+    }
+  ],
+  "ed25519": {
+    "data": "01001000020050000200720089000200",
+    "instruction_index": 2,
+    "message_case": 0,
+    "starting_offset": 12
+  },
+  "note": "Generated by `cargo test --test vectors` in tests/integration, with pyth-lazer-protocol 0.46.0's encoder. Do not edit.",
+  "signer": "197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61"
+}
