@@ -15,6 +15,7 @@ const HowItWorks = lazy(() => import('@/pages/HowItWorks'));
 const Bell = lazy(() => import('@/pages/Bell'));
 const Oracle = lazy(() => import('@/pages/Oracle'));
 const Bells = lazy(() => import('@/pages/Bells'));
+const Receipt = lazy(() => import('@/pages/Receipt'));
 const List = lazy(() => import('@/pages/List'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const Portfolio = lazy(() => import('@/pages/Portfolio'));
@@ -104,6 +105,7 @@ export function App() {
               <Route path="/bell" element={<Bell />} />
               <Route path="/oracle" element={<Oracle />} />
               <Route path="/bells" element={<Bells />} />
+              <Route path="/b/:cross" element={<Receipt />} />
               <Route path="/list" element={<List />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -17,6 +17,7 @@
   "quoteEscrow": "J7jtJHLEixreYvAYkbvncyK6tiMpSiWPt32Bbd81X5jR",
   "treasury": "GNJxWx5AWfdyQfpu4BEMAmBQzQX7QSKMhDzFBRTShfYi",
   "maker": "7oc1Nj6ZutF1kKVvWLHt6LbmSPrFdzoRD3KQdBQPZjc",
+  "keeper": "2gV24z2k3Am15jfVwDrLnugPNPKQCFzV9sKnmGbAT9QU",
   "backstop": {
     "feeBps": 15,
     "maxRaw": "10000000000",

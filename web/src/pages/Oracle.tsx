@@ -99,7 +99,7 @@ export default function Oracle() {
       </header>
 
       {data === undefined ? (
-        <div className={s.body}><div className="skeleton" style={{ height: 240, borderRadius: 16 }} /></div>
+        <div className={s.body}><div className="skeleton" style={{ height: 240, borderRadius: 16 }} aria-busy="true" /></div>
       ) : data === null ? (
         <div className={s.body}><p className={s.empty}>No bell oracle is deployed for this site yet.</p></div>
       ) : (

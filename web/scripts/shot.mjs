@@ -41,6 +41,8 @@ const ONLY_W = arg('w', null);
    can land on its loading skeleton. `--ready <css>` waits (up to a minute) for
    an element that only exists once the real content is on screen. */
 const READY = arg('ready', null);
+/** `--path /b/<cross> [--name receipt]`: one page not in the list, such as a live receipt. */
+const PATH = arg('path', null);
 
 const PAGES = [
   ['/', 'landing'],
@@ -203,7 +205,7 @@ try {
     }
   };
 
-  const pages = ONLY_PAGE ? PAGES.filter(([p]) => p === ONLY_PAGE) : PAGES;
+  const pages = PATH ? [[PATH, arg('name', 'custom')]] : ONLY_PAGE ? PAGES.filter(([p]) => p === ONLY_PAGE) : PAGES;
   const widths = ONLY_W ? WIDTHS.filter(([w]) => String(w) === ONLY_W) : WIDTHS;
 
   for (const [path, name] of pages) {

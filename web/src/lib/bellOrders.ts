@@ -35,6 +35,8 @@ export interface CrossManifest {
   mint: string; mintProgram: string; mintDecimals: number; realMint: string;
   quoteMint: string; quoteProgram: string; quoteDecimals: number;
   maker: string; backstop: { feeBps: number; maxRaw: string; maxQuote: string };
+  /** The key the keeper cranks with; a receipt trusts a counterfactual only from it. */
+  keeper?: string;
   params: { freezeSecs: number; auctionSecs: number; [k: string]: unknown };
 }
 

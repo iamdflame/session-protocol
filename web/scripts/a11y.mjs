@@ -22,8 +22,9 @@ const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i
 const BASE = arg('base', 'http://localhost:3100');
 const GROUND = arg('ground', null);
 
-const PAGES = ['/', '/trade', '/portfolio', '/markets', '/markets/SPYx', '/markets/NVDAx', '/markets/OPENAI', '/research',
-  '/how-it-works', '/bell', '/oracle', '/bells', '/list', '/nope'];
+// `--path /b/<cross>` audits one page instead, such as a live receipt
+const PAGES = arg('path', null) ? [arg('path')] : ['/', '/trade', '/portfolio', '/markets', '/markets/SPYx', '/markets/NVDAx', '/markets/OPENAI', '/research',
+  '/how-it-works', '/bell', '/oracle', '/bells', '/b/11111111111111111111111111111111', '/list', '/nope'];
 const CHROME = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'].find(existsSync);
 /* Chrome writes ~90MB of profile per run and never cleans it up; a few
    days of harness runs filled this machine's disk. Named here so the

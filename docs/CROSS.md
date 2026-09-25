@@ -136,3 +136,31 @@ Every participant's balance change must equal the arithmetic to the atom, and th
 - the backstop maker, `7oc1Nj6Z…`, offering at 15 bp.
 
 The keeper runs as a systemd user service (`deploy/install-service.sh cross-keeper`) and takes every cross from bell to close. `npm run cross:demo` seeds the next bells with the team's own labelled test orders.
+It keeps a paid-out cross for a day before closing it, so the site can show the bell's result.
+
+**On the site.** `/bells` is the ticket and the book: pick a bell, a side, an amount and an optional limit, and cancel until the freeze. `web/scripts/bells-flow.mjs` drives it with an injected devnet wallet and checks every order against the chain to the atom.
+
+## The receipt, and the swap beside it
+
+Every cross has a receipt at `/b/<cross>`, read from the chain on each visit:
+
+- **The price** the cross cleared at, and what one raw token was worth at the multiplier the cross recorded.
+- **The print.** The page fetches the transaction that posted it and checks its Ed25519 signature again, in the browser, over the bytes the program parsed. It then compares the signed feed with what the print stored, field by field, and confirms that the transaction opens with the Ed25519 precompile, as the verifier requires.
+- **The cross**, step by step: frozen, priced, auction, cleared, settled. It shows both sides' totals, what each side got and its fill ratio, the crowded side and its fee, and the escrow in and out.
+- **Your orders in it**, when this browser placed any.
+- **Every transaction** that touched it.
+
+**The counterfactual.** A receipt that claims a saving without the alternative beside it is an advertisement. So at the bell, the keeper quotes each side's total on Jupiter, for the real NVDAx on mainnet: the buyers' USDC in, the sellers' raw tokens in. The fixture has the real mint's decimals and multiplier, so the atoms carry over unchanged.
+
+The quotes go into a Memo instruction of the `price_cross` transaction itself, as `session-cross counterfactual v1 {json}` (`sdk/src/counterfactual.ts`). That makes them timestamped by the chain, signed by the keeper, and visible on any explorer.
+
+The receipt compares rates, not totals, because limits can leave part of a side unfilled: per dollar for buyers, per token for sellers. It shows the result in basis points to two places.
+
+Anyone can put a memo in a transaction that touches a cross, so a receipt shows a counterfactual only when two things hold:
+
+- the memo is in the transaction that priced this cross;
+- the keeper that the market's manifest names (`keeper`) signed that transaction.
+
+With no counterfactual, the receipt says it makes no claim about savings.
+
+The Memo program charges by the byte: 124k compute units for a real counterfactual on devnet, and 222k for the largest one the reader accepts. The keeper therefore sets a 600k limit on that transaction, rather than share the default with the price. On devnet the cross is a rehearsal at a simulated print while the swap is a real mainnet quote, and the receipt says so where the two meet.

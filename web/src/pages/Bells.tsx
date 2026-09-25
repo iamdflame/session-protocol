@@ -216,7 +216,9 @@ function Ticket({ st, now, onPlaced }: { st: BellOrdersState; now: number; onPla
   );
 }
 
-function Book({ st, c, kind, bell, now }: { st: BellOrdersState; c: CrossAccount | null; kind: BellKind; bell: { day: number; ts: number } | undefined; now: number }) {
+function Book({ st, c, address, kind, bell, now }: {
+  st: BellOrdersState; c: CrossAccount | null; address: string | null; kind: BellKind; bell: { day: number; ts: number } | undefined; now: number;
+}) {
   const m = st.multiplier;
   const last = st.lastPrint ? priceOf(st.lastPrint.equity.price, st.lastPrint.equity.expo) : null;
   const buyers = c ? Number(c.buyTotal) / 1e6 : 0;
@@ -251,6 +253,7 @@ function Book({ st, c, kind, bell, now }: { st: BellOrdersState; c: CrossAccount
           </dl>
           {c.phase === 'settling' && <Result st={st} c={c} />}
           {c.phase === 'cancelled' && <p className={s.warn}>This cross was cancelled and every order is refunded whole.</p>}
+          {address && (c.phase === 'settling' || c.phase === 'cancelled') && <Link className={s.more} to={`/b/${address}`}>Read the receipt</Link>}
         </>
       )}
     </section>
@@ -365,7 +368,9 @@ function Mine({ st, now, onChanged }: { st: BellOrdersState; now: number; onChan
               <span className={s.sub}>at the {n.kind} of {etDate(n.bellTs)}: {outcome(n.side, is)}</span>
             </span>
             <span className={s.chip} data-status={is.state}>{CHIP[is.state]}</span>
-            <a className={s.addr} href={explorer(n.signature)} target="_blank" rel="noreferrer">placed <Icon name="external" size={11} /></a>
+            {is.state === 'filled' || is.state === 'unfilled' || is.state === 'refunded'
+              ? <Link className={s.addr} to={`/b/${n.cross}`}>receipt</Link>
+              : <a className={s.addr} href={explorer(n.signature)} target="_blank" rel="noreferrer">placed <Icon name="external" size={11} /></a>}
           </li>
         ))}
       </ul>
@@ -387,7 +392,8 @@ export default function Bells() {
   const [shown, setShown] = useState<BellKind | null>(null);
   const kind: BellKind = shown ?? (bells.open && bells.close && bells.open.ts < bells.close.ts ? 'open' : 'close');
   const bell = bells[kind];
-  const cross = data && bell ? data.crosses.find((x) => x.c.day === bell.day && x.c.kind === kind)?.c ?? null : null;
+  const found = data && bell ? data.crosses.find((x) => x.c.day === bell.day && x.c.kind === kind) ?? null : null;
+  const cross = found?.c ?? null;
   const recent = data ? [...data.crosses].filter((x) => x.c.phase === 'settling' || x.c.phase === 'cancelled').reverse() : [];
 
   return (
@@ -410,7 +416,7 @@ export default function Bells() {
       </header>
 
       {data === undefined ? (
-        <div className="skeleton" style={{ height: 320, borderRadius: 16 }} />
+        <div className="skeleton" style={{ height: 320, borderRadius: 16 }} aria-busy="true" />
       ) : data === null ? (
         <p className={s.empty}>No bell-order market is deployed for this site yet.</p>
       ) : (
@@ -425,7 +431,7 @@ export default function Bells() {
                 onChange={(v) => setShown(v)}
                 items={(['open', 'close'] as const).filter((k) => bells[k]).map((k) => ({ value: k, label: k === 'open' ? 'Next open' : 'Next close' }))}
               />
-              <Book st={data} c={cross} kind={kind} bell={bell} now={now} />
+              <Book st={data} c={cross} address={found?.address.toBase58() ?? null} kind={kind} bell={bell} now={now} />
             </div>
             <Mine st={data} now={now} onChanged={refresh} />
             <section className={`${s.card} ${s.wide}`} aria-labelledby="recent-h">
@@ -436,7 +442,7 @@ export default function Bells() {
                 <ul className={s.recent}>
                   {recent.map(({ address, c }) => (
                     <li key={address.toBase58()}>
-                      <span className="num">{c.kind === 'open' ? 'Open' : 'Close'} · {etDate(c.bellTs)}</span>
+                      <Link className={`num ${s.receiptLink}`} to={`/b/${address.toBase58()}`}>{c.kind === 'open' ? 'Open' : 'Close'} · {etDate(c.bellTs)}</Link>
                       {c.phase === 'cancelled' ? (
                         <span className={s.sub}>cancelled, refunded whole</span>
                       ) : (

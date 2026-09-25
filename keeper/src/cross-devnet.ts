@@ -217,6 +217,8 @@ async function main() {
       quoteEscrow: quoteEscrowPda(market).toBase58(),
       treasury: operator.publicKey.toBase58(),
       maker: maker.publicKey.toBase58(),
+      // the key the keeper cranks with: a receipt shows a counterfactual only from it
+      keeper: load(process.env.CROSS_CRANKER_KEYPAIR ?? `${DIR}/bell-poster.json`).publicKey.toBase58(),
       backstop: { feeBps: BACKSTOP.feeBps, maxRaw: BACKSTOP.maxRaw.toString(), maxQuote: BACKSTOP.maxQuote.toString() },
       params: Object.fromEntries(Object.entries(DEVNET_MARKET_PARAMS).map(([k, v]) => [k, typeof v === 'bigint' ? v.toString() : v])),
       writtenAt: new Date().toISOString(),

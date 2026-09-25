@@ -215,7 +215,14 @@ The arithmetic is `crates/session-core/src/cross.rs`, property-tested over
 10,000 random crosses per property, and the fee rule came out of those
 tests. The program is tested end to end on the real NVDAx mint with
 Pyth-verified prints, and every balance matches the arithmetic to the
-atom. Its devnet deployment is pending: it needs 3.39 SOL of program rent.
+atom. It runs on devnet against a fixture NVDAx and the devnet bell, and a
+keeper takes every cross from its bell to closed.
+
+On the site, `/bells` places and cancels orders, and every cross has a
+receipt at `/b/<cross>`. It shows the print, with its signature checked
+again in your browser, then the fills, and beside them the keeper's Jupiter
+quote for the same size at the bell. A receipt without that quote claims no
+saving (`docs/CROSS.md`).
 
 ## Safety model
 

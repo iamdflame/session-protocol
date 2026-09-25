@@ -15,13 +15,20 @@
    If an issuer pause makes a token leg fail, the keeper settles the quote
    leg alone and retries the tokens on later passes.
 
+   At the bell it also quotes each side's total on Jupiter, for the real
+   xStock on mainnet, and writes the quotes beside the price, in a Memo of
+   the price_cross transaction: the counterfactual a receipt shows next to
+   the fill (sdk/src/counterfactual.ts).
+
      npm run cross:keeper               run until stopped (the service)
      npm run cross:keeper -- --once     one pass over every cross
      npm run cross:keeper -- --status   the market's crosses, by phase
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction, type TransactionInstruction } from '@solana/web3.js';
+import {
+  ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction, type TransactionInstruction,
+} from '@solana/web3.js';
 import bs58 from 'bs58';
 import { decodePrint, printPda } from '../../sdk/src/bell.ts';
 import { clear as clearMath, emptyLadder, LADDER } from '../../sdk/src/cross.ts';
@@ -30,6 +37,9 @@ import {
   confirmOrdersIx, decodeCross, decodeMarket, decodeOffer, decodeOrder, marketRef, offerPda, postOfferIx, priceCrossIx,
   settleOfferIx, settleOrderIx, type CrossAccount, type MarketRef,
 } from '../../sdk/src/cross-ix.ts';
+import {
+  COUNTERFACTUAL_WINDOW_SECS, counterfactualMemoIx, MAINNET_USDC, type Counterfactual, type SwapQuote,
+} from '../../sdk/src/counterfactual.ts';
 import { parseSecret } from './wallet.ts';
 
 const RPC = process.env.DEVNET_RPC ?? 'https://api.devnet.solana.com';
@@ -46,7 +56,7 @@ let stopping = false;
 for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => { stopping = true; });
 
 interface Manifest {
-  market: string; maker: string; treasury: string;
+  market: string; maker: string; treasury: string; realMint: string;
   backstop: { feeBps: number; maxRaw: string; maxQuote: string };
 }
 
@@ -90,6 +100,47 @@ async function offersOf(cross: PublicKey) {
   return accts.map((a) => ({ address: a.pubkey, f: decodeOffer(a.account.data) }));
 }
 
+/* ── the counterfactual ─────────────────────────────────────────────────── */
+
+const JUPITER_QUOTE = 'https://lite-api.jup.ag/swap/v1/quote';
+/** The Memo program charges by the byte: 124k units for a real counterfactual
+    on devnet, 222k for the largest one readCounterfactual accepts. Set the
+    limit rather than share the default 200k per instruction with the price. */
+const PRICE_WITH_MEMO_CU = 600_000;
+/** Taken at the bell, written when the cross is priced, by cross address. */
+const quoted = new Map<string, Counterfactual>();
+
+/** One ExactIn quote. Jupiter's refusal is an answer and is recorded; a
+    network failure or a rate limit throws, and the next pass asks again. */
+async function jupiterQuote(inputMint: string, outputMint: string, amount: bigint): Promise<SwapQuote> {
+  const url = `${JUPITER_QUOTE}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50&swapMode=ExactIn`;
+  const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (r.status === 429 || r.status >= 500) throw new Error(`Jupiter answered ${r.status}`);
+  const j = (await r.json().catch(() => ({}))) as {
+    inAmount?: string; outAmount?: string; priceImpactPct?: string; error?: string; errorCode?: string;
+    routePlan?: { swapInfo?: { label?: string } }[];
+  };
+  if (!r.ok || !j.inAmount || !j.outAmount) return { noRoute: String(j.error ?? j.errorCode ?? `HTTP ${r.status}`).slice(0, 120) };
+  return {
+    in: j.inAmount, out: j.outAmount, impactPct: Number(j.priceImpactPct ?? 0),
+    route: (j.routePlan ?? []).map((p) => p.swapInfo?.label ?? '?').join(' > ').slice(0, 120),
+  };
+}
+
+/** What each side's total would have got from a swap on mainnet, now. The
+    devnet quote token has USDC's 6 decimals and the fixture NVDAx the real
+    one's 8 and multiplier, so the atoms carry over unchanged. */
+async function counterfactual(cross: PublicKey, c: CrossAccount, man: Manifest): Promise<Counterfactual> {
+  const at = Math.floor(Date.now() / 1000);
+  const [buy, sell] = await Promise.all([
+    c.buyTotal > 0n ? jupiterQuote(MAINNET_USDC, man.realMint, c.buyTotal) : undefined,
+    c.sellTotal > 0n ? jupiterQuote(man.realMint, MAINNET_USDC, c.sellTotal) : undefined,
+  ]);
+  return { cross: cross.toBase58(), at, venue: 'jupiter', mint: man.realMint, ...(buy && { buy }), ...(sell && { sell }) };
+}
+
+const describeQuote = (q: SwapQuote | undefined) => (!q ? 'none' : 'noRoute' in q ? `no route (${q.noRoute})` : `${q.in} → ${q.out} via ${q.route}`);
+
 /** How much the backstop must offer, at its fee, to cover this imbalance. */
 function backstopSize(c: CrossAccount, feeBps: number): bigint {
   const ladder = emptyLadder();
@@ -109,13 +160,29 @@ async function pass(m: MarketRef, man: Manifest, cranker: Keypair, maker: Keypai
     if (stopping) return;
     const at = { day: c.day, kind: c.kind };
     const label = `${c.kind} of day ${c.day}`;
+    if (c.phase !== 'collecting') quoted.delete(address.toBase58()); // priced, by us or by anyone
     switch (c.phase) {
       case 'collecting': {
         if (now < c.bellTs) break;
+        // the alternative, as near the bell as this pass is
+        const key = address.toBase58();
+        if (!quoted.has(key) && now - c.bellTs <= COUNTERFACTUAL_WINDOW_SECS && (c.buyTotal > 0n || c.sellTotal > 0n)) {
+          try {
+            const cf = await counterfactual(address, c, man);
+            quoted.set(key, cf);
+            log(`  counterfactual for the ${label}, ${cf.at - c.bellTs}s after the bell: buy ${describeQuote(cf.buy)}; sell ${describeQuote(cf.sell)}`);
+          } catch (e) {
+            log(`  counterfactual for the ${label} not taken, asking again next pass: ${String(e).slice(0, 120)}`);
+          }
+        }
         const print = await conn.getAccountInfo(printPda(m.listing, c.day, c.kind)[0]);
         const status = print ? decodePrint(print.data).status : null;
         if (status === 'final' || status === 'missing') {
-          await send([cranker], [priceCrossIx(m, at)], `price the ${label} (${status} print)`);
+          const cf = status === 'final' ? quoted.get(key) : undefined;
+          const ixs = cf
+            ? [ComputeBudgetProgram.setComputeUnitLimit({ units: PRICE_WITH_MEMO_CU }), priceCrossIx(m, at), counterfactualMemoIx(cf)]
+            : [priceCrossIx(m, at)];
+          if (await send([cranker], ixs, `price the ${label} (${status} print)${cf ? ', its counterfactual beside it' : ''}`)) quoted.delete(key);
         } else if (now > c.bellTs + marketAcct.params.cancelAfterSecs) {
           await send([cranker], [cancelCrossIx(m, at)], `cancel the ${label}: no print in time`);
         }
