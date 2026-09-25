@@ -213,7 +213,11 @@ function TheCross({ st, c }: { st: ReceiptState; c: CrossAccount }) {
           <div>
             <dt>Escrow</dt>
             <dd>
-              <span className="num">{balanced && c.phase === 'settling' ? 'every atom out' : 'still held'}</span>
+              <span className="num">{
+                c.phase === 'settling' && c.nSettled === c.nOrders
+                  ? balanced ? 'every atom out' : `paid out; ${c.quoteIn - c.quoteOut} quote and ${c.rawIn - c.rawOut} token atoms of rounding dust go to the treasury at close`
+                  : 'still held'
+              }</span>
               <span className={s.sub}>{usd(Number(c.quoteIn) / 1e6)} in, {usd(Number(c.quoteOut) / 1e6)} out · {tok(displayed(c.rawIn, m, 8))} NVDAx in, {tok(displayed(c.rawOut, m, 8))} out</span>
             </dd>
           </div>
