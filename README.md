@@ -278,9 +278,10 @@ npm run vectors   # regenerate the cross-language vectors
 The site has its own chain: `cd web && npm run verify` type-checks it against
 the SDK, regenerates the pre-paint session script and refuses if it disagrees
 with the calendar across 313,117 timestamps, drives mint/redeem in a headless
-browser (local vault, then the devnet vault through an injected wallet), walks
-the local vault across boundaries, and audits every page for names, headings,
-keyboard reach and computed contrast on both grounds.
+browser (local vault, then the devnet vault through an injected wallet), places
+and cancels bell orders on devnet through `/bells`, checking each against the
+chain to the atom, walks the local vault across boundaries, and audits every
+page for names, headings, keyboard reach and computed contrast on both grounds.
 
 Operator procedures, health thresholds and a recovery path per halt reason are
 in `docs/OPERATIONS.md`.

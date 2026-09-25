@@ -27,11 +27,13 @@ the size and an order of magnitude slower to render.
 | `ground`      | regenerates the pre-paint ground script and refuses if it disagrees with the calendar across 313,117 timestamps |
 | `flow`        | drives a real browser through mint → refused class → redeem → persistence → reset (35 assertions) |
 | `settle`      | drives the local vault across real boundaries with chosen marks: exposure flips, funding is a transfer, backing covers claims, bad debt halts (26 assertions) |
+| `chain`       | the devnet vault through an injected Wallet Standard wallet: mint, refused class, redeem, listing, each signature checked on devnet |
+| `bells`       | a buy and a sell in the next bell's cross through `/bells` with the same wallet, each checked against the chain to the atom, then both cancelled and the refund checked (`--fresh`: a new wallet funded by the ticket's faucet button, answered by the bundled function) |
 | `a11y`        | names, headings, keyboard reach and computed contrast on every page, both grounds |
 | `shot`        | full-page screenshots at 1440 / 1024 / 768 / 390, either ground        |
 | `perf`        | at-rest main-thread cost under 4× CPU throttle                         |
 
-`flow`, `settle`, `chain`, `a11y` and `shot` need the dev server running;
+`flow`, `settle`, `chain`, `bells`, `a11y` and `shot` need the dev server running;
 `perf` needs `preview`. `functions` bundles the two serverless functions and
 runs as part of `build`.
 

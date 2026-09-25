@@ -2,9 +2,11 @@
    POST /api/faucet { wallet, message, signature } — test quote for a devnet
    wallet, to someone who can prove they hold it.
 
-   Mints 10,000 of the devnet quote token (the USDC stand-in) to the wallet's
-   token account, creating the account if needed, and drips a little SOL for
-   fees if the wallet has almost none.
+   Mints 10,000 of the devnet quote token (the USDC stand-in) and 10 fixture
+   NVDAx (the xStock stand-in bell orders trade) to the wallet's token
+   accounts, creating them if needed, and drips a little SOL for fees if the
+   wallet has almost none. Each asset has its own cap; a wallet at both caps
+   is refused.
 
    The signature is the point. An unauthenticated faucet takes a public key in
    a JSON body, so anyone can drain the operator's SOL into fresh keypairs at
@@ -20,9 +22,13 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { ata, createAtaIdempotentIx, TOKEN_PROGRAM_ID } from '../../sdk/src/ix.ts';
 import { connection, json, loadManifest, operator, nodeHandler } from './_shared.ts';
+// The bell-order sandbox: the fixture NVDAx the operator issues.
+import crossManifest from '../public/cross-devnet.json' with { type: 'json' };
 
 const AMOUNT = 10_000n * 10n ** 6n;          // 10,000.000000
 const CAP = 50_000n * 10n ** 6n;             // stop at 50,000 held
+const NVDAX_AMOUNT = 10n * 10n ** 8n;        // 10 fixture NVDAx, raw
+const NVDAX_CAP = 50n * 10n ** 8n;
 const SOL_DRIP = 0.02 * LAMPORTS_PER_SOL;
 const SOL_FLOOR = 0.01 * LAMPORTS_PER_SOL;
 /** How stale a signed request may be. Long enough to sign, short enough that a
@@ -84,15 +90,32 @@ async function handler(req: Request): Promise<Response> {
     const quoteProgram = new PublicKey(m.tokenProgram);
     const dest = ata(wallet, quoteMint, quoteProgram);
 
-    const held = await conn.getTokenAccountBalance(dest).then(r => BigInt(r.value.amount)).catch(() => 0n);
-    if (held >= CAP) {
-      return json({ error: `this wallet already holds ${(Number(held) / 1e6).toLocaleString()} test quote` }, 429);
+    const nvdaxMint = new PublicKey(crossManifest.mint);
+    const nvdaxProgram = new PublicKey(crossManifest.mintProgram);
+    const nvdaxDest = ata(wallet, nvdaxMint, nvdaxProgram);
+    const [held, heldNvdax] = await Promise.all([
+      conn.getTokenAccountBalance(dest).then(r => BigInt(r.value.amount)).catch(() => 0n),
+      conn.getTokenAccountBalance(nvdaxDest).then(r => BigInt(r.value.amount)).catch(() => 0n),
+    ]);
+    const giveQuote = held < CAP;
+    const giveNvdax = heldNvdax < NVDAX_CAP;
+    if (!giveQuote && !giveNvdax) {
+      return json({ error: `this wallet already holds ${(Number(held) / 1e6).toLocaleString()} test quote and enough fixture NVDAx` }, 429);
     }
 
-    const tx = new Transaction().add(
-      createAtaIdempotentIx(op.publicKey, wallet, quoteMint, quoteProgram),
-      mintToIx(quoteMint, dest, op.publicKey, AMOUNT, quoteProgram),
-    );
+    const tx = new Transaction();
+    if (giveQuote) {
+      tx.add(
+        createAtaIdempotentIx(op.publicKey, wallet, quoteMint, quoteProgram),
+        mintToIx(quoteMint, dest, op.publicKey, AMOUNT, quoteProgram),
+      );
+    }
+    if (giveNvdax) {
+      tx.add(
+        createAtaIdempotentIx(op.publicKey, wallet, nvdaxMint, nvdaxProgram),
+        mintToIx(nvdaxMint, nvdaxDest, op.publicKey, NVDAX_AMOUNT, nvdaxProgram),
+      );
+    }
     const sol = await conn.getBalance(wallet);
     const dripped = sol < SOL_FLOOR;
     if (dripped) {
@@ -100,7 +123,14 @@ async function handler(req: Request): Promise<Response> {
     }
 
     const signature = await sendAndConfirmTransaction(conn, tx, [op], { commitment: 'confirmed' });
-    return json({ signature, amount: AMOUNT.toString(), solDripped: dripped, quoteMint: m.quoteMint });
+    return json({
+      signature,
+      amount: (giveQuote ? AMOUNT : 0n).toString(),
+      nvdax: (giveNvdax ? NVDAX_AMOUNT : 0n).toString(),
+      solDripped: dripped,
+      quoteMint: m.quoteMint,
+      nvdaxMint: crossManifest.mint,
+    });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

@@ -16,10 +16,11 @@
     "shot": "node scripts/shot.mjs",
     "perf": "node scripts/perf.mjs",
     "profile": "node scripts/profile.mjs",
-    "verify": "npm run check && npm run ground && npm run flow && npm run demo && npm run settle && npm run chain && npm run a11y",
+    "verify": "npm run check && npm run ground && npm run flow && npm run demo && npm run settle && npm run chain && npm run bells && npm run a11y",
     "functions": "node scripts/functions.mjs",
     "chain": "node scripts/chain-flow.mjs",
     "chain:prod": "node scripts/chain-flow.mjs --base https://session-roan.vercel.app --fresh",
+    "bells": "node scripts/bells-flow.mjs",
     "demo": "node scripts/demo-flow.mjs"
   },
   "dependencies": {

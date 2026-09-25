@@ -126,6 +126,8 @@ export function useChainEngine(m: Devnet, d: ChainState, onDone: () => void): Tr
         run: async () => {
           const r = await requestFaucet(publicKey, signMessage);
           if ('error' in r) return { ok: false, error: r.error };
+          // The faucet also serves bell orders, so it can succeed with no quote in it.
+          if (r.amount === '0') return { ok: false, error: 'This wallet already holds 50,000 test quote, the faucet’s cap.' };
           onDone();
           return { ok: true, sig: r.signature, headline: `10,000 test quote sent${r.solDripped ? ', plus a little SOL for fees' : ''}`, detail: '+10,000.00 test USDC' };
         },

@@ -36,6 +36,8 @@ const RPC = process.env.DEVNET_RPC ?? 'https://api.devnet.solana.com';
 const MANIFEST = 'web/public/cross-devnet.json';
 const PASS_MS = 20_000;
 const BATCH = 6;
+/** How long a settled cross stays open for the site to show it. */
+const KEEP_SECS = 86_400;
 
 const args = process.argv.slice(2);
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -149,18 +151,24 @@ async function pass(m: MarketRef, man: Manifest, cranker: Keypair, maker: Keypai
       }
       case 'settling':
       case 'cancelled': {
-        const orders = await ordersOf(address);
-        for (const { o } of orders) {
-          if (stopping) return;
-          const ok = await send([cranker], [settleOrderIx(m, { cranker: cranker.publicKey, ...at, owner: o.owner, nonce: o.nonce, legs: LEGS })], `settle ${o.side} ${o.amount} (${o.status}) of the ${label}`);
-          if (!ok && !(o.legs & LEG_QUOTE)) {
-            // an issuer pause holds token legs, never quote refunds
-            await send([cranker], [settleOrderIx(m, { cranker: cranker.publicKey, ...at, owner: o.owner, nonce: o.nonce, legs: LEG_QUOTE })], '  settle its quote leg alone');
+        // The cross counts what it has paid out, so a finished one costs no reads.
+        if (c.nSettled < c.nOrders || c.nOffersSettled < c.nOffers) {
+          for (const { o } of await ordersOf(address)) {
+            if (stopping) return;
+            const ok = await send([cranker], [settleOrderIx(m, { cranker: cranker.publicKey, ...at, owner: o.owner, nonce: o.nonce, legs: LEGS })], `settle ${o.side} ${o.amount} (${o.status}) of the ${label}`);
+            if (!ok && !(o.legs & LEG_QUOTE)) {
+              // an issuer pause holds token legs, never quote refunds
+              await send([cranker], [settleOrderIx(m, { cranker: cranker.publicKey, ...at, owner: o.owner, nonce: o.nonce, legs: LEG_QUOTE })], '  settle its quote leg alone');
+            }
+          }
+          for (const { f } of await offersOf(address)) {
+            await send([cranker], [settleOfferIx(m, { cranker: cranker.publicKey, ...at, maker: f.maker, nonce: f.nonce, legs: LEGS })], `settle a ${f.feeBps} bp offer of the ${label}`);
           }
         }
-        for (const { f } of await offersOf(address)) {
-          await send([cranker], [settleOfferIx(m, { cranker: cranker.publicKey, ...at, maker: f.maker, nonce: f.nonce, legs: LEGS })], `settle a ${f.feeBps} bp offer of the ${label}`);
-        }
+        // Keep a paid-out cross a day before closing it: its clearing is what
+        // the site shows as the bell's result, and what receipts are
+        // computed from. Its rent comes back either way.
+        if (now < (c.clearedAt || c.bellTs) + KEEP_SECS) break;
         const fresh = decodeCross((await conn.getAccountInfo(address))!.data);
         if (fresh.nSettled === fresh.nOrders && fresh.nOffersSettled === fresh.nOffers) {
           await send([cranker], [closeCrossIx(m, { cranker: cranker.publicKey, ...at, createdBy: fresh.createdBy, treasury: new PublicKey(man.treasury) })], `close the ${label}`);

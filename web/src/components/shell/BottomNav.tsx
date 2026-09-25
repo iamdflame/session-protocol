@@ -8,12 +8,14 @@ import { Status } from '../ui/Status';
 import { isActive, PRIMARY } from './nav';
 import s from './Shell.module.css';
 
-const MOBILE = [...PRIMARY, { to: '/research', label: 'Research', icon: 'research' as const }];
+// Four primary tabs and More: the bar is five columns wide, so Research
+// lives in the sheet on a phone.
+const MOBILE = PRIMARY;
 
 export function BottomNav() {
   const { pathname } = useLocation();
   const [more, setMore] = useState(false);
-  const moreActive = ['/how-it-works', '/bell', '/oracle', '/list'].some(p => pathname.startsWith(p));
+  const moreActive = ['/research', '/how-it-works', '/bell', '/oracle', '/list'].some(p => pathname === p || pathname.startsWith(p + '/'));
   return (
     <>
       <nav className={s.bottom} aria-label="Primary">
@@ -35,8 +37,9 @@ export function BottomNav() {
       <Sheet open={more} onClose={() => setMore(false)} title="More" kind="sheet">
         <div className={s.moreList}>
           {[
+            { to: '/research', label: 'Research', icon: 'research' as const, sub: 'The study behind the product' },
             { to: '/how-it-works', label: 'How it works', icon: 'how' as const, sub: 'The handoff, step by step' },
-            { to: '/bell', label: 'Bell', icon: 'bell' as const, sub: 'The live heartbeat and the keeper' },
+            { to: '/bell', label: 'Keeper', icon: 'bell' as const, sub: 'The live heartbeat and the keeper' },
             { to: '/oracle', label: 'Oracle', icon: 'verified' as const, sub: 'Every open and close, as Pyth signed them' },
             { to: '/list', label: 'Open a vault', icon: 'list' as const, sub: 'initialize_vault from your wallet' },
           ].map(l => (

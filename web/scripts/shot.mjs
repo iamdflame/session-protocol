@@ -53,6 +53,7 @@ const PAGES = [
   ['/markets/OPENAI', 'vault-event'],
   ['/bell', 'keeper'],
   ['/oracle', 'oracle'],
+  ['/bells', 'bells'],
   ['/research', 'research'],
   ['/how-it-works', 'how'],
   ['/list', 'list'],

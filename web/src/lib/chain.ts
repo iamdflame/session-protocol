@@ -980,7 +980,7 @@ export const faucetMessage = (wallet: string, issued: number) =>
 export async function requestFaucet(
   wallet: PublicKey,
   signMessage: ((m: Uint8Array) => Promise<Uint8Array>) | undefined,
-): Promise<{ signature: string; solDripped: boolean } | { error: string }> {
+): Promise<{ signature: string; solDripped: boolean; amount?: string; nvdax?: string } | { error: string }> {
   if (!signMessage) {
     return { error: 'This wallet cannot sign messages, which the faucet needs to prove the address is yours.' };
   }
