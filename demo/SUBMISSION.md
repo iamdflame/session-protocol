@@ -148,7 +148,7 @@ The honest gap: the Meteora pool for $BELL/NVDAx isn't seeded yet. Today the NVD
 
 ## Before you press submit
 
-1. **Keep this machine on and online through judging.** The bell poster and the cross keeper run here as systemd user services. If the machine sleeps, bells go unposted and crosses wait for a crank. No funds are at risk, since every step is permissionless and a cross with no print refunds, but a judge's order would sit unfilled.
+1. **The keepers run on Railway**, project `session-keeper`, with services `bell-poster` and `cross-keeper`, so bells post and orders settle with this machine off. Check them with `railway logs --service cross-keeper`. The poster's devnet wallet held 0.284 SOL on 25 Sep and spends about 0.016 SOL a bell. Top it up before judging runs long: `solana transfer 2gV24z2k3Am15jfVwDrLnugPNPKQCFzV9sKnmGbAT9QU 1 --url devnet --allow-unfunded-recipient`.
 2. **Open all three links in a private window.** The video must be Unlisted or Public, not Private.
 3. **The receipt link lives for three weeks.** The keeper keeps a paid-out cross that long before closing it.
 4. **Deadline:** 16:00 ET, which is 20:00 UTC, on 25 Sep 2026.
