@@ -1,8 +1,8 @@
 /* The pitch video, scene by scene. Scene numbers match demo/SCRIPT-pitch.md. */
 import React from 'react';
-import { AbsoluteFill, OffthreadVideo, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, Sequence, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { C, Chip, Eyebrow, Ground, Headline, LowerThird, MONO, Mark, SANS, SceneFade, Source, Callout, clamp, ease, useIn, useS } from './kit';
-import { Bars, BlinkCard, BrowserFrame, Checklist, Clip, Dim, Netting, Still, Terminal, Week } from './graphics';
+import { Bars, BlinkCard, BrowserFrame, Checklist, Clip, Dim, NO_VIDEO, Netting, Still, Terminal, Week } from './graphics';
 import live from './live.json';
 import blink from '../../captures/blink-action.json';
 import mcp from '../../captures/terminal/mcp.json';
@@ -12,14 +12,14 @@ const Pad: React.FC<{ children: React.ReactNode; x?: number; y?: number }> = ({ 
   <div style={{ position: 'absolute', left: x, top: y, right: x, display: 'flex', flexDirection: 'column', gap: 28 }}>{children}</div>
 );
 
-/** A slow push-in on B-roll, graded down to sit behind type. */
-const Broll: React.FC<{ src: string; from?: number; dim?: number; start?: number }> = ({ src, dim = 0.5, start = 0 }) => {
+/** A slow push-in on a B-roll still, graded down to sit behind type. */
+const Broll: React.FC<{ src: string; dim?: number }> = ({ src, dim = 0.5 }) => {
   const f = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const z = interpolate(f, [0, durationInFrames], [1.04, 1.14]);
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
-      <OffthreadVideo src={staticFile(src)} muted trimBefore={Math.round(start * 30)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${z})`,  }} />
+      <Img src={staticFile(src)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${z})` }} />
       <AbsoluteFill style={{ background: `linear-gradient(180deg, rgba(8,10,13,${dim * 0.6}) 0%, rgba(8,10,13,${dim}) 55%, rgba(8,10,13,0.92) 100%)` }} />
     </AbsoluteFill>
   );
@@ -38,7 +38,7 @@ export const P01: React.FC = () => {
     <SceneFade>
       <Ground />
       <Sequence durationInFrames={s(6.5)}>
-        <Broll src="broll/4334-1080.mp4" dim={0.55} />
+        <Broll src="captures/stills/broll-ny.png" dim={0.55} />
         <Pad y={690}>
           <Eyebrow color={C.day}>New York · 16:00 ET · the close</Eyebrow>
           <Headline text="NVIDIA's price is made six and a half hours a day." size={78} />
@@ -126,7 +126,7 @@ export const P02: React.FC = () => {
 /* ── P03 · Ade, late at night ──────────────────────────────────────────── */
 // ticket-order.mp4 (captured 25 Sep): type at 5–9.5 s, quote from ~18 s, hover "Now" ~21 s, "At the bell" ~31 s, click ~39 s, toast ~45 s, "Your orders" ~50 s
 const TICKET_SEGMENTS = [
-  { from: 5.0, to: 9.5 }, { from: 18.0, to: 23.0 }, { from: 30.5, to: 34.5 }, { from: 38.5, to: 46.5, rate: 1.35 }, { from: 47.0, to: 53.0 },
+  { from: 5.5, to: 9.5 }, { from: 18.5, to: 22.5 }, { from: 31, to: 34 }, { from: 38.5, to: 46.5, rate: 1.5 }, { from: 48.5, to: 53 },
 ];
 export const P03: React.FC = () => {
   const s = useS();
@@ -135,7 +135,7 @@ export const P03: React.FC = () => {
     <SceneFade>
       <Ground />
       <Sequence durationInFrames={s(4.4)}>
-        <Broll src="broll/269-1080.mp4" dim={0.35} start={2} />
+        <Broll src="captures/stills/broll-phone.png" dim={0.35} />
         <LowerThird title="Ade · Lagos · late at night" sub="New York is shut. She wants $200 of NVIDIA." from={8} />
       </Sequence>
       <Sequence from={s(4)}>
@@ -144,8 +144,9 @@ export const P03: React.FC = () => {
         </BrowserFrame>
       </Sequence>
       {/* the two choices, side by side (positions from the capture at 1920×1080, framed at 0.833×) */}
-      <Callout x={160 + 465 * 0.8333} y={116 + 495 * 0.8333} w={180 * 0.8333} h={110 * 0.8333} label="Now, on Jupiter" color={C.night} from={at(5.2)} to={at(9.4)} />
-      <Callout x={160 + 665 * 0.8333} y={116 + 495 * 0.8333} w={185 * 0.8333} h={110 * 0.8333} label="At the bell" color={C.day} from={at(9.6)} to={at(13.4)} />
+      {/* drawn over the recording by ffmpeg when frames are rendered here (demo/video/player/composite.mjs) */}
+      {!NO_VIDEO && <Callout x={160 + 465 * 0.8333} y={116 + 495 * 0.8333} w={180 * 0.8333} h={110 * 0.8333} label="Now, on Jupiter" color={C.night} from={at(4.5)} to={at(8)} />}
+      {!NO_VIDEO && <Callout x={160 + 665 * 0.8333} y={116 + 495 * 0.8333} w={185 * 0.8333} h={110 * 0.8333} label="At the bell" color={C.day} from={at(8.2)} to={at(11)} />}
       <LowerThird title="Devnet sandbox" sub="Fixture NVDAx · test USDC · a real order at today's real open" chips={<><Chip kind="devnet">Devnet</Chip><Chip kind="simulated">Simulated prints</Chip></>} from={at(14)} />
     </SceneFade>
   );
@@ -231,9 +232,9 @@ export const P05: React.FC = () => {
       <Ground />
       {live.ready ? (
         <BrowserFrame url={`session-roan.vercel.app/b/${live.cross.slice(0, 8)}…`}>
-          <Still src="captures/stills/receipt-full.png" imgW={3840} imgH={live.receiptHeight ?? 5200} box={{ w: 1600, h: 900 }} cams={[
-            { at: 0, cx: 0.5, cy: 0.1, zoom: 1 }, { at: 4, cx: 0.4, cy: 0.16, zoom: 1.45 }, { at: 9, cx: 0.5, cy: 0.35, zoom: 1.2 },
-            { at: 15, cx: 0.5, cy: 0.62, zoom: 1.2 }, { at: 21, cx: 0.5, cy: 0.5, zoom: 1 },
+          <Still src="captures/stills/receipt-full.png" imgW={3840} imgH={live.receiptHeight ?? 5714} box={{ w: 1600, h: 900 }} cams={[
+            { at: 0, cx: 0.56, cy: 0.115, zoom: 1.3 }, { at: 4.5, cx: 0.56, cy: 0.19, zoom: 1.5 }, { at: 9.5, cx: 0.73, cy: 0.31, zoom: 1.75 },
+            { at: 14.5, cx: 0.40, cy: 0.31, zoom: 1.7 }, { at: 19.5, cx: 0.56, cy: 0.20, zoom: 1.3 },
           ]} />
         </BrowserFrame>
       ) : <Pending what="The receipt of today's open cross" />}

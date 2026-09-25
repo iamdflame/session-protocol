@@ -41,9 +41,13 @@ export const Still: React.FC<{ src: string; imgW: number; imgH: number; box: { w
   return <Img src={staticFile(src)} style={{ position: 'absolute', left, top, width: w, height: h }} />;
 };
 
+/** True when frames are rendered one by one here: recordings are composited later by ffmpeg. */
+export const NO_VIDEO = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('novideo') === '1';
+
 /** A captured recording, cut into segments (seconds in the source), played back to back. */
 export const Clip: React.FC<{ src: string; segments: { from: number; to: number; rate?: number }[] }> = ({ src, segments }) => {
   const { fps } = useVideoConfig();
+  if (NO_VIDEO) return <AbsoluteFill style={{ background: '#0A0C10' }} />;
   return (
     <Series>
       {segments.map((s, i) => {

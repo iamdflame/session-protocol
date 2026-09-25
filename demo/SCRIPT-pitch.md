@@ -96,7 +96,7 @@ Then, the receipt. The price, and the print behind it... its signature checked a
 Tokenized stocks come with issuer powers. So we drilled them, at a real bell. A pause held the tokens... but never the refunds. A multiplier change cancelled the cross, and refunded everyone, whole. Both escrows ended at zero. And across three hundred random crosses, every balance matched, to the atom.
 ```
 
-> **If a drill does not pass today**, use this instead. I'll tell you by 14:15 UTC which applies:
+> **Not needed: both drills passed at the 25 Sep open**; use the line above. Kept only for a re-run that fails:
 > ```
 > Tokenized stocks come with issuer powers, so we test for them. In the program's own test suite, on the real NVIDIA token, an issuer pause holds the tokens but never the refunds, and a multiplier change cancels the cross and refunds everyone, whole. And across three hundred random crosses, every balance matched the math, to the atom.
 > ```

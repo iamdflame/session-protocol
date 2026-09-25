@@ -94,7 +94,7 @@ The arithmetic is property-tested: ten thousand cases, a property. The programs 
 Failure modes run in public, at a real bell. We paused an NVIDIA-shaped token before the open. The cross still priced and cleared. The keeper paid every quote leg alone... and the tokens waited, until the issuer resumed. On a second token, we scheduled a new multiplier five minutes after the bell... and pricing refused to guess. It cancelled, and refunded everyone, whole. Both escrows read zero.
 ```
 
-> **If a drill does not pass today**, use this instead. I'll confirm by 14:15 UTC:
+> **Not needed: both drills passed at the 25 Sep open**; use the line above. Kept only for a re-run that fails:
 > ```
 > Failure modes are tested against the real NVIDIA token. An issuer pause holds the tokens but never the refunds. A multiplier change near the bell cancels the cross and refunds everyone, whole. A missing print cancels too. We ran the same drills on devnet at today's open, and the record shows every step.
 > ```

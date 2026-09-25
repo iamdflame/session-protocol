@@ -76,8 +76,68 @@
           "at": "2026-09-25T04:34:05.331Z",
           "what": "the issuer pauses the mint",
           "signature": "3uB7Pnv5e9vFbo5S2cZ9vYDEGXPs7EV1rH2NSNBeSYt5GsM4svJFMowc1WSQe3Sr7uHsurTbK5e97WQx38MQBcNS"
+        },
+        {
+          "at": "2026-09-25T13:43:53.040Z",
+          "what": "cleared while paused",
+          "detail": {
+            "price": "22582000e-5",
+            "crowded": "sellers",
+            "buyTokens": "17683140",
+            "sellQuote": "40000000"
+          }
+        },
+        {
+          "at": "2026-09-25T13:44:55.720Z",
+          "what": "quote legs paid while paused; the tokens are held",
+          "detail": {
+            "orders": [
+              {
+                "order": "9CtSTBqPXaqF767gJegEECky4VeJjHbQbpeQWvpXwo22",
+                "side": "buy",
+                "legs": 1
+              },
+              {
+                "order": "DZ2vqdGfCq9mQ4HRYtasajnyKSmGP8WY96bvKGE5Kn1S",
+                "side": "sell",
+                "legs": 1
+              }
+            ],
+            "quoteEscrow": "0",
+            "rawEscrow": "19966033",
+            "quoteOut": "40000000",
+            "rawOut": "0"
+          }
+        },
+        {
+          "at": "2026-09-25T13:44:57.209Z",
+          "what": "the issuer resumes the mint",
+          "signature": "8Bpv6xQ44EjwyV3bbx1UKJa5Sf8R381yU8WNQX8auuSRD5p1ywGu1oAq3hR9TgpwmM9xLDbSYKQJoVmJutvhKof"
+        },
+        {
+          "at": "2026-09-25T13:45:21.302Z",
+          "what": "every order settled",
+          "detail": {
+            "quoteIn": "40000000",
+            "quoteOut": "40000000",
+            "rawIn": "19966033",
+            "rawOut": "19966032"
+          }
+        },
+        {
+          "at": "2026-09-25T13:54:10.067Z",
+          "what": "the keeper closed the cross"
+        },
+        {
+          "at": "2026-09-25T13:54:10.433Z",
+          "what": "escrow after close: 0 quote atoms, 0 raw atoms",
+          "detail": {
+            "quoteEscrow": "0",
+            "rawEscrow": "0"
+          }
         }
-      ]
+      ],
+      "result": "passed"
     },
     {
       "drill": "multiplier",
@@ -108,9 +168,27 @@
           "at": "2026-09-25T04:34:07.934Z",
           "what": "the issuer schedules multiplier 1.0025 for 2026-09-25T13:35:00.000Z, 300s after the bell",
           "signature": "2hn5dyKBzN2GhFbMGwkJui9mmDjGM5nRtp1MCaevN3LJm95zjFwfV4VyLXdUJjuuPLjyfPKucztpfCJh8nFaoxGk"
+        },
+        {
+          "at": "2026-09-25T13:40:44.180Z",
+          "what": "the cross was cancelled: multiplier activation near the bell",
+          "signature": "47La6bpmaJ3uSGvbZjK6dpea7hpQprbqdNHfmBLHSsnpLvYDW7i8nQQfiaJLhBBf2DnWVXwthWdEh528YZ5SvuSu"
+        },
+        {
+          "at": "2026-09-25T13:41:25.738Z",
+          "what": "every order refunded whole"
+        },
+        {
+          "at": "2026-09-25T13:41:26.162Z",
+          "what": "escrow: 0 quote atoms, 0 raw atoms",
+          "detail": {
+            "quoteEscrow": "0",
+            "rawEscrow": "0"
+          }
         }
-      ]
+      ],
+      "result": "passed"
     }
   ],
-  "writtenAt": "2026-09-25T04:35:18.634Z"
+  "writtenAt": "2026-09-25T13:54:10.441Z"
 }

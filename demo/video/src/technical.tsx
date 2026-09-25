@@ -27,13 +27,13 @@ const Architecture: React.FC<{ from?: number }> = ({ from = 0 }) => {
     <>
       <Box x={110} y={250} w={330} h={120} title="bell-poster" sub="posts every open and close" from={at(0.2)} />
       <Box x={560} y={235} w={520} h={150} title="session-bell" sub="the oracle · keeps prints · holds no funds" color={C.day} from={at(0.8)} />
-      <Box x={1200} y={250} w={560} h={120} title="Pyth's verifier (Lazer)" sub="trusted signers · Ed25519" from={at(1.4)} />
+      <Box x={1200} y={250} w={560} h={120} title="Pyth's verifier (Lazer)" sub="called by CPI · trusted signers · Ed25519" from={at(1.4)} />
       <Box x={110} y={560} w={330} h={120} title="Traders · Blink · agents" sub="place and cancel orders" from={at(2.2)} />
       <Box x={560} y={530} w={520} h={180} title="session-cross" sub="escrow · pricing · auction · settlement" color={C.night} from={at(2.8)} />
       <Box x={1200} y={560} w={560} h={120} title="the keeper" sub="prices · clears · settles · closes · permissionless" from={at(3.4)} />
       <Box x={560} y={850} w={520} h={110} title="session-core" sub="the calendar and the arithmetic, shared" from={at(4.0)} mono />
       <Arrow x1={440} y1={310} x2={556} y2={310} from={at(1.0)} />
-      <Arrow x1={1196} y1={310} x2={1084} y2={310} from={at(1.6)} label="CPI verify_message" />
+      <Arrow x1={1196} y1={310} x2={1084} y2={310} from={at(1.6)} />
       <Arrow x1={440} y1={620} x2={556} y2={620} from={at(2.6)} />
       <Arrow x1={1196} y1={620} x2={1084} y2={620} from={at(3.6)} />
       <Arrow x1={820} y1={526} x2={820} y2={390} from={at(3.2)} label="reads the print" color={C.day} />
@@ -111,7 +111,7 @@ export const T03: React.FC = () => {
           <Instr n={1} name="session-bell · post_print(message, day, kind)" sub="CPI → verify_message(message, ed25519 index 0) → parse every byte → keep or refuse" color={C.day} from={s(2.5)} />
         </div>
         <div style={{ marginTop: 44, font: `600 22px/1 ${SANS}`, color: C.muted, letterSpacing: '0.1em' }}>INSTRUCTION 1 · ITS DATA, BYTE BY BYTE</div>
-        <div style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 18 }}>
+        <div style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 58 }}>
           <Seg w={120} label="disc" sub="8 bytes" color={C.faint} from={s(4)} />
           <Seg w={110} label="len" sub="u32" color={C.faint} from={s(4.3)} />
           <Seg w={120} label="magic" sub="u32" color={C.day} from={s(5)} />
@@ -121,7 +121,7 @@ export const T03: React.FC = () => {
           <Seg w={340} label="payload" sub="timestamp · feeds · price, conf, publishers, session…" color={C.day} from={s(6.2)} />
           <Seg w={110} label="day" sub="i64" color={C.faint} from={s(6.5)} />
           <Seg w={90} label="kind" sub="u8" color={C.faint} from={s(6.7)} />
-          <div style={{ position: 'absolute', left: 236, top: -34, opacity: byte12, font: `650 22px/1 ${MONO}`, color: C.warn }}>▼ byte 12: the message Pyth signed</div>
+          <div style={{ position: 'absolute', left: 236, top: -34, opacity: byte12, font: `650 22px/1 ${MONO}`, color: C.warn }}>▼ byte 12: the signed message</div>
         </div>
       </div>
       <div style={{ position: 'absolute', left: 120, top: 720, width: 1680, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, opacity: ruleIn, transform: `translateY(${(1 - ruleIn) * 20}px)` }}>
@@ -226,21 +226,27 @@ export const T05: React.FC = () => {
 /* ── T06 · failure, live ───────────────────────────────────────────────── */
 export const T06: React.FC = () => {
   const s = useS();
-  const d = live.drills;
-  const p = d.pause.result === 'passed', m = d.multiplier.result === 'passed';
+  const d = live.drills as Record<string, { result: string; steps: { what: string; signature?: string | null }[] }>;
+  const p = d.pause?.result === 'passed', m = d.multiplier?.result === 'passed';
+  // the drill's own record, in order, one line a step
+  const fromRecord = (k: string) => (d[k]?.steps ?? []).map((st, i) => ({
+    text: st.what.replace(/^(alice|bob) /, (w) => w[0].toUpperCase() + w.slice(1)),
+    at: 1 + i * 1.3,
+    tone: (/pauses|schedules|cancelled/.test(st.what) ? 'info' : /held/.test(st.what) ? 'hold' : 'ok') as 'ok' | 'hold' | 'info',
+  }));
   return (
     <SceneFade>
       <Ground />
       <Title eyebrow="Issuer drills · devnet · the 25 Sep open" text="Failure modes, run in public at a real bell." color={C.warn} />
       <div style={{ position: 'absolute', left: 120, top: 300, display: 'flex', gap: 60 }}>
-        <Checklist title="Pause" width={800} from={s(2)} items={(d.pause.steps.length ? d.pause.steps : [
+        <Checklist title="Pause" width={800} from={s(2)} items={(fromRecord('pause').length ? fromRecord('pause') : [
           { text: 'Orders in; the issuer pauses the mint', at: 1, tone: 'info' },
           { text: 'The cross prices and clears (no token moves)', at: 3 },
           { text: 'Quote legs paid while paused; tokens held', at: 5, tone: 'hold' },
           { text: 'The issuer resumes; the tokens settle', at: 7 },
           { text: p ? 'Closed · both escrows read 0 · passed' : 'Closed · both escrows read 0', at: 9 },
         ]) as never} />
-        <Checklist title="Multiplier change" width={800} from={s(14)} items={(d.multiplier.steps.length ? d.multiplier.steps : [
+        <Checklist title="Multiplier change" width={800} from={s(14)} items={(fromRecord('multiplier').length ? fromRecord('multiplier') : [
           { text: 'Orders in; 1.0025 scheduled for 13:35 UTC', at: 1, tone: 'info' },
           { text: 'price_cross: "multiplier activation near the bell"', at: 3 },
           { text: 'Cancelled; every order refunded whole', at: 5 },
@@ -265,9 +271,10 @@ export const T07: React.FC = () => {
         <Instr n={1} name="session-cross · price_cross" sub="the print × the mint's multiplier, or cancel" color={C.night} from={s(2.2)} />
         <Instr n={2} name="Memo · session-cross counterfactual v1 {…}" sub="Jupiter, mainnet, the real NVDAx: each side's total, quoted at the bell" color={C.day} from={s(3.4)} />
       </div>
-      <div style={{ position: 'absolute', left: 120, top: 720, width: 1680, padding: '22px 26px', borderRadius: 16, background: C.surface, border: `1px solid ${C.borderStrong}`, font: `450 24px/1.5 ${MONO}`, color: C.muted, opacity: memo }}>
+      <div style={{ position: 'absolute', left: 120, top: 690, width: 1680, padding: '22px 26px', borderRadius: 16, background: C.surface, border: `1px solid ${C.borderStrong}`, font: `450 24px/1.5 ${MONO}`, color: C.muted, opacity: memo }}>
         <span style={{ color: C.text }}>receipt trusts it only if</span> the memo is in the transaction that priced this cross <span style={{ color: C.text }}>and</span> the keeper named in the manifest signed it.<br />
-        <span style={{ color: C.positive }}>tests/receipt.test.ts</span>: the same quote from anyone else → <span style={{ color: C.warn }}>untrusted</span>; a memo elsewhere → <span style={{ color: C.warn }}>not a counterfactual</span>.
+        <span style={{ color: C.positive }}>tests/receipt.test.ts</span>: the same quote from anyone else → <span style={{ color: C.warn }}>untrusted</span>; a memo elsewhere → <span style={{ color: C.warn }}>not a counterfactual</span>.<br />
+        <span style={{ color: C.day }}>25 Sep, 3 s after the bell:</span> buyers' $1,205 → 5.3417 raw NVDAx via Kipseli › Meteora DLMM › Whirlpool; sellers' 3 raw → $676.10 via Raydium CLMM.
       </div>
     </SceneFade>
   );

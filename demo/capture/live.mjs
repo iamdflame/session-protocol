@@ -78,6 +78,8 @@ if (c.phase === 'settling') {
 }
 const drills = JSON.parse(readFileSync(join(ROOT, 'web/public/cross-drills.json'), 'utf8'));
 out.drills = Object.fromEntries(drills.runs.map((r) => [r.drill, { result: r.result ?? 'pending', why: r.why ?? null, steps: r.steps.map((st) => ({ at: st.at, what: st.what, signature: st.signature ?? null })) }]));
+const still = join(ROOT, 'demo/captures/stills/receipt-full.png');
+if (existsSync(still)) out.receiptHeight = readFileSync(still).readUInt32BE(20);
 out.ready = c.phase === 'settling' && !!out.print?.signature;
 out.writtenAt = new Date().toISOString();
 writeFileSync(OUT, JSON.stringify(out, null, 1) + '\n');

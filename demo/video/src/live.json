@@ -1,39 +1,47 @@
 {
- "ready": false,
+ "ready": true,
  "note": "Filled from the chain after the 25 Sep 13:30 UTC open by demo/capture/live.mjs",
  "cross": "GdN6aYz68FBYxmwjVVUbJ9PEXrsku5nsDj7S18uX7PAb",
  "print": {
-  "price": "—",
-  "atEt": "09:30",
-  "fromBell": "",
-  "signature": "",
-  "simulated": true
+  "price": "225.82",
+  "exact": "225.82000",
+  "simulated": true,
+  "fromBell": "16.0 s",
+  "atUtc": "2026-09-25T13:30:15.986Z",
+  "signature": "4MyY1CX6q3GFESBhysCTdqSqP1nH1sN2g6d1boKDdRbqWBWJPaGdfgT5jQ8PPdBS58rG9cmKVUdnw7byvDgd1EA6",
+  "verifiedHere": true,
+  "precompile": true,
+  "matchesPrint": true
  },
  "book": {
   "buyersUsd": 1205,
-  "sellersNvdax": 3,
-  "orders": 4
+  "sellersNvdax": 3.00510359,
+  "orders": 4,
+  "sellersUsd": 678.6124926937999
  },
  "clearing": {
   "crowded": "buyers",
   "feeBps": 15,
-  "buyersPut": "",
-  "buyersGot": "",
-  "sellersPut": "",
-  "sellersGot": ""
+  "buyersPut": 1205,
+  "buyersGot": 5.33261713,
+  "sellersPut": 3.00510359,
+  "sellersGot": 678.612492
  },
  "swap": {
-  "buyEdgeBps": null,
-  "sellEdgeBps": null,
-  "memoSignature": ""
+  "memoSignature": "3M2EkG2pG4Pqimx7zUrq93BfSJaZsQsEEatipEJ9WygpanAxNWuXsZzi8RDVaBbKv6VkQ5UF9aK25zdfQcKVG3cx",
+  "quotedAt": "2026-09-25T13:30:03.000Z",
+  "buyEdgeBps": -33.99,
+  "sellEdgeBps": 37.16,
+  "buyRoute": "Kipseli > Meteora DLMM > Whirlpool"
  },
  "ade": {
-  "got": "",
-  "spent": ""
+  "order": "J5LHbah5A5QhjB4Txe9DKzHhL8nkxau4uV63HjHBnMrC",
+  "spent": 200,
+  "got": 0.88508168
  },
  "drills": {
   "pause": {
-   "result": "pending",
+   "result": "passed",
    "why": null,
    "steps": [
     {
@@ -50,11 +58,41 @@
      "at": "2026-09-25T04:34:05.331Z",
      "what": "the issuer pauses the mint",
      "signature": "3uB7Pnv5e9vFbo5S2cZ9vYDEGXPs7EV1rH2NSNBeSYt5GsM4svJFMowc1WSQe3Sr7uHsurTbK5e97WQx38MQBcNS"
+    },
+    {
+     "at": "2026-09-25T13:43:53.040Z",
+     "what": "cleared while paused",
+     "signature": null
+    },
+    {
+     "at": "2026-09-25T13:44:55.720Z",
+     "what": "quote legs paid while paused; the tokens are held",
+     "signature": null
+    },
+    {
+     "at": "2026-09-25T13:44:57.209Z",
+     "what": "the issuer resumes the mint",
+     "signature": "8Bpv6xQ44EjwyV3bbx1UKJa5Sf8R381yU8WNQX8auuSRD5p1ywGu1oAq3hR9TgpwmM9xLDbSYKQJoVmJutvhKof"
+    },
+    {
+     "at": "2026-09-25T13:45:21.302Z",
+     "what": "every order settled",
+     "signature": null
+    },
+    {
+     "at": "2026-09-25T13:54:10.067Z",
+     "what": "the keeper closed the cross",
+     "signature": null
+    },
+    {
+     "at": "2026-09-25T13:54:10.433Z",
+     "what": "escrow after close: 0 quote atoms, 0 raw atoms",
+     "signature": null
     }
    ]
   },
   "multiplier": {
-   "result": "pending",
+   "result": "passed",
    "why": null,
    "steps": [
     {
@@ -71,11 +109,26 @@
      "at": "2026-09-25T04:34:07.934Z",
      "what": "the issuer schedules multiplier 1.0025 for 2026-09-25T13:35:00.000Z, 300s after the bell",
      "signature": "2hn5dyKBzN2GhFbMGwkJui9mmDjGM5nRtp1MCaevN3LJm95zjFwfV4VyLXdUJjuuPLjyfPKucztpfCJh8nFaoxGk"
+    },
+    {
+     "at": "2026-09-25T13:40:44.180Z",
+     "what": "the cross was cancelled: multiplier activation near the bell",
+     "signature": "47La6bpmaJ3uSGvbZjK6dpea7hpQprbqdNHfmBLHSsnpLvYDW7i8nQQfiaJLhBBf2DnWVXwthWdEh528YZ5SvuSu"
+    },
+    {
+     "at": "2026-09-25T13:41:25.738Z",
+     "what": "every order refunded whole",
+     "signature": null
+    },
+    {
+     "at": "2026-09-25T13:41:26.162Z",
+     "what": "escrow: 0 quote atoms, 0 raw atoms",
+     "signature": null
     }
    ]
   }
  },
- "receiptHeight": 5200,
- "phase": "collecting",
- "writtenAt": "2026-09-25T11:55:18.605Z"
+ "receiptHeight": 5714,
+ "phase": "settling",
+ "writtenAt": "2026-09-25T13:59:44.173Z"
 }

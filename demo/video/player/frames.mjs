@@ -28,7 +28,7 @@ async function slice(id, from, to, out, port) {
   const ff = spawn('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', '30', '-c:v', 'mjpeg', '-i', '-',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '15', '-pix_fmt', 'yuv420p', out], { stdio: ['pipe', 'inherit', 'inherit'] });
   try {
-    await page.navigate(`http://localhost:${port}/?c=${id}`);
+    await page.navigate(`http://localhost:${port}/?c=${id}&novideo=1`);
     await page.until(() => page.ev(`!!window.__player && window.__ready === true`), 30000);
     for (let f = from; f <= to; f++) {
       await page.ev(`(async () => { window.__player.seekTo(${f}); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

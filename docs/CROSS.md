@@ -183,4 +183,14 @@ An xStock's issuer can pause its mint and change its multiplier, so the cross ha
 - **Pause.** Alice buys $40 and Bob sells 0.2 NVDAx, then the issuer pauses the mint. The cross prices and clears, because neither step moves a token. Settling the tokens fails, so the keeper pays each quote leg alone and the tokens wait in escrow. The drill then resumes the mint, the tokens follow, and the keeper closes the cross ten minutes after it clears. It passes only if both of the market's escrow accounts then read zero.
 - **Multiplier.** Alice buys $30 and Bob sells 0.1 NVDAx, then the issuer schedules multiplier 1.0025 for five minutes after the bell. That falls inside the pricing guard, so `price_cross` cancels the cross instead of guessing which multiplier the bell meant, and the keeper refunds everyone whole. It passes only if the refunds equal what went in and both escrows read zero.
 
-`npm run cross:drill -- --watch` does the issuer's part at the right moment and writes each step's transaction into `cross-drills.json`: it resumes the mint only once every quote leg is paid while the tokens are still held. `--status` prints the record. The first runs are armed for the 25 Sep open.
+`npm run cross:drill -- --watch` does the issuer's part at the right moment and writes each step's transaction into `cross-drills.json`: it resumes the mint only once every quote leg is paid while the tokens are still held. `--status` prints the record.
+
+**Both passed at the 25 Sep open**, the first real bell this sandbox cleared:
+
+- **Multiplier.** At 13:40:28 UTC, `price_cross` cancelled with "multiplier activation near the bell". The keeper refunded both orders whole, and both escrows read 0.
+- **Pause.** The cross priced and cleared at 13:43:37 while the mint was paused. Both token legs failed "paused", and the keeper paid each quote leg alone. The watcher then resumed the mint (`8Bpv6xQ4…`), and the tokens settled. The cross closed at 13:53:53, and both escrows read 0 quote atoms and 0 raw atoms.
+
+The same bell priced the demo market's cross at NVDA's opening print, $225.82 (simulated signer), 16 s after 09:30 ET.
+
+- The keeper quoted Jupiter at 09:30:03 ET. Against that quote, the cross gave its sellers 37.16 bp more per token, and its buyers 33.99 bp less per dollar: the pool was cheaper than the stock at the open, and buyers were the crowded side, paying the 15 bp backstop fee on the part makers filled.
+- Its receipt says so. That is what the counterfactual is for.
