@@ -31,7 +31,7 @@ If a name isn't in your library, use the filter and pick a *narration* voice wit
 | Similarity | **75** | **75** | The default; higher can reproduce artefacts |
 | Style exaggeration | **0** | **0** | ElevenLabs advises 0: it adds instability |
 | Speaker boost | **On** | **On** | Slightly clearer; the latency doesn't matter here |
-| Speed | **0.95** | **1.0** | The pitch breathes; the technical one moves on |
+| Speed | **1.0** | **0.95** | The pitch is tight against 3:00; the technical one has room to breathe |
 | Download | **WAV** (or MP3 192 kbps) | same | Lossless into CapCut |
 
 **Optional: Eleven v3** for P01 and P09 only, if you want more drama. Stability **Natural**; no speed control. It honours `...` pauses and CAPITALS for emphasis, and tags like `[whispers]` or `[excited]`. **I don't recommend tags for this voice:** the calm is the point. Mixing models changes the timbre slightly, so if you use v3, check that P01 and P02 still sound like the same person.

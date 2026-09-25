@@ -27,11 +27,11 @@ NVIDIA's price is made six and a half hours a day. On Solana, its token trades a
 - stat cards: weekend pool deviation 22–31 bp against about 3 bp on weekdays; round trip at $10k, NVDAx 9.9 bp and METAx 126 bp;
 - a live "Now, on Jupiter" quote from the ticket.
 
-**Caption:** Those are the hours when pools are thinnest. Over a weekend, pool prices drift about eight times further from the stock than on a weekday, and for some names a round trip costs more than one percent. You pay for the noise, not the stock.
+**Caption:** Those are the hours pools are thinnest. Over a weekend, prices drift about eight times further from the stock than on a weekday, and for some names a round trip costs over one percent. You pay for the noise.
 
 **ElevenLabs:**
 ```
-Those are the hours when pools are thinnest. Over a weekend, pool prices drift about eight times further from the stock than on a weekday... and for some names, a round trip costs more than one percent. You pay for the noise. Not the stock.
+Those are the hours pools are thinnest. Over a weekend, prices drift about eight times further from the stock than on a weekday... and for some names, a round trip costs over one percent. You pay for the noise.
 ```
 
 ## P03 · Ade, Saturday night (0:33–0:57)
@@ -43,11 +43,11 @@ Those are the hours when pools are thinnest. Over a weekend, pool prices drift a
 
 Lower third: *Devnet sandbox · fixture NVDAx · test USDC*.
 
-**Caption:** Meet Ade. It's Saturday night in Lagos, and she wants $200 of NVIDIA. SESSION shows her both choices: swap now on Jupiter, or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
+**Caption:** Meet Ade. Saturday night in Lagos, and she wants $200 of NVIDIA. SESSION shows both choices: swap now on Jupiter, or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
 
 **ElevenLabs:**
 ```
-Meet Ade. It's Saturday night in Lagos, and she wants two hundred dollars of NVIDIA. SESSION shows her both choices: swap now, on Jupiter... or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
+Meet Ade. Saturday night in Lagos, and she wants two hundred dollars of NVIDIA. SESSION shows both choices: swap now, on Jupiter... or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
 ```
 
 ## P04 · The bell (0:57–1:25)
@@ -58,11 +58,11 @@ Meet Ade. It's Saturday night in Lagos, and she wants two hundred dollars of NVI
 - the netting animation: buyers and sellers meet, and makers fill the leftover;
 - real footage of today's print arriving on `/oracle`, with the SIMULATED SIGNER chip visible.
 
-**Caption:** Monday, 9:30 in New York. The Bell oracle posts NVIDIA's opening print, and the program verifies its signature on-chain, with Pyth's own verifier code, before it uses a single digit. Every order in the cross fills at that one price. Buyers and sellers net for free, and if one side is larger, market makers bid to fill the rest, at a fee the backstop caps.
+**Caption:** Monday, 9:30 in New York. The Bell oracle posts NVIDIA's opening print, and the program verifies its signature on-chain, with Pyth's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free, and market makers fill whatever is left, at a fee the backstop caps.
 
 **ElevenLabs:**
 ```
-Monday. Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and the program verifies its signature on-chain, with Pith's own verifier code, before it uses a single digit. Every order in the cross fills at that one price. Buyers and sellers net for free. And if one side is larger, market makers bid to fill the rest, at a fee the backstop caps.
+Monday. Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and the program verifies its signature on-chain, with Pith's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free... and market makers fill whatever is left, at a fee the backstop caps.
 ```
 
 ## P05 · The receipt (1:25–1:49)
@@ -75,11 +75,11 @@ Monday. Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print..
 
 Slow camera moves over each part.
 
-**Caption:** Then the receipt. The price, and the print behind it, with the signature checked again, right in your browser. What each side put in and got back, and the fee. And beside it, what Jupiter would have given for the same trade at that moment, because a saving you can't check isn't a saving.
+**Caption:** Then, the receipt. The price, and the print behind it, its signature checked again right in your browser. What each side put in and got back. And beside it, what Jupiter would have given at that moment, because a saving you can't check isn't a saving.
 
 **ElevenLabs:**
 ```
-Then, the receipt. The price, and the print behind it... with the signature checked again, right in your browser. What each side put in, and got back, and the fee. And beside it, what Jupiter would have given for the same trade, at that moment. Because a saving you can't check... isn't a saving.
+Then, the receipt. The price, and the print behind it... its signature checked again, right in your browser. What each side put in, and got back. And beside it, what Jupiter would have given, at that moment. Because a saving you can't check... isn't a saving.
 ```
 
 ## P06 · Trust (1:49–2:11)
@@ -89,11 +89,11 @@ Then, the receipt. The price, and the print behind it... with the signature chec
 - multiplier: "cancelled: multiplier activation near the bell", then "refunded whole", then "escrow 0 · passed";
 - then "300 random crosses · every balance to the atom".
 
-**Caption:** Tokenized stocks come with issuer powers, so we drilled them at a real bell. An issuer pause held the tokens but never the refunds. A multiplier change cancelled the cross and refunded everyone, whole. Both escrows ended at zero. And across 300 random crosses, every balance matched the math to the atom.
+**Caption:** Tokenized stocks come with issuer powers, so we drilled them at a real bell. A pause held the tokens but never the refunds. A multiplier change cancelled the cross and refunded everyone, whole. Both escrows ended at zero. And across 300 random crosses, every balance matched, to the atom.
 
 **ElevenLabs:**
 ```
-Tokenized stocks come with issuer powers. So we drilled them, at a real bell. An issuer pause held the tokens... but never the refunds. A multiplier change cancelled the cross, and refunded everyone, whole. Both escrows ended at zero. And across three hundred random crosses, every balance matched the math, to the atom.
+Tokenized stocks come with issuer powers. So we drilled them, at a real bell. A pause held the tokens... but never the refunds. A multiplier change cancelled the cross, and refunded everyone, whole. Both escrows ended at zero. And across three hundred random crosses, every balance matched, to the atom.
 ```
 
 > **If a drill does not pass today**, use this instead. I'll tell you by 14:15 UTC which applies:
@@ -110,11 +110,11 @@ Tokenized stocks come with issuer powers. So we drilled them, at a real bell. An
 - the Blink card;
 - an agent terminal calling `bell_quote`.
 
-**Caption:** It belongs on Solana. Signatures verified inside the same transaction. One instruction clears the whole book at one price, whatever its size. Token-2022 multipliers read on-chain, so the price per token always matches the share. And it travels: a Blink on X, or an AI agent with its limits in code.
+**Caption:** It belongs on Solana. Signatures verified inside the same transaction. One instruction clears the whole book, whatever its size. Token multipliers read on-chain, so a token's price always matches the share. And it travels: a Blink on X, or an AI agent with its limits in code.
 
 **ElevenLabs:**
 ```
-It belongs on Solana. Signatures, verified inside the same transaction. One instruction clears the whole book, at one price, whatever its size. Token twenty-twenty-two multipliers, read on-chain, so the price per token always matches the share. And it travels: a Blink on X... or an A.I. agent, with its limits written in code.
+It belongs on Solana. Signatures, verified inside the same transaction. One instruction clears the whole book, whatever its size. Token multipliers, read on-chain, so a token's price always matches the share. And it travels: a Blink on X... or an A.I. agent, with its limits written in code.
 ```
 
 ## P08 · Where it stands (2:31–2:47)
