@@ -472,6 +472,52 @@ The buffer needs about 2.3 SOL for the length of the upload, and a build larger 
 
 From then on, new prints are not flagged simulated. The poster refuses to run a simulated source against a config that verifies through Pyth, and the reverse.
 
+## Bell orders: the keeper, the drills and the site's functions
+
+`programs/session-cross` fills bell orders at the bell's print (`docs/CROSS.md`). A third service runs it on devnet:
+
+```bash
+deploy/install-service.sh cross-keeper    # prices, clears, settles and closes every cross
+npm run cross:keeper -- --status          # each market's crosses, by phase
+journalctl --user -u cross-keeper -f
+```
+
+**What the keeper does.** Every step is permissionless; the keeper is a convenience, not an authority.
+
+- It prices a cross once the bell's print is final, and cancels it if no print arrives within six hours.
+- It confirms the book in batches.
+- It posts the backstop maker's offer (`keeper/.devnet/bell-maker.json`, 15 bp) when a cross opens its auction, and clears the cross after the auction.
+- It settles every order and offer. When an issuer pause blocks the tokens, it pays the quote leg alone and retries the tokens on later passes.
+- It closes a paid-out cross a day after it clears.
+- At the bell it quotes both sides on Jupiter for the real NVDAx, and writes the quotes as a Memo beside `price_cross`. That transaction asks for 600k compute units, because the Memo program charges about 124k for a real quote.
+
+It cranks with the poster's key, which pays the fees. It re-reads `web/public/cross-drills.json` every pass, so a new drill market needs no restart.
+
+**Seeding and drills.**
+
+- `npm run cross:demo` puts the team's labelled test orders into the next open and close.
+- `npm run cross:drill -- --setup --apply` creates the two issuer-power drill markets, and `-- --arm --apply` arms them for the next open.
+- The watcher does the issuer's part at the right moment and records every step. It runs as a transient unit, which does not survive a reboot:
+
+```bash
+systemd-run --user --unit=cross-drill --working-directory=$PWD --setenv=NODE_NO_WARNINGS=1 \
+  $(command -v node) --experimental-strip-types keeper/src/cross-drill.ts --watch
+npm run cross:drill -- --status
+```
+
+**The site's functions** run on Vercel with `OPERATOR_KEYPAIR` set; the deploy key never goes there.
+
+- `/api/faucet` needs a signed message from the wallet. It then mints 10,000 test quote and 10 fixture NVDAx, each capped per wallet, and drips SOL for fees.
+- `/api/bell-action` is the Blink. It holds no key: it builds the `place_order` transaction for the wallet that clicked. `web/public/actions.json` maps `/bells` to it.
+
+**Checks.**
+
+- `cd web && npm run bells` places and cancels orders through `/bells`, checked on devnet to the atom. `-- --fresh --base https://session-roan.vercel.app` does it through the deployed faucet.
+- `cd web && npm run actions` drives the Blink.
+- `npm run mcp:check` calls the agent tools.
+
+All three read devnet heavily. The public RPC rate-limits per IP, so run them one at a time and not back to back.
+
 ---
 
 ## What is not covered
