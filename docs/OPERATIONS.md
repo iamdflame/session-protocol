@@ -488,7 +488,7 @@ journalctl --user -u cross-keeper -f
 - It confirms the book in batches.
 - It posts the backstop maker's offer (`keeper/.devnet/bell-maker.json`, 15 bp) when a cross opens its auction, and clears the cross after the auction.
 - It settles every order and offer. When an issuer pause blocks the tokens, it pays the quote leg alone and retries the tokens on later passes.
-- It closes a paid-out cross a day after it clears.
+- It closes a paid-out cross three weeks after it clears, so receipts linked from outside keep working.
 - At the bell it quotes both sides on Jupiter for the real NVDAx, and writes the quotes as a Memo beside `price_cross`. That transaction asks for 600k compute units, because the Memo program charges about 124k for a real quote.
 
 It cranks with the poster's key, which pays the fees. It re-reads `web/public/cross-drills.json` every pass, so a new drill market needs no restart.

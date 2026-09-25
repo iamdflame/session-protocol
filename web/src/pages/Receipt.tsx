@@ -337,7 +337,7 @@ export default function Receipt() {
         <p className={s.empty}>No bell-order market is deployed for this site.</p>
       ) : !c ? (
         <p className={s.empty}>
-          There is no open cross at this address. The keeper closes a cross a day after it clears, and returns its rent;
+          There is no open cross at this address. The keeper closes a cross three weeks after it clears, and returns its rent;
           its transactions stay on chain: <Addr addr={address.toBase58()} label="the address on the explorer" />.
         </p>
       ) : (

@@ -52,8 +52,10 @@ const MANIFEST = 'web/public/cross-devnet.json';
 const DRILLS = 'web/public/cross-drills.json';
 const PASS_MS = 20_000;
 const BATCH = 6;
-/** How long a settled cross stays open for the site to show it. */
-const KEEP_SECS = 86_400;
+/** How long a settled cross stays open for the site to show it. Three weeks:
+    receipts get linked from outside (videos, posts), and a link that dies
+    the next day is worse than rent held a little longer. */
+const KEEP_SECS = 21 * 86_400;
 
 const args = process.argv.slice(2);
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -240,7 +242,7 @@ async function pass(m: MarketRef, man: Manifest, cranker: Keypair, maker: Keypai
             await send([cranker], [settleOfferIx(m, { cranker: cranker.publicKey, ...at, maker: f.maker, nonce: f.nonce, legs: LEGS })], `settle a ${f.feeBps} bp offer of the ${label}`);
           }
         }
-        // Keep a paid-out cross a day before closing it: its clearing is what
+        // Keep a paid-out cross (KEEP_SECS) before closing it: its clearing is what
         // the site shows as the bell's result, and what receipts are
         // computed from. Its rent comes back either way.
         if (now < (c.clearedAt || c.bellTs) + (man.keepSecs ?? KEEP_SECS)) break;
