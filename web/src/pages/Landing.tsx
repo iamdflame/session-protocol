@@ -1,12 +1,12 @@
 /* ───────────────────────────────────────────────────────────────────────────
    Home is the product.
 
-   The first viewport answers, in this order: what SESSION does, whether NYSE
-   is open, which class is carrying the stock, when the next handoff is, and
-   what you can do about it right now. Then the instrument itself — NVDA.DAY
-   and NVDA.NIGHT, read from the devnet vault — then the market, the evidence,
-   and how the handoff works. No hero illustration: the session rail is the
-   hero, and it is live.
+   The first viewport is bell orders: what they do, a countdown to the next
+   bell, and a real receipt from one. Below it, the first product, DAY and
+   NIGHT: whether NYSE is open, which class is carrying the stock, when the
+   next handoff is, and what you can do about it right now. Then the
+   instrument itself — NVDA.DAY and NVDA.NIGHT, read from the devnet vault —
+   then the market, the evidence, and how the handoff works.
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -37,6 +37,63 @@ function readout(sc: ScrubState | null, holder: 'DAY' | 'NIGHT' | null) {
   if (cls === 'day') return <><b className="day-ink">DAY holds the stock.</b> NYSE is open, arbitrage keeps the token pinned to the share, and there is no overnight gap.</>;
   if (cls === 'night') return <><b className="night-ink">NIGHT holds the stock.</b> The exchange is shut, the token keeps trading with nothing to arbitrage against, and the gap lives here.</>;
   return null;
+}
+
+/* The first real bell's receipt: the 25 Sep 2026 open, on devnet. */
+const FIRST_RECEIPT = '/b/GdN6aYz68FBYxmwjVVUbJ9PEXrsku5nsDj7S18uX7PAb';
+
+/* Bell orders, first: an order placed at any hour fills at the NYSE open or
+   close, at the bell's verified print. The next bell is the next session
+   boundary, so the same calendar that drives the rail counts down to it. */
+function BellHero() {
+  const sess = useSession();
+  const next = sess ? upcoming(sess.now, 1)[0] : null;
+  return (
+    <section className={s.hero} aria-labelledby="bell-h">
+      <div className={s.heroTop}>
+        <div>
+          <div className={s.statusLine}>
+            <span className={s.brand}>SESSION</span>
+            <Status kind="live" label="Every NYSE bell" />
+            <Status kind="devnet" label="Devnet" title="Bell orders run on Solana devnet with a fixture NVDAx and test USDC. Prints are signed by a test key, and flagged simulated, until SESSION holds a Pyth Pro key." />
+          </div>
+          <h1 id="bell-h" className={`display ${s.title}`}>Buy at the bell.</h1>
+        </div>
+        <p className={s.sub}>
+          Place an order in a tokenized stock at any hour, and it fills at the NYSE open or close, at the price
+          the bell printed, verified on Solana. Everyone in the bell gets the same price, and every fill gets a
+          receipt with the swap it beat, or lost to, beside it.
+        </p>
+      </div>
+      <div className={`${s.bellCard} grid-bg`}>
+        <div>
+          <p className={s.modEyebrow}>Next bell{next ? (next.to === 'DAY' ? ' · the open' : ' · the close') : ''}</p>
+          {sess
+            ? <Countdown seconds={sess.until} className={s.bigClock} label="Next bell in" />
+            : <div className="skeleton" style={{ height: 56, width: 220, marginTop: 10 }} />}
+          <p className={s.nextSub}>
+            {next ? <><span className="num">{etClock(next.at)} ET</span>{next.label !== 'Today' ? ` · ${next.label}` : ''}</> : '—'}
+          </p>
+        </div>
+        <div>
+          <p className={s.modEyebrow}>The first real bell · 25 Sep open</p>
+          <p className={s.bellFact}><span className={s.bellPrice}>$225.82</span> NVDA, verified on chain</p>
+          <p className={s.nextSub}>
+            Priced, cleared and settled. Against Jupiter, sellers got 37.16 bp more and buyers 33.99 bp less,
+            and the receipt shows both.
+          </p>
+        </div>
+        <div className={s.bellActions}>
+          <Button to="/bells" size="lg">
+            Place a bell order
+            <Icon name="chevronRight" size={16} />
+          </Button>
+          <Button to={FIRST_RECEIPT} variant="secondary" size="sm">See a real receipt</Button>
+          <Button to="/oracle" variant="tertiary" size="sm">Every print, verified</Button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function MarketModule({ parked, halted, asset }: {
@@ -216,16 +273,19 @@ export default function Landing() {
 
   return (
     <div className={s.page}>
-      {/* ── the product, first ──────────────────────────────────────────── */}
+      {/* ── bell orders, first ──────────────────────────────────────────── */}
+      <BellHero />
+
+      {/* ── the first product: DAY and NIGHT ────────────────────────────── */}
       <section className={s.hero} aria-labelledby="hero-h">
         <div className={s.heroTop} data-tour="session">
           <div>
             <div className={s.statusLine}>
-              <span className={s.brand}>SESSION</span>
+              <span className={s.brand}>DAY AND NIGHT</span>
               <Status kind="live" label="Live" />
               <Status kind="devnet" label="Devnet vault" title="The vaults run on Solana devnet with test mints; the program is the mainnet program." />
             </div>
-            <h1 id="hero-h" className={`display ${s.title}`}>Separate the day from the night.</h1>
+            <h2 id="hero-h" className={`display ${s.title} ${s.titleSecond}`}>Separate the day from the night.</h2>
           </div>
           <p className={s.sub}>
             Tokenized equities trade around the clock; the stock behind them trades for six and a half hours.

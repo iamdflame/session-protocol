@@ -9,6 +9,20 @@
 .sub { font-size: var(--t-lead); line-height: 1.55; color: var(--text-muted); max-width: 58ch; padding-bottom: 6px; }
 .sub b { font-weight: 620; }
 
+/* The first product's heading sits under the bell hero, one step smaller. */
+.titleSecond { font-size: clamp(2rem, 1.4rem + 2.4vw, 3.2rem); }
+
+/* ── bell orders ─────────────────────────────────────────────────────────── */
+.bellCard {
+  margin-top: 18px; padding: 24px 28px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  background-color: var(--surface);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(220px, 0.8fr); gap: 28px; align-items: start;
+}
+.bellFact { margin-top: 10px; font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.2rem); font-weight: 620; letter-spacing: -0.03em; line-height: 1.1; }
+.bellPrice { font-weight: 680; font-variant-numeric: tabular-nums; }
+.bellActions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+
 /* ── the market module ───────────────────────────────────────────────────── */
 .module {
   position: relative; margin-top: 18px;
@@ -106,6 +120,8 @@
 /* ── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
   .heroTop { grid-template-columns: 1fr; }
+  .bellCard { grid-template-columns: 1fr 1fr; }
+  .bellActions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; }
   .modTop { grid-template-columns: 1fr 1fr; }
   .actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; }
   .actionNote { flex: 1 1 280px; }
@@ -121,6 +137,8 @@
 @media (max-width: 640px) {
   .page { padding-top: 16px; gap: 40px; }
   .module { padding: 18px 16px 16px; margin-top: 10px; }
+  .bellCard { grid-template-columns: 1fr; gap: 18px; padding: 18px 16px; margin-top: 10px; }
+  .bellActions { flex-direction: column; align-items: stretch; }
   .modTop { grid-template-columns: 1fr; gap: 18px; }
   .actions { flex-direction: column; align-items: stretch; }
   .research { padding: 20px 16px; }

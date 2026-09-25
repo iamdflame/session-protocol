@@ -1,144 +1,76 @@
-# Ninety seconds
+# Sixty seconds
 
-The claim, the evidence, and the parts that are not real yet — in the order
-that lets you check them rather than believe them.
+The claim, the evidence, and the parts that are not real yet, in the order that
+lets you check them rather than believe them.
 
 ---
 
 ## The claim
 
-A tokenized share trades twenty-four hours. The stock behind it trades for
-six and a half. During those hours an arbitrageur can hedge the token against
-the real share and the two stay pinned; outside them nobody can, and the token
-drifts on its own.
+A tokenized stock trades 168 hours a week, but its price is made in 6.5, and
+most of the trading happens in the hours it isn't: 63% of tokenized-equity
+volume, when pools are thinnest. Wall Street's answer to a thin book is the
+auction at the bell. Tokenized stocks have none.
 
-Those are two different assets wearing one ticker. **SESSION splits them into
-`X.DAY` and `X.NIGHT`**, and at each session boundary the inventory changes
-hands. Because a day-holder wants to be flat at precisely the instant a
-night-holder wants to be long, that handoff is a book entry rather than a
-trade — only the *difference in size* between the two sides ever reaches a
-market.
+**SESSION is that auction, on Solana.**
+- An order placed at any hour fills at the NYSE open or close, at the bell's Pyth print, verified on chain.
+- Everyone in the bell gets one price.
+- Buyers and sellers net against each other with no fee, and makers fill only the imbalance.
+- Every cross gets a receipt, with the swap it beat, or lost to, beside it.
 
-A brokerage cannot sell you this. Neither can any other tokenized-stock
-product on Solana: they all sell the bundle.
+## The evidence: one real bell
 
-## The evidence
+At the 25 September 2026 open, on devnet, with nobody at the keyboard:
 
-Not a thesis. A measurement, over **83,322 hourly closes** and
-**6,118 sessions** across 20 tokenized equities and 6 controls:
+- **The prints.** All five listings were posted and finalised. NVDA opened at $225.82, 16 s after 09:30 ET.
+- **The cross.** The NVDA cross priced, cleared and settled 4 test orders and the backstop's offer. Buyers were crowded, and paid the 15 bp fee only on the part the maker filled.
+- **Against Jupiter** at 09:30:03 ET, sellers got 37.16 bp more and buyers 33.99 bp less. **The receipt shows the loss as plainly as the gain.** A comparison that could only ever say "you saved" would be an advertisement.
+- **Both issuer drills passed** at the same bell, and both escrows ended at zero:
+  - a paused mint, where the quote legs were paid and the tokens waited for the resume;
+  - a multiplier change, where the cross cancelled and everyone was refunded whole.
 
-| | |
-|---|---|
-| Night volatility | **2.78%** |
-| Day volatility | **1.90%** |
-| The night is wider in | **18 of 20** names |
-| Night minus day, per hour of exposure | **−1.37 bp**, t = **−1.31** |
-| Night wins | **9 of 20** |
+## Sixty seconds, in order
 
-Read the last row carefully, because it is the one a pitch would hide: **there
-is no overnight premium.** The anomaly that half this sector is built on does
-not survive the measurement. What survives is that the night carries 46% more
-volatility and pays nothing extra for it — which is a reason to *sell* the
-night, not to buy it, and that is the product.
+1. **[/bells](https://session-roan.vercel.app/bells)** *(10 s)*. No wallet needed. It shows the next open and close, the book, and the ticket with "Now, on Jupiter" beside "At the bell".
+2. **[The receipt](https://session-roan.vercel.app/b/GdN6aYz68FBYxmwjVVUbJ9PEXrsku5nsDj7S18uX7PAb)** *(20 s)*. Look for:
+   - the print's signature, verified again by your browser;
+   - the signed feed matching the stored print, field by field;
+   - the fills and the fee;
+   - Jupiter's quote beside them, from a memo inside the pricing transaction, signed by the keeper the manifest names.
+3. **Place one** *(20 s)*. Connect a devnet wallet, take the faucet on the page, and order for the next real bell. The keepers run on Railway, so it fills and settles without us.
+4. **[/oracle](https://session-roan.vercel.app/oracle)** *(10 s)*. Every print, each linked to its transaction.
 
-The controls behave exactly as the mechanism predicts: GLDx, which trades
-24 hours with no session, shows no split. → `/research`
+To check the chain rather than the page, open [NVDA's post](https://explorer.solana.com/tx/4MyY1CX6q3GFESBhysCTdqSqP1nH1sN2g6d1boKDdRbqWBWJPaGdfgT5jQ8PPdBS58rG9cmKVUdnw7byvDgd1EA6?cluster=devnet):
+- instruction 0 sets the compute budget;
+- instruction 1 is the Ed25519 precompile;
+- instruction 2 is `post_print`, which calls the verifier `CVuKQF…`.
 
-## Ninety seconds, in order
-
-1. **`/`** — the clock is live and correct through DST, holidays and early
-   closes. The finding is above the fold. So is the line saying what is
-   actually deployed.
-2. **`/markets/NVDAx`** — a real vault on devnet. Connect a wallet, take the
-   faucet, mint the parked class. Every figure is read from the chain; the
-   ledger at the bottom decodes the program's own events, so it says what
-   happened rather than listing hashes. Your statement appears once you have
-   traded, with the line the whole thesis rests on: what the same money would
-   have made **held as the undivided token** over the same moments.
-3. **`/markets/OPENAI`** — the same program on a name with **no exchange
-   session**. No NYSE clock anywhere on that page, because OPENAI has no
-   09:30. The boundary is the next print, or the moment the token's executable
-   price runs from the issuer's mark — read live from prestocks.com and posted
-   on chain.
-4. **`/bell`** — the keeper, launched on mainnet with its curve denominated in
-   **real NVDAx**. The half worth reading is the list of things it *cannot* do.
-5. **`/list`** — open a vault yourself. `initialize_vault` takes no
-   permission: the signer becomes the authority, the address is derived from
-   the mint pair, and whoever gets there first opens it. The catalog finds it
-   by scanning the program's accounts, and shows it under "Show all" because
-   it is not curated — which decides where it appears and nothing else.
-6. **`/research`** — the measurement, including what it fails to find.
+Then open [the pricing transaction](https://explorer.solana.com/tx/3M2EkG2pG4Pqimx7zUrq93BfSJaZsQsEEatipEJ9WygpanAxNWuXsZzi8RDVaBbKv6VkQ5UF9aK25zdfQcKVG3cx?cluster=devnet), whose memo is the Jupiter quote.
 
 ## What is real, and what is not
 
-Stated the same way everywhere it appears, because a demo that hides this is
-the thing this project is arguing against.
+**Real**
+- Both programs, on devnet, at real NYSE bell times, cranked by a keeper that runs unattended.
+- The verification path. It is Pyth's own verifier code, called exactly as a mainnet post calls it. In tests it is Pyth's mainnet binary.
+- The counterfactual: live mainnet Jupiter quotes for the real NVDAx.
+- `$BELL` on mainnet, launched through Clawpump and quoted in real NVDAx.
 
-**Real, on chain, right now**
-- The program, on devnet: settlement, funding, the handoff, the recap, the
-  call auction, the halts. 156 Rust tests, including a year-long adversarial
-  simulation across 40 seeded runs.
-- Two vaults. One equity-session, one event-session.
-- A Meteora DAMM v2 pool for `NVDA.DAY`, with a swap verified: 10 DAY in,
-  9.92 quote out.
-- `$BELL` on **mainnet**, quoted in **real NVDAx**.
-- The detector on the OPENAI vault: the live mark and executable price from
-  prestocks.com, re-posted every fifteen minutes and settled against.
-- A first bell, end to end: settled, exposure flipped, the handoff filled by
-  an arbitrageur who was paid 25 bp for bringing the stock, and DAY's NAV down
-  by exactly that.
-- Vaults opened from a browser by a wallet that is nobody in particular, found
-  by scanning the program rather than by a list this repository keeps.
-
-**Not real yet, and why**
-- **The vaults hold stand-ins.** Devnet has no xStocks, no USDC and no pre-IPO
-  tokens. The mints are built to the same *shape* — Token-2022 with a
-  permanent delegate, a pause switch, a scaled-UI multiplier, a 1% transfer
-  fee where the real one has it — because those are the code paths that have
-  to work. Building the easy version is how a real bug survived a whole phase
-  here (see below).
-- **The mark is Pyth's `Crypto.SOL/USD`.** No tokenised-equity feed is
-  sponsored on devnet.
-- **Mainnet costs more than this has.** The program is 854,600 bytes; rent
-  alone is **5.95 SOL** settled and **11.9 SOL** peak during the deploy, before
-  a share of inventory. The wallet holds 0.25. → `docs/PHASE-F.md`
-
-## The bug worth knowing about
-
-The audit said the program could not hold a real xStock. The obvious half was
-the token program: `Account<'info, Mint>` owner-checks against classic SPL, so
-a Token-2022 mint failed validation. Fixed, and a vault shaped like NVDAx went
-live.
-
-It was still wrong. Anchor's `init` sizes a token account by calling
-`get_extension_types()` on the mint, and that returns `InvalidAccountData` for
-any extension the pinned `spl-token-2022` predates. **NVDAx and OPENAI both
-carry two such extensions.** Reading works — every read path tolerates unknown
-extensions — so nothing caught it until a mint was built with the extensions
-the real asset actually has.
-
-The first fix was wrong too: a local table of which mint extension obliges
-which account extension, mirrored from the stale dependency, which missed
-`PausableAccount`. The working fix asks the chain — `GetAccountDataSize` puts
-the question to the deployed token program, which knows every extension there
-is.
-
-Four tests pin it against real mainnet bytes, including one that **fails when
-a future `spl-token-2022` learns these extensions**, so the workaround is
-removed rather than forgotten.
+**Not real yet**
+- **The signer.** SESSION has no Pyth Pro key, so a test key signs devnet prints, and a rebuild of Pyth's verifier trusts it. The price source is Jupiter's stock data. The program flags every such print `simulated` for good, and every page says so first.
+- **The tokens.** A fixture NVDAx carries the real mint's extensions and multiplier bits, alongside test USDC.
+- **The orders.** They are the team's labelled test traders, and yours if you place one.
+- **Mainnet, and an audit.** Neither has happened.
 
 ## Where it rests on somebody's word
 
-One place, named on the page it affects: **the event-session detector.** No
-oracle prices a pre-IPO token, so an operator posts the issuer's mark and the
-executable price. The program bounds how stale that reading may be, records
-who posted it, and refuses to settle on one it cannot trust. It cannot make
-the reading true, and `/markets/OPENAI` says so in its own footer.
+- **On devnet, the price.** The test signer is ours. With a Pyth Pro key the signer is Pyth's, and `set_verifier` points the oracle at Pyth's own program. The `simulated` flag is set by the program from the verifier's id, so it cannot be cleared by a claim.
+- **The counterfactual quote.** It is the keeper's word for what Jupiter quoted at that moment. The chain timestamps it and the named keeper signs it, but nobody can re-derive it afterwards, and the receipt says whose word it is.
 
-Everything else is Pyth, with full verification required, a posted-slot bound,
-and a publish-time window around the bell itself.
+Everything else is on chain, and the receipt re-checks it in your browser.
 
----
+## What the first real bell caught
 
-`docs/OPERATIONS.md` is the runbook. `docs/AUDIT.md` is the adversarial
-record, including the findings that turned out to be wrong.
+Two receipt bugs surfaced at the 25 Sep open. Neither could have shown up in a test that places the Ed25519 instruction first.
+
+- **A verified print was reported as unverified.** The poster puts a compute-budget instruction first, so the Ed25519 check sits at index 1. The first receipt looked only at index 0. It now reads the index that `post_print` itself names in its data, and a test pins it.
+- **A settled cross was described wrongly.** The receipt called a paid-out escrow "still held" when all it held was rounding dust. It now names the dust, which goes to the treasury when the cross closes.

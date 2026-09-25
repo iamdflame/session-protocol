@@ -118,7 +118,7 @@ export async function bellPrints(
   return { prints: want.map(b => out.get(b)).filter((x): x is BellPrint => !!x), fetched, failed };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.endsWith('keeper/src/bell-prints.ts')) {
   const m = JSON.parse(readFileSync('keeper/.devnet/manifest.json', 'utf8'));
   const conn = new Connection(m.rpc, 'confirmed');
   const bells = process.argv.slice(2).map(Number).filter(Boolean);

@@ -518,6 +518,42 @@ npm run cross:drill -- --status
 
 All three read devnet heavily. The public RPC rate-limits per IP, so run them one at a time and not back to back.
 
+## The keepers on Railway
+
+Since 25 Sep 2026 the bell poster and the cross keeper run on Railway, project `session-keeper`, rather than on a laptop. There are two services, `bell-poster` and `cross-keeper`, each restarted whenever it exits. The systemd units above remain the local alternative. Run only one copy of each: two posters race each other, and two keepers duplicate every crank.
+
+```bash
+deploy/railway/deploy.sh                    # bundle both keepers and deploy them
+deploy/railway/deploy.sh cross-keeper       # or one
+railway logs --service bell-poster          # the same lines journalctl showed
+railway logs --service cross-keeper
+```
+
+**What is uploaded.** `deploy.sh` bundles `keeper/src/bell-poster.ts` and `keeper/src/cross-keeper.ts` with esbuild. It stages them in a temporary folder with:
+- the public manifests they read (`web/public/bell-devnet.json`, `cross-devnet.json` and `cross-drills.json`);
+- this folder's `Dockerfile`, `start.sh` and `railway.json`.
+
+Only that folder is uploaded, so nothing else in the repository can reach Railway. The script also refuses to deploy if anything in the upload looks like a 64-byte secret key.
+
+**Redeploy** after any change to a keeper, or to one of those manifests. A new drill market counts, because the container has its own copy of `cross-drills.json`.
+
+**Keys** are service variables, never files. `start.sh` writes each variable to the path the keepers already read, then runs the keeper that `SESSION_ROLE` names.
+
+| Service | `SESSION_ROLE` | Keys |
+|---|---|---|
+| `bell-poster` | `bell-poster` | `BELL_SIGNER_KEY` (`bell-signer.json`), `BELL_POSTER_KEY` (`bell-poster.json`) |
+| `cross-keeper` | `cross-keeper` | `BELL_POSTER_KEY` (the cranker), `BELL_MAKER_KEY` (`bell-maker.json`) |
+
+Set a key from its file over stdin, so it appears on no command line and in no output:
+
+```bash
+railway variable set BELL_MAKER_KEY --stdin --service cross-keeper --skip-deploys < keeper/.devnet/bell-maker.json
+```
+
+These are devnet keys with no authority over any program. The deploy wallet (`~/.config/solana/id.json`) and the mainnet key in `.env` never go to Railway.
+
+**Funding** is the same as before: top up the poster from the deploy wallet. It pays for the prints and for every crank, about 0.016 SOL for the 25 Sep open including its cross. The poster's `data/bell-poster.db` is a log, not state. It starts empty with each deploy, and the chain is the record.
+
 ---
 
 ## What is not covered

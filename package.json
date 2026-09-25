@@ -6,7 +6,7 @@
   "workspaces": [
     "web"
   ],
-  "description": "Split a tokenized equity into the hours arbitrage works and the hours it does not",
+  "description": "Bell orders for tokenized stocks: orders placed at any hour fill at the NYSE open or close, at the bell's Pyth print, verified on Solana",
   "scripts": {
     "test": "npm run check:eligibility && npm run test:rust && npm run test:ts",
     "test:rust": "cargo test -p session-core -p session -p session-bell -p session-cross",

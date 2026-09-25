@@ -78,8 +78,9 @@ export function parseSecret(raw: string): Parsed {
 
 // Only when run directly. `parseSecret` is imported by the launcher, and a
 // module that prints a wallet report on import is a module that prints it in
-// the middle of somebody else's output.
-const RUN_DIRECTLY = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!);
+// the middle of somebody else's output. Matched on the path, not on
+// import.meta.url: bundled into a keeper, every module shares the bundle's url.
+const RUN_DIRECTLY = process.argv[1]?.endsWith('keeper/src/wallet.ts');
 if (!RUN_DIRECTLY) {
   // nothing else to do; the parser above is the export
 } else {
