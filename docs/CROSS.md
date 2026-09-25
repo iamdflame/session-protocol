@@ -175,3 +175,12 @@ The Memo program charges by the byte: 124k compute units for a real counterfactu
 Before handing over anything to sign, the function reads the balance the order would draw on. A wallet that cannot pay is told how much it holds and where the faucet is, instead of being given a transaction that fails.
 
 Orders through the Blink are capped at $1,000 or 5 NVDAx, because the sandbox's backstop is finite. The function holds no key. `actions.json` maps `/bells` to the action, so a shared link to the page unfurls as a Blink. `npm run actions` drives it as a client would, through to a real order on devnet that it then cancels.
+
+## Issuer-power drills, on devnet
+
+An xStock's issuer can pause its mint and change its multiplier, so the cross has to survive both without anyone losing an atom. `tests/integration/tests/cross.rs` proves this in LiteSVM on the real NVDAx bytes. `keeper/src/cross-drill.ts` runs the same two cases in public, at a real bell. Each has a fixture mint of its own and a market on the NVDA listing, so the demo market is untouched. The same keeper cranks them, from `web/public/cross-drills.json`.
+
+- **Pause.** Alice buys $40 and Bob sells 0.2 NVDAx, then the issuer pauses the mint. The cross prices and clears, because neither step moves a token. Settling the tokens fails, so the keeper pays each quote leg alone and the tokens wait in escrow. The drill then resumes the mint, the tokens follow, and the keeper closes the cross ten minutes after it clears. It passes only if both of the market's escrow accounts then read zero.
+- **Multiplier.** Alice buys $30 and Bob sells 0.1 NVDAx, then the issuer schedules multiplier 1.0025 for five minutes after the bell. That falls inside the pricing guard, so `price_cross` cancels the cross instead of guessing which multiplier the bell meant, and the keeper refunds everyone whole. It passes only if the refunds equal what went in and both escrows read zero.
+
+`npm run cross:drill -- --watch` does the issuer's part at the right moment and writes each step's transaction into `cross-drills.json`: it resumes the mint only once every quote leg is paid while the tokens are still held. `--status` prints the record. The first runs are armed for the 25 Sep open.

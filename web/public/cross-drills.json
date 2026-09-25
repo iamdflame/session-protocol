@@ -1,0 +1,116 @@
+{
+  "note": "Written by `npm run cross:drill`. Issuer-power drills on devnet: fixture mints of their own, cranked by the same keeper, at real bells.",
+  "drills": [
+    {
+      "drill": "pause",
+      "title": "the issuer pauses the mint before the bell",
+      "market": "4dDc631ogwMY84nvZPQacqU1gVj37g72tUG7NCgn8BG3",
+      "mint": "BMHcW8cgdq31wSZZv1177v77hs7dFCnzo3xRWd1Z7deu",
+      "mintProgram": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "quoteMint": "7GWMrVqJpttjz916ijZ8fK6efm3oXACGcY5LdC9EierL",
+      "quoteProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "rawEscrow": "3jojXB2Lg4H2DothXLE1WEdeWP5up5sn9cKaQ9zS5ams",
+      "quoteEscrow": "Cy67RuXnERejF6fgv4kDdJxEv2ggURVS1s1GA777emjX",
+      "listing": "3rtzzDabjEwEuVNSustqcxXjwm3eiyFQBZetF8eSbjvh",
+      "treasury": "GNJxWx5AWfdyQfpu4BEMAmBQzQX7QSKMhDzFBRTShfYi",
+      "maker": "7oc1Nj6ZutF1kKVvWLHt6LbmSPrFdzoRD3KQdBQPZjc",
+      "realMint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+      "keeper": "2gV24z2k3Am15jfVwDrLnugPNPKQCFzV9sKnmGbAT9QU",
+      "backstop": {
+        "feeBps": 15,
+        "maxRaw": "0",
+        "maxQuote": "0"
+      },
+      "keepSecs": 600
+    },
+    {
+      "drill": "multiplier",
+      "title": "the issuer schedules a new multiplier five minutes after the bell",
+      "market": "HUj5Lxsyemk1drBAvXVJsdmqKFFCwsBt3Woar7gLdrRU",
+      "mint": "BoQPdaEsoL9ohU1Z8nmXkZK5n6xSHjkB4KJVHqFeNmi6",
+      "mintProgram": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "quoteMint": "7GWMrVqJpttjz916ijZ8fK6efm3oXACGcY5LdC9EierL",
+      "quoteProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "rawEscrow": "5YnUQtgc6eXmgBd7hGL3zHbwsTG2MgP35w6FhJGHXt3H",
+      "quoteEscrow": "FrctFgdch7NovZFRw3GHqBNJD99c5gFeuxW4QBubkf53",
+      "listing": "3rtzzDabjEwEuVNSustqcxXjwm3eiyFQBZetF8eSbjvh",
+      "treasury": "GNJxWx5AWfdyQfpu4BEMAmBQzQX7QSKMhDzFBRTShfYi",
+      "maker": "7oc1Nj6ZutF1kKVvWLHt6LbmSPrFdzoRD3KQdBQPZjc",
+      "realMint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+      "keeper": "2gV24z2k3Am15jfVwDrLnugPNPKQCFzV9sKnmGbAT9QU",
+      "backstop": {
+        "feeBps": 15,
+        "maxRaw": "0",
+        "maxQuote": "0"
+      },
+      "keepSecs": 600
+    }
+  ],
+  "runs": [
+    {
+      "drill": "pause",
+      "bell": "2026-09-25T13:30:00.000Z",
+      "day": 20721,
+      "kind": "open",
+      "cross": "E13U8rm1LQX6ipGFL2DUqYvPTUvpQXaiek4yvK8Q1MiF",
+      "steps": [
+        {
+          "at": "2026-09-25T04:34:03.531Z",
+          "what": "alice buys $40",
+          "signature": "4MvvjEfhfrwMecjBxmj3Cx5cVFP4SKeuGKEBFJjezD1cowAiUZaMmFwrVRwjPfJgJ3JZDLi6dvr3sjCCTBN2vF1S",
+          "detail": {
+            "order": "9CtSTBqPXaqF767gJegEECky4VeJjHbQbpeQWvpXwo22",
+            "quoteAtoms": "40000000"
+          }
+        },
+        {
+          "at": "2026-09-25T04:34:04.637Z",
+          "what": "bob sells 0.2 NVDAx",
+          "signature": "4H2NpNdoea6SABJg3Zkv1zE1uBkf9judNaiAbWANWBJboavGrqix1woexvAibFddou5hdE6chfuSwngDk8UJqBky",
+          "detail": {
+            "order": "DZ2vqdGfCq9mQ4HRYtasajnyKSmGP8WY96bvKGE5Kn1S",
+            "rawAtoms": "19966033"
+          }
+        },
+        {
+          "at": "2026-09-25T04:34:05.331Z",
+          "what": "the issuer pauses the mint",
+          "signature": "3uB7Pnv5e9vFbo5S2cZ9vYDEGXPs7EV1rH2NSNBeSYt5GsM4svJFMowc1WSQe3Sr7uHsurTbK5e97WQx38MQBcNS"
+        }
+      ]
+    },
+    {
+      "drill": "multiplier",
+      "bell": "2026-09-25T13:30:00.000Z",
+      "day": 20721,
+      "kind": "open",
+      "cross": "FhqBRwcoWwJgotfHQu32mQfJ6mK65hXEXTfMHAHrNrdX",
+      "steps": [
+        {
+          "at": "2026-09-25T04:34:06.731Z",
+          "what": "alice buys $30",
+          "signature": "Aa38GWxzoBGX1CKVp1wum7W4oW6GqCydSSvsNVZWCjMVt2QphzYwNxPJexAPsPd9w7v8Yd8a6U3hDY5NGwovc9Z",
+          "detail": {
+            "order": "MWKKngfL6TuCprRQEZK1GQy763jxkFrY85RAnYsWMYP",
+            "quoteAtoms": "30000000"
+          }
+        },
+        {
+          "at": "2026-09-25T04:34:07.364Z",
+          "what": "bob sells 0.1 NVDAx",
+          "signature": "2Gp6YkFAQypXZY4a67kV48YbDoX7hSqdJVrLDhs3TRTqq2JAgHiJWM9XEZavE8MsuNFmMjgPoDq1ZdT6bPDaC4u7",
+          "detail": {
+            "order": "3BXKhMhheMr7jTHHqFaRPyYk6ZY7mzF2RCk3JFEL5uGg",
+            "rawAtoms": "9983016"
+          }
+        },
+        {
+          "at": "2026-09-25T04:34:07.934Z",
+          "what": "the issuer schedules multiplier 1.0025 for 2026-09-25T13:35:00.000Z, 300s after the bell",
+          "signature": "2hn5dyKBzN2GhFbMGwkJui9mmDjGM5nRtp1MCaevN3LJm95zjFwfV4VyLXdUJjuuPLjyfPKucztpfCJh8nFaoxGk"
+        }
+      ]
+    }
+  ],
+  "writtenAt": "2026-09-25T04:35:18.634Z"
+}

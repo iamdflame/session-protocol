@@ -20,6 +20,11 @@
    the price_cross transaction: the counterfactual a receipt shows next to
    the fill (sdk/src/counterfactual.ts).
 
+   It also cranks the issuer-power drill markets in
+   web/public/cross-drills.json (keeper/src/cross-drill.ts), when that file
+   exists: no backstop and no counterfactual there, and a short keep, so a
+   drill's escrow is visibly empty the same day.
+
      npm run cross:keeper               run until stopped (the service)
      npm run cross:keeper -- --once     one pass over every cross
      npm run cross:keeper -- --status   the market's crosses, by phase
@@ -44,6 +49,7 @@ import { parseSecret } from './wallet.ts';
 
 const RPC = process.env.DEVNET_RPC ?? 'https://api.devnet.solana.com';
 const MANIFEST = 'web/public/cross-devnet.json';
+const DRILLS = 'web/public/cross-drills.json';
 const PASS_MS = 20_000;
 const BATCH = 6;
 /** How long a settled cross stays open for the site to show it. */
@@ -58,6 +64,8 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => { stoppi
 interface Manifest {
   market: string; maker: string; treasury: string; realMint: string;
   backstop: { feeBps: number; maxRaw: string; maxQuote: string };
+  /** A drill market: no backstop, no counterfactual, and this keep instead of a day. */
+  drill?: string; keepSecs?: number;
 }
 
 const conn = new Connection(RPC, 'confirmed');
@@ -166,7 +174,7 @@ async function pass(m: MarketRef, man: Manifest, cranker: Keypair, maker: Keypai
         if (now < c.bellTs) break;
         // the alternative, as near the bell as this pass is
         const key = address.toBase58();
-        if (!quoted.has(key) && now - c.bellTs <= COUNTERFACTUAL_WINDOW_SECS && (c.buyTotal > 0n || c.sellTotal > 0n)) {
+        if (!man.drill && !quoted.has(key) && now - c.bellTs <= COUNTERFACTUAL_WINDOW_SECS && (c.buyTotal > 0n || c.sellTotal > 0n)) {
           try {
             const cf = await counterfactual(address, c, man);
             quoted.set(key, cf);
@@ -235,7 +243,7 @@ async function pass(m: MarketRef, man: Manifest, cranker: Keypair, maker: Keypai
         // Keep a paid-out cross a day before closing it: its clearing is what
         // the site shows as the bell's result, and what receipts are
         // computed from. Its rent comes back either way.
-        if (now < (c.clearedAt || c.bellTs) + KEEP_SECS) break;
+        if (now < (c.clearedAt || c.bellTs) + (man.keepSecs ?? KEEP_SECS)) break;
         const fresh = decodeCross((await conn.getAccountInfo(address))!.data);
         if (fresh.nSettled === fresh.nOrders && fresh.nOffersSettled === fresh.nOffers) {
           await send([cranker], [closeCrossIx(m, { cranker: cranker.publicKey, ...at, createdBy: fresh.createdBy, treasury: new PublicKey(man.treasury) })], `close the ${label}`);
@@ -256,22 +264,53 @@ async function status(m: MarketRef): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
-  if (!existsSync(MANIFEST)) throw new Error(`${MANIFEST} is missing: run npm run cross:devnet -- --apply`);
-  const man = JSON.parse(readFileSync(MANIFEST, 'utf8')) as Manifest;
+async function refOf(man: Manifest): Promise<MarketRef> {
   const marketKey = new PublicKey(man.market);
   const info = await conn.getAccountInfo(marketKey);
   if (!info) throw new Error(`market ${man.market} is not on this cluster`);
-  const m = marketRef(marketKey, decodeMarket(info.data));
-  if (args.includes('--status')) return status(m);
+  return marketRef(marketKey, decodeMarket(info.data));
+}
+
+/** The drill markets, re-read each pass so a new drill needs no restart. */
+function drills(): Manifest[] {
+  if (!existsSync(DRILLS)) return [];
+  try {
+    return (JSON.parse(readFileSync(DRILLS, 'utf8')) as { drills: Manifest[] }).drills ?? [];
+  } catch (e) {
+    log(`${DRILLS} unreadable: ${String(e).slice(0, 120)}`);
+    return [];
+  }
+}
+
+async function main(): Promise<void> {
+  if (!existsSync(MANIFEST)) throw new Error(`${MANIFEST} is missing: run npm run cross:devnet -- --apply`);
+  const man = JSON.parse(readFileSync(MANIFEST, 'utf8')) as Manifest;
+  const m = await refOf(man);
+  if (args.includes('--status')) {
+    await status(m);
+    for (const d of drills()) await status(await refOf(d)).catch((e) => console.log(`drill ${d.drill}: ${String(e).slice(0, 120)}`));
+    return;
+  }
   const cranker = loadKey(process.env.CROSS_CRANKER_KEYPAIR ?? 'keeper/.devnet/bell-poster.json');
   const maker = existsSync('keeper/.devnet/bell-maker.json') ? loadKey('keeper/.devnet/bell-maker.json') : null;
   log(`cross keeper: market ${man.market}, cranker ${cranker.publicKey.toBase58()}, backstop ${maker?.publicKey.toBase58() ?? 'off'} at ${man.backstop.feeBps} bp; ladder ${LADDER} buckets`);
+  const drillRefs = new Map<string, MarketRef>();
   do {
     try {
       await pass(m, man, cranker, maker);
     } catch (e) {
       log(`pass failed: ${String(e).slice(0, 200)}`);
+    }
+    for (const d of drills()) {
+      try {
+        if (!drillRefs.has(d.market)) {
+          drillRefs.set(d.market, await refOf(d));
+          log(`cross keeper: also the ${d.drill} drill, market ${d.market}`);
+        }
+        await pass(drillRefs.get(d.market)!, d, cranker, null);
+      } catch (e) {
+        log(`${d.drill} drill pass failed: ${String(e).slice(0, 200)}`);
+      }
     }
     if (!args.includes('--once')) await sleep(PASS_MS);
   } while (!stopping && !args.includes('--once'));
