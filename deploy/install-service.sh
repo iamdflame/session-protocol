@@ -3,6 +3,7 @@
 #
 #   deploy/install-service.sh night-cost    the cost-of-the-night collector
 #   deploy/install-service.sh bell-poster   the devnet bell poster
+#   deploy/install-service.sh cross-keeper  the devnet cross keeper
 #
 # deploy/<name>.service is a template: @NODE@ and @REPO@ are filled in here,
 # because node comes from nvm, which a systemd unit cannot see. The unit runs
@@ -12,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-name=${1:?usage: deploy/install-service.sh <night-cost|bell-poster>}
+name=${1:?usage: deploy/install-service.sh <night-cost|bell-poster|cross-keeper>}
 [ -f "deploy/$name.service" ] || { echo "no deploy/$name.service"; exit 1; }
 repo=$(pwd)
 node=$(command -v node) || { echo "node is not on PATH"; exit 1; }

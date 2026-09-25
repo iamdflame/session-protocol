@@ -128,4 +128,11 @@ Every step after `place_order` is permissionless.
 
 Every participant's balance change must equal the arithmetic to the atom, and the escrow must be empty after every close. 300 crosses pass on one seed (181 crowded with buyers, 119 with sellers, 12,845 NVDAx delivered), spanning more than a year of trading days: DST changes, holidays and a year boundary. 40 pass on the default seed on every run. `CROSS_FUZZ=<n> CROSS_FUZZ_SEED=<s>` runs more.
 
-**Devnet: pending.** The deployment needs 3.39 SOL of program rent. `npm run cross:devnet` lists the steps and `-- --apply` takes them: a fixture NVDAx with the real extensions, the config, an NVDA market, and the backstop maker. `npm run cross:keeper` then runs every cross from bell to close.
+**On devnet since 25 Sep 2026.** `npm run cross:devnet -- --apply` stood the sandbox up (`web/public/cross-devnet.json`):
+
+- a fixture NVDAx, `FFMzfSf2…`, a Token-2022 mint carrying NVDAx's own multiplier bits and the real one's extensions;
+- the config;
+- the NVDA market, `AYmob34F…`, priced by the devnet bell's simulated prints;
+- the backstop maker, `7oc1Nj6Z…`, offering at 15 bp.
+
+The keeper runs as a systemd user service (`deploy/install-service.sh cross-keeper`) and takes every cross from bell to close. `npm run cross:demo` seeds the next bells with the team's own labelled test orders.

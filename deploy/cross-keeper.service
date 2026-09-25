@@ -1,0 +1,24 @@
+# The cross keeper, as a systemd user service: prices, confirms, clears,
+# settles and closes every devnet cross, and posts the backstop maker's
+# standing offer. Every step is permissionless; this is a convenience.
+# Installed by `deploy/install-service.sh cross-keeper`.
+#
+#   systemctl --user status cross-keeper
+#   journalctl --user -u cross-keeper -f
+#   npm run cross:keeper -- --status
+
+[Unit]
+Description=SESSION cross keeper (devnet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@NODE@ --experimental-strip-types keeper/src/cross-keeper.ts
+Environment=NODE_NO_WARNINGS=1
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

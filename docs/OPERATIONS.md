@@ -461,7 +461,7 @@ npm run build:program
 solana program deploy target/deploy/session_bell.so --program-id target/deploy/session_bell-keypair.json --url devnet
 ```
 
-The buffer needs about 2.3 SOL for the length of the upload. One upgrade is pending: the deployed build predates `FeedFromTheFuture`.
+The buffer needs about 2.3 SOL for the length of the upload, and a build larger than the program's allocation needs `solana program extend` first. The 25 Sep upgrade, which added `FeedFromTheFuture`, extended the bell by 16 KB for headroom. Check the result: `solana program dump` the program and compare the first N bytes' hash with the local `.so`, where N is the file size.
 
 **Switching to Pyth Pro.** With a key:
 

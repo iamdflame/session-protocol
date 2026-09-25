@@ -1,0 +1,39 @@
+{
+  "note": "Written by `npm run cross:devnet -- --apply`. A sandbox: a fixture NVDAx priced by the devnet bell's simulated prints.",
+  "cluster": "devnet",
+  "program": "Crosf1CpgcEs6G6SiX2B7KMR4hxVcE2FGU2r53a3RK9K",
+  "config": "vYTcGUH2TDQqeS7N8eQi1ysCnaSvnmbUMPwovCEWiFu",
+  "market": "AYmob34FzFRo9kVBZA18jfcRSJJQfgpDKr7Kzc5FZJmb",
+  "listing": "3rtzzDabjEwEuVNSustqcxXjwm3eiyFQBZetF8eSbjvh",
+  "symbol": "NVDA",
+  "mint": "FFMzfSf29q3DhT1a6smNYBZuNUfscsgTu59351tvHdvg",
+  "mintProgram": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+  "mintDecimals": 8,
+  "realMint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+  "quoteMint": "7GWMrVqJpttjz916ijZ8fK6efm3oXACGcY5LdC9EierL",
+  "quoteProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "quoteDecimals": 6,
+  "rawEscrow": "DFfTAyNxLXuK89gJTgMty9gxPLSARCfjVudkXKMhZnS7",
+  "quoteEscrow": "J7jtJHLEixreYvAYkbvncyK6tiMpSiWPt32Bbd81X5jR",
+  "treasury": "GNJxWx5AWfdyQfpu4BEMAmBQzQX7QSKMhDzFBRTShfYi",
+  "maker": "7oc1Nj6ZutF1kKVvWLHt6LbmSPrFdzoRD3KQdBQPZjc",
+  "backstop": {
+    "feeBps": 15,
+    "maxRaw": "10000000000",
+    "maxQuote": "25000000000"
+  },
+  "params": {
+    "freezeSecs": 120,
+    "auctionSecs": 120,
+    "cancelAfterSecs": 21600,
+    "maxFeeBps": 100,
+    "minOrderQuote": "1000000",
+    "minOrderRaw": "1000000",
+    "maxSideQuote": "100000000000",
+    "maxSideRaw": "50000000000",
+    "rrToleranceBps": 1,
+    "multiplierGuardSecs": 900,
+    "acceptSimulated": true
+  },
+  "writtenAt": "2026-09-25T01:26:00.686Z"
+}

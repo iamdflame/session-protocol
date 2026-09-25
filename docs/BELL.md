@@ -120,6 +120,5 @@ Every state change emits an event: `PrintPosted`, `PrintFinalized`, `PrintMissin
 ## Known limits
 
 - **Devnet is simulated** (above). The live Pyth Pro path in the poster is written against `@pythnetwork/pyth-lazer-sdk` 7 and has not run.
-- **The devnet binary predates `FeedFromTheFuture`.** An upgrade needs about 2.3 SOL of temporary buffer, and the devnet faucet has been rate-limiting. Until then the devnet program would accept a future-dated message from its test signer. The poster never sends one, and every print's `posted_at` sits beside its feed time on `/oracle`.
 - **The multiplier cross-check is not built.** The divergence recorded is `(token − equity × rr) / (equity × rr)` from Pyth's own feeds. Checking `rr` against the xStock's scaled-UI multiplier waits for Phase 2, which has to settle what one raw token is worth first. Simulated prints carry no `rr` at all, because Jupiter's multiplier is not shown to be the quantity Pyth's `.RR` feed carries.
 - **The bell price is Pyth's aggregate at the bell, not the exchange's official open or close.** How far apart those are is what `docs/METHOD.md`'s calibration measures.

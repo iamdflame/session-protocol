@@ -39,6 +39,7 @@
     "bell:poster": "node --experimental-strip-types keeper/src/bell-poster.ts",
     "cross:devnet": "node --experimental-strip-types keeper/src/cross-devnet.ts",
     "cross:keeper": "node --experimental-strip-types keeper/src/cross-keeper.ts",
+    "cross:demo": "node --experimental-strip-types keeper/src/cross-demo.ts",
     "bell": "node --experimental-strip-types agent/launch.ts",
     "bell:verify": "node --experimental-strip-types agent/verify.ts",
     "mcp": "node --experimental-strip-types agent/mcp.ts",
