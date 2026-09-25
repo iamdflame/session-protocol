@@ -14,7 +14,7 @@ import { bellTs, etDay, type BellKind } from '@sdk/bell.ts';
 import { cancelOrderIx, crossPda, orderPda, placeOrderIx, type CrossAccount } from '@sdk/cross-ix.ts';
 import { WAD } from '@sdk/cross.ts';
 import {
-  addNote, displayed, markCancelled, noteState, priceOf, readNotes, toRaw, useBellOrders, type BellOrdersState, type NoteState,
+  addNote, displayed, markCancelled, noteState, priceOf, readNotes, toRaw, useBellOrders, useSwapNow, type BellOrdersState, type NoteState,
 } from '@/lib/bellOrders';
 import { explorer, explorerAddr, requestFaucet, short, useSendTx } from '@/lib/chain';
 import { countdown, etDate, etParts } from '@/lib/session';
@@ -128,6 +128,13 @@ function Ticket({ st, now, onPlaced }: { st: BellOrdersState; now: number; onPla
     ? side === 'buy' ? `≈ ${tok(amt / last)} NVDAx` : `≈ ${usd(amt * last)}`
     : null;
 
+  // the alternative: the same trade on Jupiter now, for the real NVDAx
+  const atoms = !valid ? 0n : side === 'buy' ? BigInt(Math.floor(amt * 1e6)) : toRaw(amt, m, 8);
+  const swap = useSwapNow(side, atoms, st.manifest.realMint);
+  const swapOut = swap.state === 'quote' ? (side === 'buy' ? displayed(swap.out, m, 8) : Number(swap.out) / 1e6) : null;
+  const bellOut = last !== null && valid ? (side === 'buy' ? amt / last : amt * last) : null;
+  const edge = swapOut && bellOut ? (bellOut / swapOut - 1) * 1e4 : null;
+
   return (
     <section className={s.card} aria-labelledby="ticket-h">
       <h2 id="ticket-h" className={s.cardTitle}>Place a bell order</h2>
@@ -179,11 +186,26 @@ function Ticket({ st, now, onPlaced }: { st: BellOrdersState; now: number; onPla
 
       <dl className={s.estimate}>
         <div>
-          <dt>At the last print</dt>
+          <dt>Now, on Jupiter</dt>
+          <dd className="num">
+            {swap.state === 'quote' && swapOut !== null ? (side === 'buy' ? `≈ ${tok(swapOut)} NVDAx` : `≈ ${usd(swapOut)}`)
+              : swap.state === 'loading' ? 'Quoting…' : swap.state === 'none' ? 'No route' : '—'}
+            <span className={s.sub}>
+              {swap.state === 'quote'
+                ? `a swap of the real NVDAx on mainnet, via ${swap.route || 'a direct pool'}, ${(swap.impactPct * 100).toFixed(2)}% price impact`
+                : swap.state === 'none' ? `Jupiter: ${swap.why}` : 'type an amount to compare'}
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>At the bell</dt>
           <dd className="num">
             {estimate ?? (st.lastPrint ? '—' : 'No print yet')}
             {st.lastPrint && last !== null
-              ? <span className={s.sub}>NVDA {usd(last)} at the {st.lastPrint.kind} of {etDate(st.lastPrint.bellTs)}; the bell&rsquo;s own print decides</span>
+              ? <span className={s.sub}>
+                  at the last print, NVDA {usd(last)} at the {st.lastPrint.kind} of {etDate(st.lastPrint.bellTs)}; the bell&rsquo;s own print decides
+                  {edge !== null && `. Per ${side === 'buy' ? 'dollar' : 'token'}, ${Math.abs(edge).toFixed(1)} bp ${edge >= 0 ? 'more' : 'less'} than the swap, before any imbalance fee`}
+                </span>
               : <span className={s.sub}>the oracle records its first print at the next bell; your order fills at that bell&rsquo;s print</span>}
           </dd>
         </div>

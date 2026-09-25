@@ -138,7 +138,7 @@ Every participant's balance change must equal the arithmetic to the atom, and th
 The keeper runs as a systemd user service (`deploy/install-service.sh cross-keeper`) and takes every cross from bell to close. `npm run cross:demo` seeds the next bells with the team's own labelled test orders.
 It keeps a paid-out cross for a day before closing it, so the site can show the bell's result.
 
-**On the site.** `/bells` is the ticket and the book: pick a bell, a side, an amount and an optional limit, and cancel until the freeze. `web/scripts/bells-flow.mjs` drives it with an injected devnet wallet and checks every order against the chain to the atom.
+**On the site.** `/bells` is the ticket and the book: pick a bell, a side, an amount and an optional limit, and cancel until the freeze. The ticket sets the two choices side by side. "Now, on Jupiter" is a live quote for the same trade on the real NVDAx. "At the bell" is the estimate at the last print, compared per unit and before any imbalance fee. `web/scripts/bells-flow.mjs` drives it with an injected devnet wallet and checks every order against the chain to the atom.
 
 ## The receipt, and the swap beside it
 

@@ -28,6 +28,7 @@ import {
   ataOf, CROSS_ACCOUNT, CROSS_PROGRAM_ID, decodeCross, decodeMarket, decodeOrder, marketRef, OFFSETS,
   type CrossAccount, type Market, type MarketRef, type OrderAccount,
 } from '@sdk/cross-ix.ts';
+import { MAINNET_USDC } from '@sdk/counterfactual.ts';
 import { load } from './data';
 
 export interface CrossManifest {
@@ -129,6 +130,45 @@ export function useBellOrders(owner: PublicKey | null, intervalMs = 20_000) {
   }, [connection, owner, intervalMs, tick]);
 
   return { data, error, refresh };
+}
+
+/* ── the alternative: a swap now ────────────────────────────────────────── */
+
+export type SwapNow =
+  | { state: 'idle' | 'loading' }
+  | { state: 'quote'; out: bigint; route: string; impactPct: number; at: number }
+  | { state: 'none'; why: string };
+
+/**
+ * What the same trade gets on Jupiter right now, for the real xStock on
+ * mainnet: the ticket's "now" beside its "at the bell". Buy quotes USDC in;
+ * sell quotes raw token atoms in, exactly as the order escrows them. Waits
+ * until typing settles, and keeps only the newest answer.
+ */
+export function useSwapNow(side: 'buy' | 'sell', atoms: bigint, realMint: string | undefined, delayMs = 600): SwapNow {
+  const [q, setQ] = useState<SwapNow>({ state: 'idle' });
+  useEffect(() => {
+    if (!realMint || atoms <= 0n) { setQ({ state: 'idle' }); return; }
+    let live = true;
+    setQ({ state: 'loading' });
+    const t = setTimeout(async () => {
+      const [input, output] = side === 'buy' ? [MAINNET_USDC, realMint] : [realMint, MAINNET_USDC];
+      try {
+        const r = await fetch(`https://lite-api.jup.ag/swap/v1/quote?inputMint=${input}&outputMint=${output}&amount=${atoms}&slippageBps=50&swapMode=ExactIn`);
+        const j = (await r.json()) as { outAmount?: string; priceImpactPct?: string; error?: string; routePlan?: { swapInfo?: { label?: string } }[] };
+        if (!live) return;
+        if (!r.ok || !j.outAmount) { setQ({ state: 'none', why: j.error ?? `Jupiter answered ${r.status}` }); return; }
+        setQ({
+          state: 'quote', out: BigInt(j.outAmount), impactPct: Number(j.priceImpactPct ?? 0), at: Date.now(),
+          route: (j.routePlan ?? []).map((p) => p.swapInfo?.label ?? '?').join(' > '),
+        });
+      } catch (e) {
+        if (live) setQ({ state: 'none', why: e instanceof Error ? e.message : String(e) });
+      }
+    }, delayMs);
+    return () => { live = false; clearTimeout(t); };
+  }, [side, atoms, realMint, delayMs]);
+  return q;
 }
 
 /* ── units ───────────────────────────────────────────────────────────────── */
