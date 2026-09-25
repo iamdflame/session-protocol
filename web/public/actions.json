@@ -1,0 +1,6 @@
+{
+  "rules": [
+    { "pathPattern": "/bells", "apiPath": "/api/bell-action" },
+    { "pathPattern": "/api/bell-action**", "apiPath": "/api/bell-action**" }
+  ]
+}

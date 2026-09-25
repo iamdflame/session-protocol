@@ -224,6 +224,11 @@ again in your browser, then the fills, and beside them the keeper's Jupiter
 quote for the same size at the bell. A receipt without that quote claims no
 saving (`docs/CROSS.md`).
 
+A Blink does the same from a post on X: `/api/bell-action` is a Solana Action
+whose card offers a buy or a sell at the next bell. It builds the transaction
+for whichever wallet clicked, and tells an empty wallet where the faucet is
+before asking it to sign. `actions.json` maps `/bells` to it.
+
 Agents get the same through MCP (`npm run mcp`, stdio):
 
 - `bell_status`: the next bells and their books.

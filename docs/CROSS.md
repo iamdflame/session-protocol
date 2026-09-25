@@ -164,3 +164,14 @@ Anyone can put a memo in a transaction that touches a cross, so a receipt shows 
 With no counterfactual, the receipt says it makes no claim about savings.
 
 The Memo program charges by the byte: 124k compute units for a real counterfactual on devnet, and 222k for the largest one the reader accepts. The keeper therefore sets a 600k limit on that transaction, rather than share the default with the price. On devnet the cross is a rehearsal at a simulated print while the swap is a real mainnet quote, and the receipt says so where the two meet.
+
+## From a post: the Blink
+
+`/api/bell-action` is a Solana Action (`web/api-src/bell-action.ts`).
+
+- **GET** returns the card: buy or sell NVDAx at the next bell, when it fills, when it freezes, the fee cap, and that this is devnet.
+- **POST** `{ account }` returns the `place_order` transaction, built at that moment for that wallet. It is the same instruction `/bells` builds, with a fresh nonce.
+
+Before handing over anything to sign, the function reads the balance the order would draw on. A wallet that cannot pay is told how much it holds and where the faucet is, instead of being given a transaction that fails.
+
+Orders through the Blink are capped at $1,000 or 5 NVDAx, because the sandbox's backstop is finite. The function holds no key. `actions.json` maps `/bells` to the action, so a shared link to the page unfurls as a Blink. `npm run actions` drives it as a client would, through to a real order on devnet that it then cancels.
