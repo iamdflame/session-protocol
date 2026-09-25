@@ -1,0 +1,81 @@
+{
+ "ready": false,
+ "note": "Filled from the chain after the 25 Sep 13:30 UTC open by demo/capture/live.mjs",
+ "cross": "GdN6aYz68FBYxmwjVVUbJ9PEXrsku5nsDj7S18uX7PAb",
+ "print": {
+  "price": "—",
+  "atEt": "09:30",
+  "fromBell": "",
+  "signature": "",
+  "simulated": true
+ },
+ "book": {
+  "buyersUsd": 1205,
+  "sellersNvdax": 3,
+  "orders": 4
+ },
+ "clearing": {
+  "crowded": "buyers",
+  "feeBps": 15,
+  "buyersPut": "",
+  "buyersGot": "",
+  "sellersPut": "",
+  "sellersGot": ""
+ },
+ "swap": {
+  "buyEdgeBps": null,
+  "sellEdgeBps": null,
+  "memoSignature": ""
+ },
+ "ade": {
+  "got": "",
+  "spent": ""
+ },
+ "drills": {
+  "pause": {
+   "result": "pending",
+   "why": null,
+   "steps": [
+    {
+     "at": "2026-09-25T04:34:03.531Z",
+     "what": "alice buys $40",
+     "signature": "4MvvjEfhfrwMecjBxmj3Cx5cVFP4SKeuGKEBFJjezD1cowAiUZaMmFwrVRwjPfJgJ3JZDLi6dvr3sjCCTBN2vF1S"
+    },
+    {
+     "at": "2026-09-25T04:34:04.637Z",
+     "what": "bob sells 0.2 NVDAx",
+     "signature": "4H2NpNdoea6SABJg3Zkv1zE1uBkf9judNaiAbWANWBJboavGrqix1woexvAibFddou5hdE6chfuSwngDk8UJqBky"
+    },
+    {
+     "at": "2026-09-25T04:34:05.331Z",
+     "what": "the issuer pauses the mint",
+     "signature": "3uB7Pnv5e9vFbo5S2cZ9vYDEGXPs7EV1rH2NSNBeSYt5GsM4svJFMowc1WSQe3Sr7uHsurTbK5e97WQx38MQBcNS"
+    }
+   ]
+  },
+  "multiplier": {
+   "result": "pending",
+   "why": null,
+   "steps": [
+    {
+     "at": "2026-09-25T04:34:06.731Z",
+     "what": "alice buys $30",
+     "signature": "Aa38GWxzoBGX1CKVp1wum7W4oW6GqCydSSvsNVZWCjMVt2QphzYwNxPJexAPsPd9w7v8Yd8a6U3hDY5NGwovc9Z"
+    },
+    {
+     "at": "2026-09-25T04:34:07.364Z",
+     "what": "bob sells 0.1 NVDAx",
+     "signature": "2Gp6YkFAQypXZY4a67kV48YbDoX7hSqdJVrLDhs3TRTqq2JAgHiJWM9XEZavE8MsuNFmMjgPoDq1ZdT6bPDaC4u7"
+    },
+    {
+     "at": "2026-09-25T04:34:07.934Z",
+     "what": "the issuer schedules multiplier 1.0025 for 2026-09-25T13:35:00.000Z, 300s after the bell",
+     "signature": "2hn5dyKBzN2GhFbMGwkJui9mmDjGM5nRtp1MCaevN3LJm95zjFwfV4VyLXdUJjuuPLjyfPKucztpfCJh8nFaoxGk"
+    }
+   ]
+  }
+ },
+ "receiptHeight": 5200,
+ "phase": "collecting",
+ "writtenAt": "2026-09-25T11:55:18.605Z"
+}

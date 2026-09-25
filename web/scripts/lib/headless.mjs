@@ -13,7 +13,7 @@ import { createConnection } from 'node:net';
 import { existsSync, rmSync } from 'node:fs';
 import { WebSocket } from 'ws';
 
-export const injectWallet = (wallet, rpc) => `
+export const injectWallet = (wallet, rpc, { name = 'Headless Test Wallet' } = {}) => `
 (() => {
   const SECRET = ${JSON.stringify([...wallet.secretKey])};
   const ADDRESS = ${JSON.stringify(wallet.publicKey.toBase58())};
@@ -77,7 +77,7 @@ export const injectWallet = (wallet, rpc) => `
   // reads the result from wallet.accounts afterwards, so both must move.
   const wallet = {
     version: '1.0.0',
-    name: 'Headless Test Wallet',
+    name: ${JSON.stringify(name)},
     icon: ICON,
     chains: ['solana:devnet'],
     accounts: [],
@@ -140,12 +140,18 @@ const waitPort = (p) => new Promise((res, rej) => {
   go();
 });
 
+let launches = 0;
+
 /** Headless Chrome with the wallet injected into every document. */
-export async function openChrome(inject, { width = 1440, height = 900 } = {}) {
-  const profile = '/tmp/session-flow-' + process.pid;
-  const port = 9350 + (process.pid % 300);
+export async function openChrome(inject, { width = 1440, height = 900, dsf = 1, profile: profileName = 'flow' } = {}) {
+  // a new port per launch: a process may open several browsers in turn, and
+  // the last one can still be letting go of its port
+  const profile = `/tmp/session-${profileName}-${process.pid}-${launches}`;
+  const port = 9350 + ((process.pid + launches++ * 37) % 300);
   const chrome = spawn(CHROME, [
     '--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--disable-gpu', '--hide-scrollbars',
+    // keep animation frames running: a headless page otherwise counts as backgrounded
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     '--user-data-dir=' + profile, 'about:blank',
   ], { stdio: 'ignore' });
   await waitPort(port);
@@ -171,8 +177,10 @@ export async function openChrome(inject, { width = 1440, height = 900 } = {}) {
   };
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dsf, mobile: false });
   await send('Page.addScriptToEvaluateOnNewDocument', { source: inject });
+  await send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
+  await send('Page.bringToFront').catch(() => {});
   const until = async (fn, ms = 25000, every = 400) => {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {

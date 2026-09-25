@@ -1,0 +1,74 @@
+{
+ "P01": {
+  "title": "Hook",
+  "seconds": 18
+ },
+ "P02": {
+  "title": "The cost",
+  "seconds": 19
+ },
+ "P03": {
+  "title": "Ade, late at night",
+  "seconds": 25
+ },
+ "P04": {
+  "title": "The bell",
+  "seconds": 25
+ },
+ "P05": {
+  "title": "The receipt",
+  "seconds": 23
+ },
+ "P06": {
+  "title": "Trust",
+  "seconds": 24
+ },
+ "P07": {
+  "title": "Why Solana",
+  "seconds": 23
+ },
+ "P08": {
+  "title": "Where it stands",
+  "seconds": 16
+ },
+ "P09": {
+  "title": "End card",
+  "seconds": 5
+ },
+ "T01": {
+  "title": "What this is",
+  "seconds": 16
+ },
+ "T02": {
+  "title": "Architecture",
+  "seconds": 26
+ },
+ "T03": {
+  "title": "How a print gets in",
+  "seconds": 42
+ },
+ "T04": {
+  "title": "The cross",
+  "seconds": 50
+ },
+ "T05": {
+  "title": "The tests",
+  "seconds": 41
+ },
+ "T06": {
+  "title": "Failure, live",
+  "seconds": 33
+ },
+ "T07": {
+  "title": "The keeper, and the counterfactual",
+  "seconds": 27
+ },
+ "T08": {
+  "title": "Agents and Blinks",
+  "seconds": 26
+ },
+ "T09": {
+  "title": "Check it yourself",
+  "seconds": 18
+ }
+}
