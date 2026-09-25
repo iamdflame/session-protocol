@@ -34,7 +34,7 @@ NVIDIA's price is made six and a half hours a day. On Solana, its token trades a
 Those are the hours pools are thinnest. Over a weekend, prices drift about eight times further from the stock than on a weekday... and for some names, a round trip costs over one percent. You pay for the noise.
 ```
 
-## P03 · Ade, Saturday night (0:33–0:57)
+## P03 · Ade, late at night (0:33–0:57)
 
 **Picture:**
 - a phone at night;
@@ -43,11 +43,11 @@ Those are the hours pools are thinnest. Over a weekend, prices drift about eight
 
 Lower third: *Devnet sandbox · fixture NVDAx · test USDC*.
 
-**Caption:** Meet Ade. Saturday night in Lagos, and she wants $200 of NVIDIA. SESSION shows both choices: swap now on Jupiter, or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
+**Caption:** Meet Ade. It's late at night in Lagos, and New York is shut. She wants $200 of NVIDIA. SESSION shows both choices: swap now on Jupiter, or buy at the next open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
 
 **ElevenLabs:**
 ```
-Meet Ade. Saturday night in Lagos, and she wants two hundred dollars of NVIDIA. SESSION shows both choices: swap now, on Jupiter... or buy at Monday's open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
+Meet Ade. It's late at night in Lagos, and New York is shut. She wants two hundred dollars of NVIDIA. SESSION shows both choices: swap now, on Jupiter... or buy at the next open. She picks the bell. One signature, and her dollars wait in escrow, cancellable until two minutes before the open.
 ```
 
 ## P04 · The bell (0:57–1:25)
@@ -58,11 +58,11 @@ Meet Ade. Saturday night in Lagos, and she wants two hundred dollars of NVIDIA. 
 - the netting animation: buyers and sellers meet, and makers fill the leftover;
 - real footage of today's print arriving on `/oracle`, with the SIMULATED SIGNER chip visible.
 
-**Caption:** Monday, 9:30 in New York. The Bell oracle posts NVIDIA's opening print, and the program verifies its signature on-chain, with Pyth's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free, and market makers fill whatever is left, at a fee the backstop caps.
+**Caption:** 9:30 in New York. The Bell oracle posts NVIDIA's opening print, and the program verifies its signature on-chain, with Pyth's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free, and market makers fill whatever is left, at a fee the backstop caps.
 
 **ElevenLabs:**
 ```
-Monday. Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and the program verifies its signature on-chain, with Pith's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free... and market makers fill whatever is left, at a fee the backstop caps.
+Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and the program verifies its signature on-chain, with Pith's own verifier code. Everyone in the cross trades at that one price. Buyers and sellers net for free... and market makers fill whatever is left, at a fee the backstop caps.
 ```
 
 ## P05 · The receipt (1:25–1:49)

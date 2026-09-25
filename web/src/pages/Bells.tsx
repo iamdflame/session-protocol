@@ -422,7 +422,7 @@ export default function Bells() {
     <div className={s.page}>
       <header className={s.head}>
         <span className={s.eyebrow}>Bell orders</span>
-        <h1 className={s.title}>Trade NVDAx at the close, at the price the close printed</h1>
+        <h1 className={s.title}>Trade NVDAx at the bell, at the price the bell printed</h1>
         <p className={s.lead}>
           Place an order any time. At the NYSE open or close it fills at <strong>the bell&rsquo;s print</strong>, the
           same price for everyone in it. Buyers and sellers net against each other and pay nothing for it. If one

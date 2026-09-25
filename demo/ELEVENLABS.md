@@ -7,7 +7,7 @@ Everything here was checked against ElevenLabs' own documentation on 25 Sep 2026
 Paste this test line into **Text to Speech** with each candidate, and keep the one that sounds calm, certain, and not like an advert:
 
 ```
-Monday. Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and every order in the cross fills at that one price.
+Nine thirty, in New York. The Bell oracle posts NVIDIA's opening print... and everyone in the cross trades at that one price.
 ```
 
 Calm, confident male voices to audition (Voice Library → search by name, or filter *Narration*, *Male*, *Middle-aged*):
