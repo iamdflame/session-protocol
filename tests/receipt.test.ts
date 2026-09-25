@@ -61,9 +61,15 @@ const inSlot = [{ signature: 'post', slot: 555, err: null }];
 {
   const r = await checkPrint(mock(inSlot, { post: fetched(postIxs(), poster) }), key(5), print);
   check('a real print verifies here', 'verifiedHere' in r && r.verifiedHere, JSON.stringify(r, (_, v) => (typeof v === 'bigint' ? String(v) : v)).slice(0, 200));
-  check('and opens with the Ed25519 precompile', 'precompile' in r && r.precompile);
+  check('and carries the Ed25519 precompile where post_print says', 'precompile' in r && r.precompile);
   check('and equals what the print stored', 'matchesPrint' in r && r.matchesPrint);
   check('and names its signer', 'signer' in r && r.signer === new PublicKey(signer.publicKey).toBase58());
+}
+{
+  // the poster puts a compute budget first, so the Ed25519 instruction is at index 1
+  const withBudget = postPrintIxs({ poster, symbol: 'NVDA', day: 20_356, kind: 'open', message, verifier: key(3), treasury: key(4), computeUnits: 400_000 });
+  const r = await checkPrint(mock(inSlot, { post: fetched(withBudget, poster) }), key(5), print);
+  check('behind a compute budget, the precompile is found at index 1', 'precompile' in r && r.precompile && r.verifiedHere && r.matchesPrint);
 }
 {
   const ixs = postIxs();

@@ -34,7 +34,7 @@ export interface PrintCheck {
   signature: string;
   /** Ed25519 over the signed payload, checked here. */
   verifiedHere: boolean;
-  /** The transaction's first instruction is the Ed25519 precompile, as the verifier requires. */
+  /** The Ed25519 precompile is in this transaction, at the index post_print names, as the verifier requires. */
   precompile: boolean;
   signer: string;
   payload: LazerPayload;
@@ -97,7 +97,8 @@ export async function checkPrint(conn: Connection, printAddress: PublicKey, prin
     return {
       signature: hit.signature,
       verifiedHere: nacl.sign.detached.verify(m.payload, m.signature, m.publicKey),
-      precompile: ixs[0]?.program.equals(ED25519_PROGRAM_ID) ?? false,
+      // post_print ends with the index of its Ed25519 instruction (u16): 0, or 1 behind a compute budget
+      precompile: ixs[post.data[post.data.length - 2] | (post.data[post.data.length - 1] << 8)]?.program.equals(ED25519_PROGRAM_ID) ?? false,
       signer: signer.toBase58(),
       payload,
       feed,

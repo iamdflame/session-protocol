@@ -148,7 +148,7 @@ function ThePrint({ st, c }: { st: ReceiptState; c: CrossAccount }) {
       {pc ? (
         <ul className={s.checks} aria-label="Checks on the print">
           <Check ok={pc.verifiedHere}>Signature checked again in this browser: Ed25519 by {short(pc.signer, 4)} over the signed payload</Check>
-          <Check ok={pc.precompile}>The transaction opens with the Ed25519 precompile, which the verifier requires</Check>
+          <Check ok={pc.precompile}>The Ed25519 precompile is in the same transaction, where post_print says it is, as the verifier requires</Check>
           <Check ok={pc.matchesPrint}>What was signed equals what the print stored, field by field</Check>
         </ul>
       ) : e.present && gap ? (
