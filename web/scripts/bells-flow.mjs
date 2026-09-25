@@ -30,7 +30,7 @@ import { injectWallet, openChrome } from './lib/headless.mjs';
 import { bellTs, etDay } from '../../sdk/src/bell.ts';
 import { multiplierWad, readScaledUi, WAD } from '../../sdk/src/cross.ts';
 import {
-  ataOf, CROSS_PROGRAM_ID, crossPda, decodeCross, decodeOrder, quoteEscrowPda, rawEscrowPda,
+  ataOf, cancelOrderIx, CROSS_PROGRAM_ID, crossPda, decodeCross, decodeMarket, decodeOrder, marketRef, quoteEscrowPda, rawEscrowPda,
 } from '../../sdk/src/cross-ix.ts';
 import { createAtaIdempotentIx } from '../../sdk/src/ix.ts';
 
@@ -67,7 +67,17 @@ const check = (name, ok, detail = '') => {
 /* ── the chain, read directly ───────────────────────────────────────────── */
 
 const tokenAmount = (info) => (info && info.data.length >= 72 ? info.data.readBigUInt64LE(64) : 0n);
-async function snapshot(cross = null) {
+/** The public RPC refuses bursts; a refused read is asked again, not failed. */
+async function retry(fn, tries = 5) {
+  for (let i = 1; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (i >= tries || !/429|rate limit|fetch failed/i.test(String(e))) throw e;
+      await new Promise((r) => setTimeout(r, 2_000 * i));
+    }
+  }
+}
+async function snapshot(cross = null) { return retry(() => snapshotOnce(cross)); }
+async function snapshotOnce(cross = null) {
   const [sol, infos] = await Promise.all([
     conn.getBalance(wallet.publicKey),
     conn.getMultipleAccountsInfo([myQuote, myRaw, quoteEscrow, rawEscrow, MINT, ...(cross ? [cross] : [])]),
@@ -88,7 +98,7 @@ async function placed(side, since) {
   const notes = await page.ev(`JSON.parse(localStorage.getItem('session.bell-orders.v1.${wallet.publicKey.toBase58()}') ?? '[]')`);
   const note = notes.find((n) => n.side === side && n.placedAt >= since);
   if (!note) return null;
-  const info = await conn.getAccountInfo(new PublicKey(note.order));
+  const info = await retry(() => conn.getAccountInfo(new PublicKey(note.order)));
   return info && info.owner.equals(CROSS_PROGRAM_ID) ? { address: note.order, o: decodeOrder(info.data) } : null;
 }
 
@@ -286,7 +296,32 @@ try {
 } catch (e) {
   check('the run finished', false, e instanceof Error ? e.message : String(e));
 } finally {
+  await cleanup();
   page.close();
+}
+
+/* Whatever this run placed and the page did not get to cancel is cancelled
+   here, signed by the run's own wallet, so a failed run leaves nothing in a
+   real cross. A fresh wallet's key exists only in this process. */
+async function cleanup() {
+  try {
+    const notes = [];
+    for (const kind of ['buy', 'sell']) {
+      const x = await placed(kind, 0).catch(() => null);
+      if (x && x.o.status === 'open') notes.push(x);
+    }
+    if (!notes.length) return;
+    const ref = marketRef(MARKET, decodeMarket((await retry(() => conn.getAccountInfo(MARKET))).data));
+    for (const { address, o } of notes) {
+      const c = decodeCross((await retry(() => conn.getAccountInfo(o.cross))).data);
+      await retry(() => sendAndConfirmTransaction(conn, new Transaction().add(
+        cancelOrderIx(ref, { owner: wallet.publicKey, day: c.day, kind: c.kind, nonce: o.nonce, side: o.side }),
+      ), [wallet], { commitment: 'confirmed' }));
+      console.log(`  clean up: cancelled ${o.side} ${address} the page left open`);
+    }
+  } catch (e) {
+    console.log(`  clean up failed: ${String(e).slice(0, 160)} (wallet ${wallet.publicKey.toBase58()})`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

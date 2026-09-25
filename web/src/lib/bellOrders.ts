@@ -63,12 +63,18 @@ export function useBellOrders(owner: PublicKey | null, intervalMs = 20_000) {
   const [data, setData] = useState<BellOrdersState | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  // A write is confirmed by one node; the next read may come from another a
+  // slot or two behind, or be refused by a rate limit. Read once more shortly.
+  const refresh = useCallback(() => {
+    setTick((t) => t + 1);
+    setTimeout(() => setTick((t) => t + 1), 4_000);
+  }, []);
 
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const read = async () => {
+      let failed = false;
       let manifest: CrossManifest;
       try {
         manifest = await load<CrossManifest>('/cross-devnet.json');
@@ -121,9 +127,11 @@ export function useBellOrders(owner: PublicKey | null, intervalMs = 20_000) {
         };
         if (live) { setData(next); setError(null); }
       } catch (e) {
+        failed = true;
         if (live) setError(e instanceof Error ? e.message : String(e));
       }
-      if (live) timer = setTimeout(read, intervalMs);
+      // a refused read is asked again soon, not at the next full interval
+      if (live) timer = setTimeout(read, failed ? Math.min(5_000, intervalMs) : intervalMs);
     };
     read();
     return () => { live = false; if (timer) clearTimeout(timer); };
