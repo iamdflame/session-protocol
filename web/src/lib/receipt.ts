@@ -11,48 +11,24 @@
      the manifest names signed it; anyone can put a memo in a transaction
      that touches a cross.
 
-   The history reads (signatures, transactions) are the ones the public RPC
+   The checks themselves are sdk/src/receipt.ts, which the agent's
+   bell_receipt uses too. The history reads are the ones the public RPC
    refuses first. Each is optional. A part that could not be read says so,
    and is never filled with a guess. Once a part has a definite answer it is
    not read again.
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useRef, useState } from 'react';
-import { PublicKey, type ConfirmedSignatureInfo, type Connection, type VersionedTransactionResponse } from '@solana/web3.js';
+import { PublicKey, type ConfirmedSignatureInfo } from '@solana/web3.js';
 import { useConnection } from '@solana/wallet-adapter-react';
-import nacl from 'tweetnacl';
-import {
-  BELL_DISCRIMINATOR, BELL_PROGRAM_ID, decodePrint, ED25519_PROGRAM_ID, parseLazerMessage, parseLazerPayload,
-  POST_PRINT_MESSAGE_OFFSET, type LazerFeed, type LazerPayload, type Print,
-} from '@sdk/bell.ts';
-import { COUNTERFACTUAL_TAG, MEMO_PROGRAM_ID, readCounterfactual, type Counterfactual } from '@sdk/counterfactual.ts';
+import { decodePrint, type Print } from '@sdk/bell.ts';
 import { multiplierWad, readScaledUi, WAD } from '@sdk/cross.ts';
-import { CROSS_DISCRIMINATOR, CROSS_PROGRAM_ID, decodeCross, decodeMarket, type CrossAccount, type Market } from '@sdk/cross-ix.ts';
+import { CROSS_PROGRAM_ID, decodeCross, decodeMarket, type CrossAccount, type Market } from '@sdk/cross-ix.ts';
+import { checkPrint, findCounterfactual, type CounterfactualRead, type Missing, type PrintCheck } from '@sdk/receipt.ts';
 import { load } from './data';
 import type { CrossManifest } from './bellOrders';
 
-export interface PrintCheck {
-  /** The post_print transaction whose message the print holds. */
-  signature: string;
-  /** Ed25519 over the signed payload, checked in this browser. */
-  verifiedHere: boolean;
-  /** The transaction's first instruction is the Ed25519 precompile, as the verifier requires. */
-  precompile: boolean;
-  signer: string;
-  payload: LazerPayload;
-  /** The listing's equity feed as signed. */
-  feed: LazerFeed | null;
-  /** Price, confidence, exponent, publishers, session, both timestamps and the signer all equal the print's. */
-  matchesPrint: boolean;
-}
-
-/** Why a part is absent: the RPC refused, or there is nothing there. */
-export type Missing = { missing: 'unavailable' | 'none'; why?: string };
-
-export type CounterfactualRead =
-  | { cf: Counterfactual; signature: string }
-  | { untrusted: string; signature: string }
-  | Missing;
+export type { CounterfactualRead, Missing, PrintCheck };
 
 export interface ReceiptState {
   address: PublicKey;
@@ -70,86 +46,7 @@ export interface ReceiptState {
   readAt: number;
 }
 
-interface Ix { program: PublicKey; accounts: PublicKey[]; data: Uint8Array }
-
-function instructions(tx: VersionedTransactionResponse): Ix[] {
-  const msg = tx.transaction.message;
-  const loaded = tx.meta?.loadedAddresses;
-  const keys = [...msg.staticAccountKeys, ...(loaded?.writable ?? []), ...(loaded?.readonly ?? [])];
-  return msg.compiledInstructions.map((ix) => ({
-    program: keys[ix.programIdIndex],
-    accounts: ix.accountKeyIndexes.map((i) => keys[i]),
-    data: ix.data,
-  }));
-}
-
-const startsWith = (data: Uint8Array, prefix: number[]) => data.length >= prefix.length && prefix.every((b, i) => data[i] === b);
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 160);
-const getTx = (conn: Connection, signature: string) =>
-  conn.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
-
-async function checkPrint(conn: Connection, printAddress: PublicKey, print: Print): Promise<PrintCheck | Missing> {
-  if (!print.equity.present) return { missing: 'none', why: 'this bell has no price: its print is marked missing' };
-  try {
-    // the post the print holds is the one in the slot it recorded
-    const sigs = await conn.getSignaturesForAddress(printAddress, { limit: 100 });
-    const hit = sigs.find((x) => BigInt(x.slot) === print.slot && !x.err);
-    if (!hit) return { missing: 'unavailable', why: `no successful transaction in slot ${print.slot} among the print's last ${sigs.length}` };
-    const tx = await getTx(conn, hit.signature);
-    if (!tx) return { missing: 'unavailable', why: 'the RPC did not return the transaction' };
-    const ixs = instructions(tx);
-    const post = ixs.find((ix) => ix.program.equals(BELL_PROGRAM_ID) && startsWith(ix.data, BELL_DISCRIMINATOR.post_print));
-    if (!post) return { missing: 'none', why: 'that transaction holds no post_print' };
-    const len = new DataView(post.data.buffer, post.data.byteOffset, post.data.byteLength).getUint32(8, true);
-    const m = parseLazerMessage(post.data.subarray(POST_PRINT_MESSAGE_OFFSET, POST_PRINT_MESSAGE_OFFSET + len));
-    const payload = parseLazerPayload(m.payload);
-    const feed = payload.feeds.find((f) => f.feedId === print.equity.feedId) ?? null;
-    const signer = new PublicKey(m.publicKey);
-    const e = print.equity;
-    const matchesPrint = !!feed && signer.equals(print.signer) && payload.timestampUs === print.messageTsUs
-      && feed.price === e.price && feed.confidence === e.conf && feed.exponent === e.expo
-      && feed.publishers === e.publishers && (feed.session ?? 255) === e.session && feed.feedTsUs === e.feedTsUs;
-    return {
-      signature: hit.signature,
-      verifiedHere: nacl.sign.detached.verify(m.payload, m.signature, m.publicKey),
-      precompile: ixs[0]?.program.equals(ED25519_PROGRAM_ID) ?? false,
-      signer: signer.toBase58(),
-      payload,
-      feed,
-      matchesPrint,
-    };
-  } catch (e) {
-    return { missing: 'unavailable', why: why(e) };
-  }
-}
-
-async function findCounterfactual(
-  conn: Connection, address: PublicKey, c: CrossAccount, history: ConfirmedSignatureInfo[], keeper: string | undefined,
-): Promise<CounterfactualRead> {
-  if (!c.pricedAt) return { missing: 'none', why: 'the cross has not been priced' };
-  // the memo marks it; the block time finds the price even if the RPC drops memos
-  const candidates = history.filter((h) => !h.err && (h.memo?.includes(COUNTERFACTUAL_TAG) || h.blockTime === c.pricedAt)).slice(0, 3);
-  try {
-    for (const h of candidates) {
-      const tx = await getTx(conn, h.signature);
-      if (!tx || tx.meta?.err) continue;
-      const ixs = instructions(tx);
-      const priced = ixs.some((ix) => ix.program.equals(CROSS_PROGRAM_ID) && startsWith(ix.data, CROSS_DISCRIMINATOR.price_cross) && ix.accounts[0]?.equals(address));
-      if (!priced) continue;
-      const memo = ixs.find((ix) => ix.program.equals(MEMO_PROGRAM_ID));
-      const cf = memo ? readCounterfactual(new TextDecoder().decode(memo.data)) : null;
-      if (!cf || cf.cross !== address.toBase58()) return { missing: 'none', why: 'the transaction that priced this cross carries no swap quote' };
-      const payer = tx.transaction.message.staticAccountKeys[0];
-      if (!keeper || !payer.equals(new PublicKey(keeper))) return { untrusted: payer.toBase58(), signature: h.signature };
-      return { cf, signature: h.signature };
-    }
-  } catch (e) {
-    return { missing: 'unavailable', why: why(e) };
-  }
-  return candidates.length
-    ? { missing: 'none', why: 'no transaction of this cross both priced it and carried a swap quote' }
-    : { missing: 'unavailable', why: 'the transaction that priced this cross is not in the history the RPC returned' };
-}
 
 const settled = (c: CrossAccount) =>
   (c.phase === 'settling' || c.phase === 'cancelled') && c.nSettled === c.nOrders && c.nOffersSettled === c.nOffers;

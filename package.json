@@ -10,7 +10,7 @@
   "scripts": {
     "test": "npm run check:eligibility && npm run test:rust && npm run test:ts",
     "test:rust": "cargo test -p session-core -p session -p session-bell -p session-cross",
-    "test:ts": "node --experimental-strip-types tests/calendar.check.ts && node --experimental-strip-types tests/pyth-schedule.check.ts && node --experimental-strip-types tests/bell.test.ts && node --experimental-strip-types tests/cross.test.ts && node --experimental-strip-types tests/cross-ix.test.ts && node --experimental-strip-types tests/counterfactual.test.ts && node --experimental-strip-types tests/layout.test.ts && node --experimental-strip-types tests/health.test.ts && node --experimental-strip-types tests/ix.test.ts && node --experimental-strip-types tests/issuer.test.ts && node --experimental-strip-types tests/events.test.ts && node --experimental-strip-types tests/claim.test.ts && node --experimental-strip-types tests/event.test.ts && node --experimental-strip-types tests/statement.test.ts",
+    "test:ts": "node --experimental-strip-types tests/calendar.check.ts && node --experimental-strip-types tests/pyth-schedule.check.ts && node --experimental-strip-types tests/bell.test.ts && node --experimental-strip-types tests/cross.test.ts && node --experimental-strip-types tests/cross-ix.test.ts && node --experimental-strip-types tests/counterfactual.test.ts && node --experimental-strip-types tests/receipt.test.ts && node --experimental-strip-types tests/layout.test.ts && node --experimental-strip-types tests/health.test.ts && node --experimental-strip-types tests/ix.test.ts && node --experimental-strip-types tests/issuer.test.ts && node --experimental-strip-types tests/events.test.ts && node --experimental-strip-types tests/claim.test.ts && node --experimental-strip-types tests/event.test.ts && node --experimental-strip-types tests/statement.test.ts",
     "vectors": "node --experimental-strip-types tests/gen-vectors.ts && node --experimental-strip-types tests/gen-settle-vectors.ts && cargo test -p session --lib emit_account_vector",
     "keeper": "node --experimental-strip-types keeper/src/index.ts",
     "data": "node scripts/discover.mjs > data/_raw-universe.json && node scripts/history.mjs && node research/fetch-hourly.mjs",
@@ -43,6 +43,7 @@
     "bell": "node --experimental-strip-types agent/launch.ts",
     "bell:verify": "node --experimental-strip-types agent/verify.ts",
     "mcp": "node --experimental-strip-types agent/mcp.ts",
+    "mcp:check": "node --experimental-strip-types --no-warnings agent/mcp-check.ts",
     "auction": "node --experimental-strip-types keeper/src/auction.ts",
     "retune": "node --experimental-strip-types keeper/src/retune.ts",
     "check:eligibility": "node scripts/eligibility.mjs"
@@ -54,7 +55,8 @@
     "@solana/spl-token": "^0.4.13",
     "@solana/spl-token-metadata": "^0.1.6",
     "@solana/web3.js": "1.98.4",
-    "bn.js": "^5.2.5"
+    "bn.js": "^5.2.5",
+    "tweetnacl": "^1.0.3"
   },
   "license": "MIT",
   "overrides": {

@@ -224,6 +224,19 @@ again in your browser, then the fills, and beside them the keeper's Jupiter
 quote for the same size at the bell. A receipt without that quote claims no
 saving (`docs/CROSS.md`).
 
+Agents get the same through MCP (`npm run mcp`, stdio):
+
+- `bell_status`: the next bells and their books.
+- `bell_quote`: a bell order against a Jupiter swap now.
+- `bell_receipt`: a cross's print, verified again, and a wallet's fills
+  from the program's own events.
+- `bell_place_order` and `bell_cancel_order`: these write. They are capped
+  per order in code (`AGENT_MAX_BELL_QUOTE`, `AGENT_MAX_BELL_RAW`), and on
+  mainnet they are refused unless `SESSION_ALLOW_MAINNET=1`.
+
+`npm run mcp:check` calls every one of these as a client would, and reads
+each write back from devnet.
+
 ## Safety model
 
 Every caller is assumed adversarial and every input hostile.
