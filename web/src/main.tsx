@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Buffer } from 'buffer';
 import { App } from './App';
+import './styles/fonts.css';
 import './styles/globals.css';
 
 // @solana/web3.js and the wallet adapters reach for a global `Buffer` in a few
