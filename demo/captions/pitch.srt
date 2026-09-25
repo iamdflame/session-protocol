@@ -1,0 +1,171 @@
+1
+00:00:00,400 --> 00:00:05,460
+NVIDIA's price is made six and a half hours a day.
+
+2
+00:00:05,520 --> 00:00:10,989
+On Solana, its token trades all 168 hours of the week…
+
+3
+00:00:11,049 --> 00:00:16,314
+and 63% of that volume happens while the price isn't
+
+4
+00:00:16,374 --> 00:00:17,440
+being made.
+
+5
+00:00:18,400 --> 00:00:21,817
+Those are the hours pools are thinnest.
+
+6
+00:00:21,877 --> 00:00:26,632
+Over a weekend, prices drift about eight times further
+
+7
+00:00:26,692 --> 00:00:31,447
+from the stock than on a weekday, and for some names a
+
+8
+00:00:31,507 --> 00:00:34,478
+round trip costs over one percent.
+
+9
+00:00:34,538 --> 00:00:36,440
+You pay for the noise.
+
+10
+00:00:37,400 --> 00:00:42,178
+Meet Ade. It's late at night in Lagos, and New York is
+
+11
+00:00:42,238 --> 00:00:44,955
+shut. She wants $200 of NVIDIA.
+
+12
+00:00:45,015 --> 00:00:49,883
+SESSION shows both choices: swap now on Jupiter, or buy
+
+13
+00:00:49,943 --> 00:00:53,198
+at the next open. She picks the bell.
+
+14
+00:00:53,258 --> 00:00:57,319
+One signature, and her dollars wait in escrow,
+
+15
+00:00:57,379 --> 00:01:01,440
+cancellable until two minutes before the open.
+
+16
+00:01:02,400 --> 00:01:07,026
+9:30 in New York. The Bell oracle posts NVIDIA's opening
+
+17
+00:01:07,086 --> 00:01:11,629
+print, and the program verifies its signature on-chain,
+
+18
+00:01:11,689 --> 00:01:14,139
+with Pyth's own verifier code.
+
+19
+00:01:14,199 --> 00:01:18,072
+Everyone in the cross trades at that one price.
+
+20
+00:01:18,132 --> 00:01:22,674
+Buyers and sellers net for free, and market makers fill
+
+21
+00:01:22,734 --> 00:01:26,440
+whatever is left, at a fee the backstop caps.
+
+22
+00:01:27,400 --> 00:01:32,172
+Then, the receipt. The price, and the print behind it,
+
+23
+00:01:32,232 --> 00:01:36,645
+its signature checked again right in your browser.
+
+24
+00:01:36,705 --> 00:01:39,777
+What each side put in and got back.
+
+25
+00:01:39,837 --> 00:01:44,429
+And beside it, what Jupiter would have given at that
+
+26
+00:01:44,489 --> 00:01:49,440
+moment, because a saving you can't check isn't a saving.
+
+27
+00:01:50,400 --> 00:01:54,829
+Tokenized stocks come with issuer powers, so we drilled
+
+28
+00:01:54,889 --> 00:01:59,237
+them at a real bell. A pause held the tokens but never
+
+29
+00:01:59,297 --> 00:02:03,808
+the refunds. A multiplier change cancelled the cross and
+
+30
+00:02:03,868 --> 00:02:08,134
+refunded everyone, whole. Both escrows ended at zero.
+
+31
+00:02:08,194 --> 00:02:12,705
+And across 300 random crosses, every balance matched, to
+
+32
+00:02:12,765 --> 00:02:13,440
+the atom.
+
+33
+00:02:14,400 --> 00:02:18,581
+It belongs on Solana. Signatures verified inside the
+
+34
+00:02:18,641 --> 00:02:23,147
+same transaction. One instruction clears the whole book,
+
+35
+00:02:23,207 --> 00:02:27,714
+whatever its size. Token multipliers read on-chain, so a
+
+36
+00:02:27,774 --> 00:02:30,895
+token's price always matches the share.
+
+37
+00:02:30,955 --> 00:02:35,217
+And it travels: a Blink on X, or an AI agent with its
+
+38
+00:02:35,277 --> 00:02:36,440
+limits in code.
+
+39
+00:02:37,400 --> 00:02:42,187
+Today it runs on devnet, at the real New York bells,
+
+40
+00:02:42,247 --> 00:02:47,220
+with a test signer standing in for Pyth until our Pyth
+
+41
+00:02:47,280 --> 00:02:51,974
+Pro key arrives. Next: an audit, then mainnet, with
+
+42
+00:02:52,034 --> 00:02:52,440
+caps.
+
+43
+00:02:53,400 --> 00:02:57,440
+SESSION. Trade at the bell.

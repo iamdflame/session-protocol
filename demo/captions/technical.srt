@@ -1,0 +1,275 @@
+1
+00:00:00,400 --> 00:00:04,986
+This is the engineering behind SESSION: orders that fill
+
+2
+00:00:05,046 --> 00:00:09,632
+at the NYSE open or close, at a price verified on-chain.
+
+3
+00:00:09,692 --> 00:00:14,030
+Two programs, a shared core, one keeper, and receipts
+
+4
+00:00:14,090 --> 00:00:15,440
+anyone can check.
+
+5
+00:00:16,400 --> 00:00:20,381
+The bell oracle, session-bell, only keeps prints: it
+
+6
+00:00:20,441 --> 00:00:24,499
+never holds funds. The exchange, session-cross, holds
+
+7
+00:00:24,559 --> 00:00:28,229
+the escrow and does the pricing, the auction and
+
+8
+00:00:28,289 --> 00:00:32,348
+settlement. Both share one Rust core for the calendar
+
+9
+00:00:32,408 --> 00:00:36,700
+and the arithmetic. Every step after placing an order is
+
+10
+00:00:36,760 --> 00:00:40,663
+permissionless. The keeper is a convenience, not an
+
+11
+00:00:40,723 --> 00:00:41,440
+authority.
+
+12
+00:00:42,400 --> 00:00:45,112
+A print arrives as one transaction.
+
+13
+00:00:45,172 --> 00:00:49,546
+Instruction zero is Solana's Ed25519 precompile, and its
+
+14
+00:00:49,606 --> 00:00:53,506
+offsets point at our instruction, where the signed
+
+15
+00:00:53,566 --> 00:00:55,882
+message starts at byte twelve.
+
+16
+00:00:55,942 --> 00:01:00,316
+The program hands that message to Pyth's verifier, which
+
+17
+00:01:00,376 --> 00:01:04,434
+checks the signer is trusted and unexpired, and then
+
+18
+00:01:04,494 --> 00:01:08,869
+parses every byte itself. The close is the last price in
+
+19
+00:01:08,929 --> 00:01:12,987
+the seconds before 4 PM; the open is the first after
+
+20
+00:01:13,047 --> 00:01:17,263
+9:30. Regular session only, tight confidence, strictly
+
+21
+00:01:17,323 --> 00:01:21,698
+better prices replace worse ones, and a price stamped in
+
+22
+00:01:21,758 --> 00:01:23,440
+the future is refused.
+
+23
+00:01:24,400 --> 00:01:28,684
+Orders collect in escrow until two minutes before the
+
+24
+00:01:28,744 --> 00:01:33,029
+bell, then the book freezes. Once the print is final,
+
+25
+00:01:33,089 --> 00:01:37,373
+the cross prices one raw token at the print times the
+
+26
+00:01:37,433 --> 00:01:41,226
+mint's own multiplier, read from its Token-2022
+
+27
+00:01:41,286 --> 00:01:45,734
+extension. It cancels instead if the multiplier changes
+
+28
+00:01:45,794 --> 00:01:49,997
+near the bell. Buyers and sellers net at that price.
+
+29
+00:01:50,057 --> 00:01:54,587
+The larger side's remainder goes to a two-minute auction
+
+30
+00:01:54,647 --> 00:01:59,177
+on a 101-step fee ladder. The clearing fee is the lowest
+
+31
+00:01:59,237 --> 00:02:03,112
+ask that covers the need, and the last bucket is
+
+32
+00:02:03,172 --> 00:02:07,538
+rationed. Everything consumed rounds up and everything
+
+33
+00:02:07,598 --> 00:02:11,883
+received rounds down, so the escrow can never pay out
+
+34
+00:02:11,943 --> 00:02:13,440
+more than it holds.
+
+35
+00:02:14,400 --> 00:02:18,725
+The arithmetic is property-tested, ten thousand cases a
+
+36
+00:02:18,785 --> 00:02:23,030
+property. The programs run in LiteSVM against the real
+
+37
+00:02:23,090 --> 00:02:27,494
+NVIDIA token, captured from mainnet at its real address,
+
+38
+00:02:27,554 --> 00:02:31,799
+and prices verified by Pyth's real verifier binary: 19
+
+39
+00:02:31,859 --> 00:02:34,270
+oracle cases, 9 exchange cases.
+
+40
+00:02:34,330 --> 00:02:38,735
+A fuzzer runs 300 random crosses across more than a year
+
+41
+00:02:38,795 --> 00:02:43,040
+of trading days, and every balance must match the math
+
+42
+00:02:43,100 --> 00:02:47,345
+to the atom. The TypeScript SDK decodes the very bytes
+
+43
+00:02:47,405 --> 00:02:51,331
+the Rust wrote. And a headless browser places real
+
+44
+00:02:51,391 --> 00:02:54,440
+orders on devnet and checks every atom.
+
+45
+00:02:55,400 --> 00:02:59,018
+Failure modes run in public, at a real bell.
+
+46
+00:02:59,078 --> 00:03:03,114
+We paused an NVIDIA-shaped token before the open.
+
+47
+00:03:03,174 --> 00:03:07,378
+The cross still priced and cleared, the keeper paid
+
+48
+00:03:07,438 --> 00:03:11,892
+every quote leg alone, and the tokens waited until the
+
+49
+00:03:11,952 --> 00:03:16,238
+issuer resumed. On a second token we scheduled a new
+
+50
+00:03:16,298 --> 00:03:20,502
+multiplier five minutes after the bell, and pricing
+
+51
+00:03:20,562 --> 00:03:24,932
+refused to guess: it cancelled and refunded everyone,
+
+52
+00:03:24,992 --> 00:03:27,440
+whole. Both escrows read zero.
+
+53
+00:03:28,400 --> 00:03:32,786
+At the bell, the keeper quotes both sides of the cross
+
+54
+00:03:32,846 --> 00:03:37,150
+on Jupiter, for the real NVIDIA token on mainnet, and
+
+55
+00:03:37,210 --> 00:03:41,678
+writes the quotes into the very transaction that prices
+
+56
+00:03:41,738 --> 00:03:45,960
+the cross. A receipt shows that comparison only from
+
+57
+00:03:46,020 --> 00:03:50,323
+that transaction, and only if the keeper named in the
+
+58
+00:03:50,383 --> 00:03:54,440
+manifest signed it. Anyone else's memo is ignored.
+
+59
+00:03:55,400 --> 00:04:00,272
+Agents get five MCP tools: status, quote, receipt, place
+
+60
+00:04:00,332 --> 00:04:05,028
+and cancel. The two that write are capped per order in
+
+61
+00:04:05,088 --> 00:04:09,079
+code and refused on mainnet unless a flag says
+
+62
+00:04:09,139 --> 00:04:13,659
+otherwise. A Blink builds the same order for whoever
+
+63
+00:04:13,719 --> 00:04:17,974
+clicks. It checks the balance before asking for a
+
+64
+00:04:18,034 --> 00:04:20,440
+signature, and holds no key.
+
+65
+00:04:21,400 --> 00:04:24,727
+Don't take the page's word for any of it.
+
+66
+00:04:24,787 --> 00:04:28,692
+Every receipt links the print's transaction, its
+
+67
+00:04:28,752 --> 00:04:32,575
+signature check, and the memo beside the price.
+
+68
+00:04:32,635 --> 00:04:37,118
+The programs, the keeper and the tests are open source.
+
+69
+00:04:37,178 --> 00:04:38,440
+Check the chain.
