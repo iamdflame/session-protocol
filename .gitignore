@@ -52,3 +52,13 @@ data/bell-poster.db-shm
 tests/integration/target/
 tests/integration/fixtures/*.so
 tools/*/target/
+
+# demo video: sources are tracked, media is not
+demo/out/
+demo/audio/
+demo/captures/
+demo/broll/*.mp4
+demo/broll/*.webm
+demo/video/node_modules/
+demo/video/out/
+demo/video/public/captures/
